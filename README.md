@@ -3,19 +3,20 @@
 ## 启动
 
 ```bash
-go run main.go
+make run
 ```
 
-## 命令
+## API
+
+### 删除脚本
 
 ```bash
-# 删除脚本
-curl -XDELETE http://39.106.4.207:8001/8090/script?name=node_modules/db
+curl -XDELETE http://127.0.0.1:8090/script?name=node_modules/db
 ```
+<!--
+## 开发
 
-## Dev
-
-注册模块加载器
+### 注册模块加载器
 
 ```go
 registry := require.NewRegistryWithLoader(func(path string) ([]byte, error) { // 创建自定义 require loader（脚本每次修改后，registry 需要重新生成，防止 module 被缓存，从而导致 module 修改后不生效）
@@ -38,8 +39,8 @@ registry := require.NewRegistryWithLoader(func(path string) ([]byte, error) { //
     return []byte(script.JsContent), err
 })
 ```
-
-## Example
+-->
+## 脚本示例
 
 ### node_modules 模块
 
@@ -135,7 +136,9 @@ registry := require.NewRegistryWithLoader(func(path string) ([]byte, error) { //
     };
     ```
 
-### Native 方法
+### 调用 Native 方法
+
+#### 接口响应
 
 ```typescript
 export default function (req: HttpRequest, res: HttpResponse) {
@@ -144,10 +147,16 @@ export default function (req: HttpRequest, res: HttpResponse) {
 }
 ```
 
+#### 控制台打印
+
 ```typescript
 // console
 console.error("hello, world")
+```
 
+#### 异常
+
+```typescript
 // error
 throw new Error("hello, world")
 throw {
@@ -155,6 +164,8 @@ throw {
     message: "error message"
 }
 ```
+
+#### 其它
 
 ```typescript
 // base64
@@ -187,11 +198,11 @@ const
     img1 = image.parse(request("GET", "https://www.baidu.com/img/flexible/logo/plus_logo_web_2.png").data) // 读取一张图片
 image.toBytes(img0) // 将图片转换成二进制字节数组
 ```
-
+<!-- 
 ## Curl
 
 ```bash
 curl -XPOST http://127.0.0.1:8090/service/greeting -H 'Content-Type: application/x-www-form-urlencoded' -d 'name=zhangsan&age=26&name=lisi'
 
 curl -XPOST http://127.0.0.1:8090/service/greeting -H 'Content-Type: application/json' -d '{"name":"zhangsan","age":26}'
-```
+``` -->
