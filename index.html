@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no"><!-- 网页的宽度自动适应手机屏幕的宽度 -->
+    <title>Cube</title>
+    <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.1/min/vs/editor/editor.main.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+        html, body {
+            width: 100%;
+            height: 100%;
+        }
+        html {
+            overflow: hidden;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container" style="width: 100%; height: 100%;"></div>
+    <div id="btn" style="position: fixed; z-index: 10; bottom: 40px; right: 40px; width: 40px; height: 40px; font-size: 18px; display: flex; line-height: 40px; justify-content: center; border-radius: 50%; box-shadow: rgb(0, 0, 0, 0.12) 0px 2px 8px 0px; cursor: pointer; background-color: white;" onclick="javascript:(() => { if (this.innerText == '🔓') { window.editor.updateOptions({ readOnly: false }); this.innerText = '💾'; return; }; document.onkeydown({ ctrlKey: true, keyCode: 83 }); })();">💾</div>
+    <script src="https://cdn.bootcdn.net/ajax/libs/typescript/4.8.4/typescript.min.js"></script>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/sweetalert/2.1.2/sweetalert.min.js"></script>
+
+    <script>var require = { paths: { "vs": "https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.1/min/vs" } };</script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.1/min/vs/loader.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.1/min/vs/editor/editor.main.nls.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.1/min/vs/editor/editor.main.js"></script>
+
+    <script>
+        (async function () {
+            monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+                allowNonTsExtensions: true,
+                experimentalDecorators: true, // 启用实验性的装饰器特性
+                typeRoots: ["."],
+                downlevelIteration: true // 允许迭代器进行迭代
+            });
+            monaco.languages.typescript.typescriptDefaults.addExtraLib(`
+                declare function $native(name: string): any;
+                declare class HttpRequest {
+                    getHeader(): { [name: string]: string[]; };
+                    getURL(): { path: string; params: { [name: string]: string[]; }; };
+                    getBody(): any;
+                    getMethod(): "GET" | "POST" | "PUT" | "DELETE";
+                    getForm(): { [name: string]: string[]; };
+                };
+                declare class HttpResponse {
+                    setStatus(status: number): void;
+                    setHeaders(headers: { [name: string]: string; }): void;
+                    setData(data: Uint8Array): void;
+                };
+            `, "global.d.ts");
+
+            const scripts = await fetch("script", {
+                method: "GET"
+            }).then(r => r.json()).then(r => r.data.scripts) || [];
+            scripts.forEach(s => {
+                monaco.languages.typescript.typescriptDefaults.addExtraLib(s.content, s.name + ".ts");
+            });
+
+            const editor = monaco.editor.create(document.getElementById("container"), {
+                language: "typescript",
+                theme: "vs-dark",
+                model: monaco.editor.createModel(`import { user } from "./user";
+
+export default function (req: HttpRequest, res: HttpResponse) {
+    return \`hello, \${user?.name ?? "world"}\`;
+};`, "typescript", new monaco.Uri("main.ts")),
+                options: {
+                    selectOnLineNumbers: true,
+                    roundedSelection: false,
+                    readOnly: false,
+                    cursorStyle: "line",
+                    automaticLayout: true
+                }
+            });
+            editor.onDidFocusEditorText(() => {
+                if (document.getElementById("btn").innerText === "🔓") {
+                    document.activeElement.blur(); // 防止在只读模式下，移动端点击编辑框时弹出软键盘
+                }
+            });
+            window.onresize = () => editor.layout(); // 当浏览器窗口大小发生改变时，编辑器自动调整大小
+
+            document.onkeydown = function (e) {
+                const keyCode = e.keyCode || e.which || e.charCode,
+                    ctrlKey = e.ctrlKey || e.metaKey;
+                if (ctrlKey && keyCode == 83) { // Ctrl + S
+                    const tsSrc = editor.getValue(),
+                        jsSrc = ts.transpileModule(tsSrc, {
+                            compilerOptions: {
+                                module: ts.ModuleKind.CommonJS,
+                                inlineSourceMap: true, // 使源映射文件（即 *.js.map 文件）在生成的 js 文件中内联写入：源映射内容会以 `//#soureMappingURL=` 开头，按 base64 格式追加写入
+                                inlineSources: true, // 指定进一步将 ts 文件的内容也包含到输出文件中
+                                removeComments: true, // 移除注释
+                                downlevelIteration: true // 当 target 为 ES5 或 ES3 时，为 for-of、spread 和 destructuring 中的迭代器提供完全支持
+                            },
+                            fileName: `${window.name || "noname"}.ts`
+                        })?.outputText;
+                    if (!window.name) {
+                        swal({ text: "Please input the script name:", content: "input", button: { text: "Create", closeModal: false } }).then(name => {
+                            if (!name) {
+                                swal("The name was required.", "", "error");
+                                return;
+                            }
+
+                            fetch("script", {
+                                method: "POST",
+                                body: JSON.stringify({ name, content: tsSrc, jscontent: jsSrc })
+                            }).then(r => r.json()).then(r => {
+                                if (r.code === "0") {
+                                    swal("Saved successfully.", "", "success");
+                                    window.name = name;
+                                } else {
+                                    swal(r.message, "", "error");
+                                }
+                            });
+                        });
+                    } else {
+                        fetch("script", {
+                            method: "POST",
+                            body: JSON.stringify({ name, content: tsSrc, jscontent: jsSrc })
+                        }).then(r => r.json()).then(r => {
+                            if (r.code === "0") {
+                                swal("Saved successfully.", "", "success");
+                                window.name = name;
+                            } else {
+                                swal(r.message, "", "error");
+                            }
+                        });
+                    }
+                    e.preventDefault();
+                    return false;
+                }
+                if (ctrlKey && keyCode == 48) { // Ctrl + 0
+                    if (window.name) {
+                        swal({ title: "Are you sure?", text: "Once deleted, you will not be able to recover this script!", icon: "warning", buttons: true, dangerMode: true }).then(confirm => {
+                            if (confirm) {
+                                fetch("script?name=" + window.name, {
+                                    method: "DELETE"
+                                }).then(r => r.json()).then(r => {
+                                    if (r.code === "0") {
+                                        swal("Deleted successfully.", { icon: "success" });
+                                        delete window.name;
+                                    } else {
+                                        swal(r.message, "", "error");
+                                    }
+                                });
+                            }
+                        });
+                    }
+                }
+            }
+
+            const name = window.location.search.substr(1).match(/(^|&)name=(?<name>[^&]*)(&|$)/i)?.groups?.name;
+            if (!name) {
+                swal("No name specified. A new script will be created soon.", "", "warning");
+                delete window.name;
+                return;
+            }
+            const script = scripts.filter(s => s.name == name).pop();
+            if (script != null) {
+                editor.setValue(script.content);
+                editor.updateOptions({ readOnly: true });
+                document.getElementById("btn").innerText = "🔓";
+            }
+
+            window.name = name;
+            window.editor = editor;
+        })();
+    </script>
+</body>
+
+</html>
