@@ -43,17 +43,24 @@
             });
             monaco.languages.typescript.typescriptDefaults.addExtraLib(`
                 declare function $native(name: string): any;
-                declare class HttpRequest {
+                declare class ServiceRequest {
                     getHeader(): { [name: string]: string[]; };
                     getURL(): { path: string; params: { [name: string]: string[]; }; };
                     getBody(): any;
                     getMethod(): "GET" | "POST" | "PUT" | "DELETE";
                     getForm(): { [name: string]: string[]; };
+                    upgradeToWebSocket(): ServiceWebSocket;
                 };
-                declare class HttpResponse {
+                declare class ServiceResponse {
+                    constructor(status: number, header: { [name: string]: string; }, data: Uint8Array | string);
                     setStatus(status: number): void;
-                    setHeaders(headers: { [name: string]: string; }): void;
-                    setData(data: Uint8Array): void;
+                    setHeader(header: { [name: string]: string; }): void;
+                    setData(data: Uint8Array | string): void;
+                };
+                declare class ServiceWebSocket {
+                    read(): { messageType: number; data: Uint8Array; };
+                    send(data: Uint8Array | string);
+                    close();
                 };
             `, "global.d.ts");
 
@@ -69,7 +76,7 @@
                 theme: "vs-dark",
                 model: monaco.editor.createModel(`import { user } from "./user";
 
-export default function (req: HttpRequest, res: HttpResponse) {
+export default function (req: ServiceRequest): ServiceResponse | Uint8Array | any {
     return \`hello, \${user?.name ?? "world"}\`;
 };`, "typescript", new monaco.Uri("main.ts")),
                 options: {

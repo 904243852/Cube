@@ -13,7 +13,9 @@ make run
 ```bash
 curl -XDELETE http://127.0.0.1:8090/script?name=node_modules/db
 ```
+
 <!--
+
 ## 开发
 
 ### 注册模块加载器
@@ -39,7 +41,28 @@ registry := require.NewRegistryWithLoader(func(path string) ([]byte, error) { //
     return []byte(script.JsContent), err
 })
 ```
+
+### goja.Value 类型判断
+
+```
+vm := goja.New()
+value, err := vm.RunString("new UintArray([1, 2, 3])")
+if err != nil {
+    panic(err)
+    return nil
+}
+if o, ok := value.(*goja.Object); ok {
+    if b, ok := o.Export().(goja.ArrayBuffer); ok { // 如果返回值为 ArrayBuffer 类型，则转换为 []byte
+        return b.Bytes()
+    }
+    if o.Get("constructor").(*goja.Object).Get("name").String() == "Uint8Array" { // 如果返回值为 Uint8Array 类型，则转换为 []byte
+        return o.Get("buffer").Export().(goja.ArrayBuffer).Bytes()
+    }
+}
+```
+
 -->
+
 ## 脚本示例
 
 ### node_modules 模块
@@ -136,16 +159,25 @@ registry := require.NewRegistryWithLoader(func(path string) ([]byte, error) { //
     };
     ```
 
-### 调用 Native 方法
-
-#### 接口响应
+### 接口响应
 
 ```typescript
-export default function (req: HttpRequest, res: HttpResponse) {
-    res.setData(new Uint8Array([104, 101, 108, 108, 111])) // 自定义写入值，将会覆盖后文中的 return 值
-    return // 这里如果 return 任意值都是无效的，实际返回值以 res.setData 为准
+export default function (req: ServiceRequest) {
+    // return new Uint8Array([104, 101, 108, 108, 111])
+    return new ServiceResponse(200, {}, new Uint8Array([104, 101, 108, 108, 111]))
 }
 ```
+
+```typescript
+export default function (req: ServiceRequest) {
+    const ws = req.upgradeToWebSocket()
+    console.info(ws.read())
+    ws.send("hello, world")
+    ws.close()
+}
+```
+
+### 调用 Native 方法
 
 #### 控制台打印
 
@@ -198,11 +230,15 @@ const
     img1 = image.parse(request("GET", "https://www.baidu.com/img/flexible/logo/plus_logo_web_2.png").data) // 读取一张图片
 image.toBytes(img0) // 将图片转换成二进制字节数组
 ```
-<!-- 
+
+<!--
+
 ## Curl
 
 ```bash
 curl -XPOST http://127.0.0.1:8090/service/greeting -H 'Content-Type: application/x-www-form-urlencoded' -d 'name=zhangsan&age=26&name=lisi'
 
 curl -XPOST http://127.0.0.1:8090/service/greeting -H 'Content-Type: application/json' -d '{"name":"zhangsan","age":26}'
-``` -->
+```
+
+-->

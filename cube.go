@@ -20,13 +20,16 @@ import (
     "io/ioutil"
     "net/http"
     "net/smtp"
+    "os"
     "regexp"
     "strings"
     "sync"
     "time"
     "github.com/dop251/goja"
     "github.com/dop251/goja_nodejs/require"
+    "github.com/shirou/gopsutil/process"
     _ "github.com/mattn/go-sqlite3"
+    "github.com/gorilla/websocket"
 )
 
 type Script struct {
@@ -70,11 +73,14 @@ func init() {
 }
 
 func main() {
+    // 获取启动参数
     count := flag.Int("c", 1, "The total count of virtual machines.") // 定义命令行参数 c，表示虚拟机的总个数，返回 Int 类型指针，默认值为 1，其值在 Parse 后会被修改为命令参数指定的值
     flag.Parse() // 在定义命令行参数之后，调用 Parse 方法对所有命令行参数进行解析
+
+    // 创建虚拟机池
     WorkerPool.Workers = make([]*Worker, *count) // 创建 goja 实例池
     WorkerPool.Channels = make(chan *Worker, len(WorkerPool.Workers))
-    program, _ := goja.Compile("index", `(function (name, req, res) { return require("./" + name).default(req, res); })`, false) // 编译源码为 Program，strict 为 false
+    program, _ := goja.Compile("index", `(function (name, req) { return require("./" + name).default(req); })`, false) // 编译源码为 Program，strict 为 false
     for i := 0; i < len(WorkerPool.Workers); i++ {
         runtime := CreateJsRuntime() // 创建 goja 运行时
         entry, err := runtime.RunProgram(program) // 这里使用 RunProgram，可复用已编译的代码，相比直接调用 RunString 更显著提升性能
@@ -124,42 +130,65 @@ func main() {
         })
         defer timer.Stop()
 
-        response := Response{response: w}
-
+        request := ServiceRequest{
+            request: r,
+            responseWriter: w,
+            timer: timer,
+        }
         value, err := worker.Function(
             nil,
             worker.Runtime.ToValue(name),
-            worker.Runtime.ToValue(Request{request: r}),
-            worker.Runtime.ToValue(&response), // 这里必须传递地址，否则 setData 方法中无法成功修改 overwrite 值从而导致 Success 方法的执行
+            worker.Runtime.ToValue(&request),
         )
+        if request.isWebSocket == true { // 如果是 WebSocket，不需要封装响应
+            return
+        }
+
         if err != nil {
             Error(w, err)
             return
         }
-
-        if response.overwrite == false {
-            Success(w, value.Export())
-        }
-        return
+        Success(w, ExportGojaValue(value))
     })
     http.Handle("/", http.FileServer(http.FS(FileList)))
 
     fmt.Println("server has started on http://127.0.0.1:8090 🚀")
+
+    // 监控当前进程的内存和 cpu 使用率
+    go func () {
+        pid := os.Getppid()
+        p, _ := process.NewProcess(int32(pid))
+        ticker := time.NewTicker(time.Millisecond * 1000)
+        for _ = range ticker.C {
+            c, _ := p.CPUPercent()
+            m, _ := p.MemoryInfo()
+            fmt.Printf("\rcpu: %.6f%%, memory: %.2fmb" + " ", c, float32(m.RSS) / 1024 / 1024) // 结尾预留一个空格防止刷新过程中因字符串变短导致上一次打印的文本在结尾出溢出
+        }
+    }()
+
+    // 启动服务
     http.ListenAndServe(":8090", nil)
 }
 
 func Success(w http.ResponseWriter, data interface{}) {
-    switch data.(type) {
+    switch v := data.(type) {
         case string:
-            fmt.Fprintf(w, "%s", data)
+            fmt.Fprintf(w, "%s", v)
         case []uint8: // []byte
-            w.Write(data.([]byte))
+            w.Write(v)
+        case *ServiceResponse: // 自定义响应
+            h := w.Header()
+            for k, a := range v.header {
+                h.Set(k, a)
+            }
+            w.WriteHeader(v.status) // WriteHeader 必须在 Set Header 之后调用，否则状态码将无法写入
+            w.Write(v.data) // Write 必须在 WriteHeader 之后调用，否则将会抛出异常 http: superfluous response.WriteHeader call from ...
         default: // map[string]interface[]
             w.Header().Set("Content-Type", "application/json")
             json.NewEncoder(w).Encode(Result{
                 Code: "0",
                 Message: "success",
-                Data: data, // 注：这里的 data 如果为 []byte 类型或包含 []byte 类型的属性，在通过 json 序列化后将会被自动转码为 base64 字符串
+                Data: v, // 注：这里的 data 如果为 []byte 类型或包含 []byte 类型的属性，在通过 json 序列化后将会被自动转码为 base64 字符串
             })
     }
 }
@@ -181,12 +210,24 @@ func Error(w http.ResponseWriter, err error) {
         }
     }
     w.Header().Set("Content-Type", "application/json")
-    w.WriteHeader(http.StatusBadRequest)
+    w.WriteHeader(http.StatusBadRequest) // 在同一次请求响应过程中，只能调用一次 WriteHeader，否则会抛出异常 http: superfluous response.WriteHeader call from ...
     json.NewEncoder(w).Encode(Result{
         Code: code,
         Message: message,
         Data: nil,
     })
+}
+
+func ExportGojaValue(value goja.Value) interface{} {
+    if o, ok := value.(*goja.Object); ok {
+        if b, ok := o.Export().(goja.ArrayBuffer); ok { // 如果返回值为 ArrayBuffer 类型，则转换为 []byte
+            return b.Bytes()
+        }
+        if "Uint8Array" == o.Get("constructor").(*goja.Object).Get("name").String() { // 如果返回值为 Uint8Array 类型，则转换为 []byte
+            return o.Get("buffer").Export().(goja.ArrayBuffer).Bytes()
+        }
+    }
+    return value.Export()
 }
 
 //#region Script 接口请求
@@ -315,26 +356,62 @@ func CreateJsRuntime() *goja.Runtime {
 
     runtime.Set("exports", runtime.NewObject())
 
+    runtime.Set("ServiceResponse", func (call goja.ConstructorCall) *goja.Object {
+        a0, ok := call.Argument(0).Export().(int64)
+        if !ok {
+            panic(runtime.NewTypeError("The status should be a int."))
+        }
+        a1, ok := call.Argument(1).Export().(map[string]interface{})
+        if !ok {
+            panic(runtime.NewTypeError("The header should be a map."))
+        }
+        header := make(map[string]string, len(a1))
+        for k, v := range a1 {
+            s, ok := v.(string)
+            if !ok {
+                panic(runtime.NewTypeError("The " + k + " should be a string."))
+            }
+            header[k] = s
+        }
+        a2 := ExportGojaValue(call.Argument(2))
+        data := []byte(nil)
+        if s, ok := a2.(string); !ok {
+            if data, ok = a2.([]byte); !ok {
+                panic(runtime.NewTypeError("The data should be a string or a byte array."))
+            }
+        } else {
+            data = []byte(s)
+        }
+        i := &ServiceResponse{
+            status: int(a0),
+            header: header,
+            data: data,
+        }
+        iv := runtime.ToValue(i).(*goja.Object)
+        iv.SetPrototype(call.This.Prototype())
+        return iv
+    })
+
     runtime.SetFieldNameMapper(goja.UncapFieldNameMapper()) // 该转换器会将 go 对象中的属性、方法以小驼峰式命名规则映射到 js 对象中
-    runtime.Set("console", &ConsoleStruct{runtime: runtime})
+    runtime.Set("console", &ConsoleClient{runtime: runtime})
 
     runtime.Set("$native", func(name string) (module interface{}, err error) {
         switch name {
             case "base64":
                 module = &Base64Struct{}
             case "bqueue":
-                module = func(size int) *BlockingQueueStruct {
-                    return &BlockingQueueStruct{
+                module = func(size int) *BlockingQueueClient {
+                    return &BlockingQueueClient{
                         queue: make(chan interface{}, size),
                     }
                 }
             case "crypto":
-                module = &CryptoStruct{}
+                module = &CryptoClient{}
             case "db":
-                module = &DatabaseStruct{}
+                module = &DatabaseClient{}
             case "email":
-                module = func(host string, port int, username string, password string) *EmailStruct {
-                    return &EmailStruct{
+                module = func(host string, port int, username string, password string) *EmailClient {
+                    return &EmailClient{
                         host: host,
                         port: port,
                         username: username,
@@ -342,21 +419,21 @@ func CreateJsRuntime() *goja.Runtime {
                     }
                 }
             case "http":
-                module = &HttpStruct{}
+                module = &HttpClient{}
             case "pipe":
-                module = func(name string) *BlockingQueueStruct {
+                module = func(name string) *BlockingQueueClient {
                     if PipePool == nil {
-                        PipePool = make(map[string]*BlockingQueueStruct, 99)
+                        PipePool = make(map[string]*BlockingQueueClient, 99)
                     }
                     if PipePool[name] == nil {
-                        PipePool[name] = &BlockingQueueStruct{
+                        PipePool[name] = &BlockingQueueClient{
                             queue: make(chan interface{}, 99),
                         }
                     }
                     return PipePool[name]
                 }
             case "image":
-                module = &ImageStruct{}
+                module = &ImageClient{}
             default:
                 err = errors.New("The module was not found.")
         }
@@ -372,60 +449,97 @@ func CreateJsRuntime() *goja.Runtime {
 
 //#region Service 请求、响应
 
-// http request
-type Request struct {
+// service http request
+type ServiceRequest struct {
     request *http.Request
+    responseWriter http.ResponseWriter
+    timer *time.Timer
+    isWebSocket bool
     body interface{} // 用于缓存请求消息体，防止重复读取和关闭 body 流
 }
-func (r *Request) GetHeader() http.Header {
-    return r.request.Header
+func (s *ServiceRequest) GetHeader() http.Header {
+    return s.request.Header
 }
-func (r *Request) GetURL() interface{} {
-    u := r.request.URL
+func (s *ServiceRequest) GetURL() interface{} {
+    u := s.request.URL
     return map[string]interface{}{
         "path": u.Path,
         "params": u.Query(),
     }
 }
-func (r *Request) GetBody() (body interface{}, err error) {
-    if r.body != nil {
-        body = r.body
+func (s *ServiceRequest) GetBody() (body interface{}, err error) {
+    if s.body != nil {
+        body = s.body
         return
     }
-    b, err := ioutil.ReadAll(r.request.Body)
-    defer r.request.Body.Close()
+    b, err := ioutil.ReadAll(s.request.Body)
+    defer s.request.Body.Close()
     if err != nil {
         return
     }
     err = json.Unmarshal(b, &body)
-    r.body = body
+    s.body = body
     return
 }
-func (r *Request) GetMethod() string {
-    return r.request.Method
+func (s *ServiceRequest) GetMethod() string {
+    return s.request.Method
 }
-func (r *Request) GetForm() interface{} {
-    r.request.ParseForm() // 需要转换后才能获取表单
-    return r.request.Form
+func (s *ServiceRequest) GetForm() interface{} {
+    s.request.ParseForm() // 需要转换后才能获取表单
+    return s.request.Form
+}
+func (s *ServiceRequest) UpgradeToWebSocket() (ws *ServiceWebSocket, err error) {
+    s.isWebSocket = true // upgrader.Upgrade 内部已经调用过 WriteHeader 方法了，后续不应再次调用，否则将会出现 http: superfluous response.WriteHeader call from ... 的异常
+    s.timer.Stop() // 关闭定时器，WebSocket 不需要设置超时时间
+    upgrader := websocket.Upgrader{}
+    conn, err := upgrader.Upgrade(s.responseWriter, s.request, nil)
+    ws = &ServiceWebSocket{
+        connection: conn,
+    }
+    return
 }
 
-// http response
-type Response struct {
-    response http.ResponseWriter
-    overwrite bool // 是否重写响应消息体，如果为 true 则 default 方法的出参将会失效
+// service http response
+type ServiceResponse struct {
+    status int
+    header map[string]string
+    data []byte
 }
-func (r *Response) SetStatus(c int) { // 设置响应状态码
-    r.response.WriteHeader(c)
+func (s *ServiceResponse) SetStatus(status int) { // 设置响应状态码
+    s.status = status
 }
-func (r *Response) SetHeaders(h map[string]string) { // 设置响应消息头
-    x := r.response.Header()
-    for k, v := range h {
-        x.Set(k, v)
+func (s *ServiceResponse) SetHeaders(header map[string]string) { // 设置响应消息头
+    s.header = header
+}
+func (s *ServiceResponse) SetData(data []byte) { // 设置响应消息体
+    s.data = data
+}
+
+// service websocket
+type ServiceWebSocket struct {
+    connection *websocket.Conn
+}
+func (s *ServiceWebSocket) Read() (output interface{}, err error) {
+    messageType, data, err := s.connection.ReadMessage()
+    if err != nil {
+        panic(err)
+        return
     }
+    output = map[string]interface{}{
+        "messageType": messageType,
+        "data": data,
+    }
+    return
 }
-func (r *Response) SetData(b []byte) { // 设置响应消息体
-    r.overwrite = true
-    r.response.Write(b)
+func (s *ServiceWebSocket) Send(data []byte) (err error) {
+    err = s.connection.WriteMessage(1, data) // message type：0 表示消息是文本格式，1 表示消息是二进制格式。这里 data 是 []byte，因此固定使用二进制格式类型
+    if err != nil {
+        panic(err)
+    }
+    return
+}
+func (s *ServiceWebSocket) Close() {
+    s.connection.Close()
 }
 
 //#endregion
@@ -442,11 +556,11 @@ func (b *Base64Struct) Decode(input string) ([]byte, error) {
 }
 
 // blocking queue module
-type BlockingQueueStruct struct {
+type BlockingQueueClient struct {
     queue chan interface{}
     mutex sync.Mutex
 }
-func (b *BlockingQueueStruct) Put(input interface{}, timeout int) error {
+func (b *BlockingQueueClient) Put(input interface{}, timeout int) error {
     b.mutex.Lock()
     defer b.mutex.Unlock()
     select {
@@ -456,7 +570,7 @@ func (b *BlockingQueueStruct) Put(input interface{}, timeout int) error {
             return errors.New("The blocking queue is full, waiting for put timeout.")
     }
 }
-func (b *BlockingQueueStruct) Poll(timeout int) (interface{}, error) {
+func (b *BlockingQueueClient) Poll(timeout int) (interface{}, error) {
     b.mutex.Lock()
     defer b.mutex.Unlock()
     select {
@@ -466,7 +580,7 @@ func (b *BlockingQueueStruct) Poll(timeout int) (interface{}, error) {
             return nil, errors.New("The blocking queue is empty, waiting for poll timeout.")
     }
 }
-func (b *BlockingQueueStruct) Drain(size int, timeout int) (output []interface{}) {
+func (b *BlockingQueueClient) Drain(size int, timeout int) (output []interface{}) {
     b.mutex.Lock()
     defer b.mutex.Unlock()
     output = make([]interface{}, 0, size) // 创建切片，初始大小为 0，最大为 size
@@ -486,39 +600,39 @@ func (b *BlockingQueueStruct) Drain(size int, timeout int) (output []interface{}
 }
 
 // console module
-type ConsoleStruct struct {
+type ConsoleClient struct {
     runtime *goja.Runtime
 }
-func (c *ConsoleStruct) Log(a interface{}) {
-    fmt.Println(time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Log", a)
+func (c *ConsoleClient) Log(a interface{}) {
+    fmt.Println("\r"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Log", a)
 }
-func (c *ConsoleStruct) Debug(a interface{}) {
-    fmt.Println("\033[1;30m"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Debug", a, "\033[m")
+func (c *ConsoleClient) Debug(a interface{}) {
+    fmt.Println("\r"+"\033[1;30m"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Debug", a, "\033[m")
 }
-func (c *ConsoleStruct) Info(a interface{}) {
-    fmt.Println("\033[0;34m"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Info", a, "\033[m")
+func (c *ConsoleClient) Info(a interface{}) {
+    fmt.Println("\r"+"\033[0;34m"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Info", a, "\033[m")
 }
-func (c *ConsoleStruct) Warn(a interface{}) {
-    fmt.Println("\033[0;33m"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Warn", a, "\033[m")
+func (c *ConsoleClient) Warn(a interface{}) {
+    fmt.Println("\r"+"\033[0;33m"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Warn", a, "\033[m")
 }
-func (c *ConsoleStruct) Error(a interface{}) {
-    fmt.Println("\033[0;31m"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Error", a, "\033[m")
+func (c *ConsoleClient) Error(a interface{}) {
+    fmt.Println("\r"+"\033[0;31m"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Error", a, "\033[m")
 }
 
 // crypto module
-type CryptoStruct struct{}
-func (d *CryptoStruct) Md5(input []byte) [16]byte {
+type CryptoClient struct{}
+func (d *CryptoClient) Md5(input []byte) [16]byte {
     return md5.Sum(input)
 }
-func (d *CryptoStruct) Sha256(input []byte) []byte {
+func (d *CryptoClient) Sha256(input []byte) []byte {
     h := sha256.New()
     h.Write(input)
     return h.Sum(nil)
 }
 
 // db module
-type DatabaseStruct struct{}
-func (d *DatabaseStruct) Query(stmt string, param ...interface{}) (records []interface{}, err error) {
+type DatabaseClient struct{}
+func (d *DatabaseClient) Query(stmt string, param ...interface{}) (records []interface{}, err error) {
     rows, err := Database.Query(stmt, param...)
     if err != nil {
         return
@@ -542,7 +656,7 @@ func (d *DatabaseStruct) Query(stmt string, param ...interface{}) (records []int
 
     return
 }
-func (d *DatabaseStruct) Exec(stmt string, param ...interface{}) (res interface{}, err error) {
+func (d *DatabaseClient) Exec(stmt string, param ...interface{}) (res interface{}, err error) {
     s, err := Database.Prepare(stmt)
     if err != nil {
         return
@@ -555,13 +669,13 @@ func (d *DatabaseStruct) Exec(stmt string, param ...interface{}) (res interface{
 }
 
 // email module
-type EmailStruct struct {
+type EmailClient struct {
     host string
     port int
     username string
     password string
 }
-func (e *EmailStruct) Send(receivers []string, subject string, content string) (err error) {
+func (e *EmailClient) Send(receivers []string, subject string, content string) (err error) {
     address := fmt.Sprintf("%s:%d", e.host, e.port)
     auth := smtp.PlainAuth("", e.username, e.password, e.host)
     msg := append(
@@ -617,8 +731,8 @@ func (e *EmailStruct) Send(receivers []string, subject string, content string) (
 }
 
 // http module
-type HttpStruct struct{}
-func (d *HttpStruct) Request(method string, url string, headers map[string]string, body string) (response interface{}, err error) {
+type HttpClient struct{}
+func (d *HttpClient) Request(method string, url string, headers map[string]string, body string) (response interface{}, err error) {
     client := &http.Client{}
 
     req, err := http.NewRequest(strings.ToUpper(method), url, strings.NewReader(body))
@@ -649,12 +763,12 @@ func (d *HttpStruct) Request(method string, url string, headers map[string]strin
 }
 
 // pipe module
-var PipePool map[string]*BlockingQueueStruct
+var PipePool map[string]*BlockingQueueClient
 
 // image module
-type ImageStruct struct{}
-func (e *ImageStruct) New(width int, height int) *ImageBufferStruct {
-    return &ImageBufferStruct{
+type ImageClient struct{}
+func (e *ImageClient) New(width int, height int) *ImageBuffer {
+    return &ImageBuffer{
         image: image.NewRGBA(image.Rect(0, 0, width, height)),
         Width: width,
         offsetX: 0,
@@ -662,14 +776,14 @@ func (e *ImageStruct) New(width int, height int) *ImageBufferStruct {
         offsetY: 0,
     }
 }
-func (e *ImageStruct) Parse(input []byte) (imgBuf *ImageBufferStruct, err error) {
+func (e *ImageClient) Parse(input []byte) (imgBuf *ImageBuffer, err error) {
     m, _, err := image.Decode(bytes.NewBuffer(input)) // 图片文件解码
     if err != nil {
         return
     }
 
     bounds := m.Bounds()
-    imgBuf = &ImageBufferStruct{
+    imgBuf = &ImageBuffer{
         image: m,
         Width: bounds.Max.X - bounds.Min.X,
         offsetX: bounds.Min.X,
@@ -678,7 +792,7 @@ func (e *ImageStruct) Parse(input []byte) (imgBuf *ImageBufferStruct, err error)
     }
     return
 }
-func (e *ImageStruct) ToBytes(b ImageBufferStruct) (output []byte, err error) {
+func (e *ImageClient) ToBytes(b ImageBuffer) (output []byte, err error) {
     buf := new(bytes.Buffer)
     err = jpeg.Encode(buf, b.image, nil)
     if err != nil {
@@ -688,18 +802,18 @@ func (e *ImageStruct) ToBytes(b ImageBufferStruct) (output []byte, err error) {
     return
 }
 
-type ImageBufferStruct struct {
+type ImageBuffer struct {
     image image.Image
     Width int
     offsetX int
     Height int
     offsetY int
 }
-func (e *ImageBufferStruct) Get(x int, y int) uint32 {
+func (e *ImageBuffer) Get(x int, y int) uint32 {
     r, g, b, a := e.image.At(x+e.offsetX, y+e.offsetY).RGBA()
     return r << 24 & g << 16 & b << 8 & a
 }
-func (e *ImageBufferStruct) Set(x int, y int, p uint32) {
+func (e *ImageBuffer) Set(x int, y int, p uint32) {
     e.image.(*image.RGBA).Set(x+e.offsetX, y+e.offsetY, color.RGBA{uint8(p >> 24), uint8(p >> 16), uint8(p >> 8), uint8(p)})
 }
 
