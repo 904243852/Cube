@@ -420,6 +420,8 @@ func CreateJsRuntime() *goja.Runtime {
                 }
             case "http":
                 module = &HttpClient{}
+            case "image":
+                module = &ImageClient{}
             case "pipe":
                 module = func(name string) *BlockingQueueClient {
                     if PipePool == nil {
@@ -432,8 +434,6 @@ func CreateJsRuntime() *goja.Runtime {
                     }
                     return PipePool[name]
                 }
-            case "image":
-                module = &ImageClient{}
             default:
                 err = errors.New("The module was not found.")
         }

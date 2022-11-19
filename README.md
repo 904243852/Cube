@@ -1,108 +1,50 @@
 # Cube
 
-## 启动
+A simple web server that can be developed online using typescript.
 
-```bash
-make run
-```
+## Getting started
 
-## API
+1. Clone the git repo.
 
-### 删除脚本
+2. Make sure all dependencies are installed:
+    ```bash
+    make tidy
+    ```
 
-```bash
-curl -XDELETE http://127.0.0.1:8090/script?name=node_modules/db
-```
+3. Start the server:
+    ```bash
+    make run
+    ```
 
-<!--
+4. Open `http://127.0.0.1:8090/` in browser and code what you want.
 
-## 开发
+## Shortcut key of Editor Online
 
-### 注册模块加载器
+- Save as a script: `Ctrl` + `S`
 
-```go
-registry := require.NewRegistryWithLoader(func(path string) ([]byte, error) { // 创建自定义 require loader（脚本每次修改后，registry 需要重新生成，防止 module 被缓存，从而导致 module 修改后不生效）
-    // 从数据库中查找模块
-    rows, err := Db.Query("select jscontent from script where name = ?", path)
-    if err != nil {
-        panic(err.Error())
-        return nil, err
-    }
-    defer rows.Close()
-    if rows.Next() == false {
-        // 读取 node_modules 目录下模块或文件
-        if strings.HasPrefix(path, "node_modules/") {
-            return require.DefaultSourceLoader(path)
-        }
-        return nil, errors.New("The module was not found: " + path)
-    }
-    script := Script{}
-    err = rows.Scan(&script.JsContent)
-    return []byte(script.JsContent), err
-})
-```
+- Delete this script: `Ctrl` + `0`
 
-### goja.Value 类型判断
+## Example of script
 
-```
-vm := goja.New()
-value, err := vm.RunString("new UintArray([1, 2, 3])")
-if err != nil {
-    panic(err)
-    return nil
-}
-if o, ok := value.(*goja.Object); ok {
-    if b, ok := o.Export().(goja.ArrayBuffer); ok { // 如果返回值为 ArrayBuffer 类型，则转换为 []byte
-        return b.Bytes()
-    }
-    if o.Get("constructor").(*goja.Object).Get("name").String() == "Uint8Array" { // 如果返回值为 Uint8Array 类型，则转换为 []byte
-        return o.Get("buffer").Export().(goja.ArrayBuffer).Bytes()
-    }
-}
-```
-
--->
-
-## 脚本示例
-
-### node_modules 模块
-
-1. 新建模块脚本如 `node_modules/users`
+- A example of a custom module.
     ```typescript
+    // http://127.0.0.1:8090/?name=user
     export const user = {
         name: "zhangsan"
     };
     ```
-2. 调用模块
     ```typescript
-    import { user } from "users";
-    
-    export default function (req) {
-        return `hello, ${user?.name ?? "world";
+    // http://127.0.0.1:8090/?name=foo
+    import { user } from "./user";
+
+    export default function (req: ServiceRequest): ServiceResponse | Uint8Array | any {
+        return `hello, ${user?.name ?? "world"}`;
     };
     ```
 
-### 自定义模块
-
-1. 新建模块脚本如 `users`
+- A example of a custom module that extends Date.
     ```typescript
-    export const user = {
-        name: "zhangsan"
-    };
-    ```
-2. 调用模块
-    ```typescript
-    import { user } from "./users";
-    
-    export default function (req) {
-        return `hello, ${user?.name ?? "world";
-    };
-    ```
-
-### 自定义拓展方法模块
-
-1. 新建模块脚本如 `node_modules/date`
-    ```typescript
+    // http://127.0.0.1:8090/?name=node_modules/date
     declare global {
         interface Date {
             toString(layout?: string): string;
@@ -111,7 +53,7 @@ if o, ok := value.(*goja.Object); ok {
             toDate(value: string, layout: string): Date;
         }
     }
-    
+
     const L = {
         "yyyy|yy": ["FullYear"],
         "M{1,2}": ["Month", 1],
@@ -121,9 +63,9 @@ if o, ok := value.(*goja.Object); ok {
         "s{1,2}": ["Seconds"],
         "S{1,3}": ["Milliseconds", 0, -1]
     };
-    
+
     const toString = Date.prototype.toString;
-    
+
     Date.prototype.toString = function(layout?: string) {
         if (!layout) {
             return toString();
@@ -136,7 +78,7 @@ if o, ok := value.(*goja.Object); ok {
         }
         return layout;
     };
-    
+
     Date.toDate = function(value: string, layout: string): Date {
         const t = new Date(0);
         for (const l in L) {
@@ -147,11 +89,11 @@ if o, ok := value.(*goja.Object); ok {
         }
         return t;
     };
-    
+
     export default { Date };
     ```
-2. 调用模块
     ```typescript
+    // http://127.0.0.1:8090/?name=foo
     import "date";
 
     export default function (req) {
@@ -159,86 +101,110 @@ if o, ok := value.(*goja.Object); ok {
     };
     ```
 
-### 接口响应
+- A simple example of return a custom response.
+    ```typescript
+    export default function (req: ServiceRequest): ServiceResponse | Uint8Array | any {
+        // return new Uint8Array([104, 101, 108, 108, 111])
+        return new ServiceResponse(500, {}, new Uint8Array([104, 101, 108, 108, 111]))
+    }
+    ```
 
-```typescript
-export default function (req: ServiceRequest) {
-    // return new Uint8Array([104, 101, 108, 108, 111])
-    return new ServiceResponse(200, {}, new Uint8Array([104, 101, 108, 108, 111]))
-}
-```
+- A simple example of websocket server.
+    ```typescript
+    export default function (req: ServiceRequest) {
+        const ws = req.upgradeToWebSocket() // upgrade http and get a websocket
+        console.info(ws.read()) // read a message
+        ws.send("hello, world") // write a message
+        ws.close() // close the connection
+    }
+    ```
 
-```typescript
-export default function (req: ServiceRequest) {
-    const ws = req.upgradeToWebSocket()
-    console.info(ws.read())
-    ws.send("hello, world")
-    ws.close()
-}
-```
+- A simple example of using console.
+    ```typescript
+    // ...
+    console.error("this is a error message")
+    ```
 
-### 调用 Native 方法
+- A simple example of using error.
+    ```typescript
+    // ...
+    throw new Error("error message")
 
-#### 控制台打印
+    // ...
+    throw {
+        code: "error code",
+        message: "error message"
+    }
+    ```
 
-```typescript
-// console
-console.error("hello, world")
-```
+- Examples of using native module.
+    ```typescript
+    // base64
+    const base64 = $native("base64")
+    base64.encode("hello") // aGVsbG8=
+    base64.decode("aGVsbG8=") // [104, 101, 108, 108, 111]
 
-#### 异常
+    // bqueue or pipe
+    const b = $native("pipe")("default")
+    //const b = $native("bqueue")(99)
+    b.put(1)
+    b.put(2)
+    b.drain(4, 2000) // [1, 2]
 
-```typescript
-// error
-throw new Error("hello, world")
-throw {
-    code: "error code", // 指定错误码
-    message: "error message"
-}
-```
+    // db
+    $native("db").query("select name from script") // [{"name":"foo"}, {"name":"user"}]
 
-#### 其它
+    // email
+    $native("email")("smtp.163.com", 465, username, password).send(["zhangsan@abc.com"], "greeting", "hello, world")
 
-```typescript
-// base64
-const base64 = $native("base64")
-base64.encode("hello") // aGVsbG8=
-base64.decode("aGVsbG8=") // [104, 101, 108, 108, 111]
+    // crypto
+    const crypto = $native("crypto")
+    crypto.md5("hello, world").map(c => c.toString(16).padStart(2, "0")).join("") // e4d7f1b4ed2e42d15898f4b27b019da4
+    crypto.sha256("hello, world").map(c => c.toString(16).padStart(2, "0")).join("") // 09ca7e4eaa6e8ae9c7d261167129184883644d07dfba7cbfbc4c8a2e08360d5b
 
-// bqueue or pipe
-const b = $native("pipe")("default")
-//const b = $native("bqueue")(99)
-b.put(1)
-b.put(2)
-b.drain(4, 2000) // [1, 2]
+    // http
+    $native("http").request("GET", "https://www.baidu.com") // {"data":"PGh0bWw...","headers":{"Content-Length":["227"],"Content-Type":["text/html"]...]},"status":200}}
 
-// email
-$native("email")("smtp.163.com", 465, username, password).send(["zhangsan@abc.com"], "greeting", "hello, world")
-
-// crypto
-const crypto = $native("crypto")
-crypto.md5("hello, world").map(c => c.toString(16).padStart(2, "0")).join("") // e4d7f1b4ed2e42d15898f4b27b019da4
-crypto.sha256("hello, world").map(c => c.toString(16).padStart(2, "0")).join("") // 09ca7e4eaa6e8ae9c7d261167129184883644d07dfba7cbfbc4c8a2e08360d5b
-
-// http
-$native("http").request("GET", "https://www.baidu.com") // {"data":"PGh0bWw...","headers":{"Content-Length":["227"],"Content-Type":["text/html"]...]},"status":200}}
-
-// image
-const image = $native("image")
-const
-    img0 = image.new(100, 200), // 创建一张空图片，宽 100，高 200
-    img1 = image.parse(request("GET", "https://www.baidu.com/img/flexible/logo/plus_logo_web_2.png").data) // 读取一张图片
-image.toBytes(img0) // 将图片转换成二进制字节数组
-```
+    // image
+    const image = $native("image")
+    const
+        img0 = image.new(100, 200), // create a picture with width 100 and height 200
+        img1 = image.parse(request("GET", "https://www.baidu.com/img/flexible/logo/plus_logo_web_2.png").data) // read a picture from network
+    image.toBytes(img0) // convert this picture to a byte array
+    ```
 
 <!--
 
-## Curl
+## Other
 
-```bash
-curl -XPOST http://127.0.0.1:8090/service/greeting -H 'Content-Type: application/x-www-form-urlencoded' -d 'name=zhangsan&age=26&name=lisi'
+- Register a module loader
+    ```go
+    registry := require.NewRegistryWithLoader(func(path string) ([]byte, error) { // 创建自定义 require loader（脚本每次修改后，registry 需要重新生成，防止 module 被缓存，从而导致 module 修改后不生效）
+        // 从数据库中查找模块
+        rows, err := Db.Query("select jscontent from script where name = ?", path)
+        if err != nil {
+            panic(err.Error())
+            return nil, err
+        }
+        defer rows.Close()
+        if rows.Next() == false {
+            // 读取 node_modules 目录下模块或文件
+            if strings.HasPrefix(path, "node_modules/") {
+                return require.DefaultSourceLoader(path)
+            }
+            return nil, errors.New("The module was not found: " + path)
+        }
+        script := Script{}
+        err = rows.Scan(&script.JsContent)
+        return []byte(script.JsContent), err
+    })
+    ```
 
-curl -XPOST http://127.0.0.1:8090/service/greeting -H 'Content-Type: application/json' -d '{"name":"zhangsan","age":26}'
-```
+- Commands of example service using curl
+    ```bash
+    curl -XPOST http://127.0.0.1:8090/service/greeting -H 'Content-Type: application/x-www-form-urlencoded' -d 'name=zhangsan&age=26&name=lisi'
+
+    curl -XPOST http://127.0.0.1:8090/service/greeting -H 'Content-Type: application/json' -d '{"name":"zhangsan","age":26}'
+    ```
 
 -->
