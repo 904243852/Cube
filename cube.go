@@ -5,6 +5,7 @@ import (
     "crypto/md5"
     "crypto/sha256"
     "crypto/tls"
+    "crypto/x509"
     "database/sql"
     "embed"
     "encoding/base64"
@@ -12,6 +13,7 @@ import (
     "errors"
     "flag"
     "fmt"
+    "html/template"
     "image"
     "image/color"
     _ "image/gif"
@@ -25,6 +27,7 @@ import (
     "strings"
     "sync"
     "time"
+    "golang.org/x/net/http2"
     "github.com/dop251/goja"
     "github.com/dop251/goja_nodejs/require"
     "github.com/shirou/gopsutil/process"
@@ -32,15 +35,11 @@ import (
     "github.com/gorilla/websocket"
 )
 
-type Script struct {
+type Source struct {
     Name string `json:"name"`
+    Type string `json:"type"` // ts, tpl, vue
     Content string `json:"content"`
-    JsContent string `json:"jscontent"`
-}
-type Result struct {
-    Code string `json:"code"`
-    Message string `json:"message"`
-    Data interface{} `json:"data"`
+    Compiled string `json:"compiled"`
 }
 type Worker struct {
     Runtime *goja.Runtime
@@ -64,51 +63,35 @@ func init() {
         panic(err)
     }
     Database.Exec(`
-        create table if not exists script (
-            name varchar(128) primary key not null,
+        create table if not exists source (
+            name varchar(64) not null,
+            type varchar(8) not null,
             content text not null,
-            jscontent text not null
+            compiled text not null,
+            primary key(name, type)
         );
     `)
 }
 
 func main() {
     // 获取启动参数
-    count := flag.Int("c", 1, "The total count of virtual machines.") // 定义命令行参数 c，表示虚拟机的总个数，返回 Int 类型指针，默认值为 1，其值在 Parse 后会被修改为命令参数指定的值
-    flag.Parse() // 在定义命令行参数之后，调用 Parse 方法对所有命令行参数进行解析
+    arguments := ParseStartupArguments()
 
     // 创建虚拟机池
-    WorkerPool.Workers = make([]*Worker, *count) // 创建 goja 实例池
-    WorkerPool.Channels = make(chan *Worker, len(WorkerPool.Workers))
-    program, _ := goja.Compile("index", `(function (name, req) { return require("./" + name).default(req); })`, false) // 编译源码为 Program，strict 为 false
-    for i := 0; i < len(WorkerPool.Workers); i++ {
-        runtime := CreateJsRuntime() // 创建 goja 运行时
-        entry, err := runtime.RunProgram(program) // 这里使用 RunProgram，可复用已编译的代码，相比直接调用 RunString 更显著提升性能
-        if err != nil {
-            panic(err)
-        }
-        function, ok := goja.AssertFunction(entry)
-        if !ok {
-            panic(errors.New("The entry is not a function."))
-        }
-        worker := Worker{Runtime: runtime, Function: function}
-        WorkerPool.Workers[i] = &worker
-        WorkerPool.Channels <- &worker
-    }
-    RegisterModuleLoader() // 注册 Module 加载器
+    CreateWorkerPool(arguments.Count)
 
-    http.HandleFunc("/script", func(w http.ResponseWriter, r *http.Request) {
+    http.HandleFunc("/source", func(w http.ResponseWriter, r *http.Request) {
         var (
             data interface{}
             err error
         )
         switch r.Method {
             case "GET":
-                data, err = HandleScriptGet(w, r)
+                data, err = HandleSourceGet(w, r)
             case "POST":
-                err = HandleScriptPost(w, r)
+                err = HandleSourcePost(w, r)
             case "DELETE":
-                err = HandleScriptDelete(w, r)
+                err = HandleSourceDelete(w, r)
             default:
                 err = errors.New("Unsupported method " + r.Method)
         }
@@ -120,13 +103,16 @@ func main() {
     })
     http.HandleFunc("/service/", func(w http.ResponseWriter, r *http.Request) {
         name := r.URL.Path[9:]
+        if name == "" {
+            name = "index"
+        }
         worker := <-WorkerPool.Channels
         defer func() {
             WorkerPool.Channels <- worker
         }()
 
         timer := time.AfterFunc(60000*time.Millisecond, func() { // 允许脚本最大执行的时间为 60 秒
-            worker.Runtime.Interrupt("The script executed timeout.")
+            worker.Runtime.Interrupt("The service executed timeout.")
         })
         defer timer.Stop()
 
@@ -150,9 +136,28 @@ func main() {
         }
         Success(w, ExportGojaValue(value))
     })
-    http.Handle("/", http.FileServer(http.FS(FileList)))
+    http.HandleFunc("/resource/", func(w http.ResponseWriter, r *http.Request) {
+        name := r.URL.Path[10:]
+        if ok, _ := regexp.MatchString("^\\w{2,32}\\.vue$", name); !ok {
+            Error(w, errors.New("Invalid argument name, not a vue."))
+            return
+        }
+        names := strings.Split(name, ".")
 
-    fmt.Println("server has started on http://127.0.0.1:8090 🚀")
+        rows, err := Database.Query("select content from source where name = ? and type = ?", names[0], names[1])
+        if err != nil {
+            Error(w, err)
+        }
+        defer rows.Close()
+        if rows.Next() == false {
+            Error(w, errors.New("The resource is not found: " + name))
+            return
+        }
+        source := Source{}
+        err = rows.Scan(&source.Content)
+        Success(w, source.Content)
+    })
+    http.Handle("/", http.FileServer(http.FS(FileList)))
 
     // 监控当前进程的内存和 cpu 使用率
     go func () {
@@ -162,12 +167,54 @@ func main() {
         for _ = range ticker.C {
             c, _ := p.CPUPercent()
             m, _ := p.MemoryInfo()
-            fmt.Printf("\rcpu: %.6f%%, memory: %.2fmb" + " ", c, float32(m.RSS) / 1024 / 1024) // 结尾预留一个空格防止刷新过程中因字符串变短导致上一次打印的文本在结尾出溢出
+            fmt.Printf("\rcpu: %.6f%%, memory: %.2fmb, vm: %d/%d" + " ", // 结尾预留一个空格防止刷新过程中因字符串变短导致上一次打印的文本在结尾出溢出
+                c,
+                float32(m.RSS) / 1024 / 1024,
+                len(WorkerPool.Workers) - len(WorkerPool.Channels), len(WorkerPool.Workers),
+            )
         }
     }()
 
     // 启动服务
-    http.ListenAndServe(":8090", nil)
+    if arguments.Secure {
+        fmt.Println("server has started on https://127.0.0.1:" + arguments.Port + " 🚀")
+        http.ListenAndServeTLS(":" + arguments.Port, arguments.ServerCert, arguments.ServerKey, nil)
+    } else {
+        fmt.Println("server has started on http://127.0.0.1:" + arguments.Port + " 🚀")
+        http.ListenAndServe(":" + arguments.Port, nil)
+    }
+}
+
+func ParseStartupArguments() (a struct { Count int; Port string; Secure bool; ServerKey string; ServerCert string; }) {
+    flag.IntVar(&a.Count, "n", 1, "The total count of virtual machines.") // 定义命令行参数 c，表示虚拟机的总个数，返回 Int 类型指针，默认值为 1，其值在 Parse 后会被修改为命令参数指定的值
+    flag.StringVar(&a.Port, "p", "8090", "Port to use.")
+    flag.BoolVar(&a.Secure, "s", false, "Enable https.")
+    flag.StringVar(&a.ServerKey, "k", "server.key", "SSL key file.")
+    flag.StringVar(&a.ServerCert, "c", "server.crt", "SSL cert file.")
+    flag.Parse() // 在定义命令行参数之后，调用 Parse 方法对所有命令行参数进行解析
+    return
+}
+
+func ExportMapValue(obj map[string]interface{}, name string, t string) (value interface{}, ok bool) {
+    if obj == nil {
+        return
+    }
+    if o, ok := obj[name]; ok {
+        switch t {
+            case "string":
+                value, ok = o.(string)
+            case "bool":
+                value, ok = o.(bool)
+            case "int":
+                value, ok = o.(int)
+            default:
+                panic(errors.New("Unsupported type " + t + "."))
+        }
+        if !ok {
+            panic(errors.New("The " + name + " is not a " + t + "."))
+        }
+    }
+    return
 }
 
 func Success(w http.ResponseWriter, data interface{}) {
@@ -185,10 +232,12 @@ func Success(w http.ResponseWriter, data interface{}) {
             w.Write(v.data) // Write 必须在 WriteHeader 之后调用，否则将会抛出异常 http: superfluous response.WriteHeader call from ...
         default: // map[string]interface[]
             w.Header().Set("Content-Type", "application/json")
-            json.NewEncoder(w).Encode(Result{
-                Code: "0",
-                Message: "success",
-                Data: v, // 注：这里的 data 如果为 []byte 类型或包含 []byte 类型的属性，在通过 json 序列化后将会被自动转码为 base64 字符串
+            enc := json.NewEncoder(w)
+            enc.SetEscapeHTML(false) // 见 https://pkg.go.dev/encoding/json#Marshal，字符串值编码为强制为有效 UTF-8 的 JSON 字符串，用 Unicode 替换符文替换无效字节。为了使 JSON 能够安全地嵌入 HTML 标记中，字符串使用 HTMLEscape 编码，它将替换 `<`、`>`、`&`、`U+2028` 和 `U+2029`，并转义到 `\u003c`、`\u003e`、`\u0026`、`\u2028` 和 `\u2029`。在使用编码器时，可以通过调用 SetEscapeHTML(false) 禁用此替换。
+            enc.Encode(map[string]interface{}{
+                "code": "0",
+                "message": "success",
+                "data": v, // 注：这里的 data 如果为 []byte 类型或包含 []byte 类型的属性，在通过 json 序列化后将会被自动转码为 base64 字符串
             })
     }
 }
@@ -197,44 +246,31 @@ func Error(w http.ResponseWriter, err error) {
     code, message := "1", err.Error() // 错误信息默认包含了异常信息和调用栈
     if e, ok := err.(*goja.Exception); ok {
         if o, ok := e.Value().Export().(map[string]interface{}); ok {
-            if m, ok := o["message"]; ok {
-                if ms, ok := m.(string); ok {
-                    message = ms // 获取 throw 对象中的 message 和 code 属性，作为失败响应的错误信息和错误码
-                }
+            if m, ok := ExportMapValue(o, "message", "string"); ok {
+                message = m.(string) // 获取 throw 对象中的 message 和 code 属性，作为失败响应的错误信息和错误码
             }
-            if c, ok := o["code"]; ok {
-                if cs, ok := c.(string); ok {
-                    code = cs
-                }
+            if c, ok := ExportMapValue(o, "code", "string"); ok {
+                code = c.(string)
             }
         }
     }
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(http.StatusBadRequest) // 在同一次请求响应过程中，只能调用一次 WriteHeader，否则会抛出异常 http: superfluous response.WriteHeader call from ...
-    json.NewEncoder(w).Encode(Result{
-        Code: code,
-        Message: message,
-        Data: nil,
+    json.NewEncoder(w).Encode(map[string]interface{}{
+        "code": code,
+        "message": message,
     })
 }
 
-func ExportGojaValue(value goja.Value) interface{} {
-    if o, ok := value.(*goja.Object); ok {
-        if b, ok := o.Export().(goja.ArrayBuffer); ok { // 如果返回值为 ArrayBuffer 类型，则转换为 []byte
-            return b.Bytes()
-        }
-        if "Uint8Array" == o.Get("constructor").(*goja.Object).Get("name").String() { // 如果返回值为 Uint8Array 类型，则转换为 []byte
-            return o.Get("buffer").Export().(goja.ArrayBuffer).Bytes()
-        }
-    }
-    return value.Export()
-}
+//#region Source 接口请求
 
-//#region Script 接口请求
-
-func HandleScriptGet(w http.ResponseWriter, r *http.Request) (data struct { Scripts []Script `json:"scripts"`; Total int `json:"total"`; }, err error) {
+func HandleSourceGet(w http.ResponseWriter, r *http.Request) (data struct { Sources []Source `json:"sources"`; Total int `json:"total"`; }, err error) {
     r.ParseForm()
     name := r.Form.Get("name")
+    stype := r.Form.Get("type")
+    if stype == "" {
+        stype = "ts"
+    }
     from := r.Form.Get("from")
     if from == "" {
         from = "0"
@@ -244,23 +280,23 @@ func HandleScriptGet(w http.ResponseWriter, r *http.Request) (data struct { Scri
         size = "10"
     }
 
-    err = Database.QueryRow("select count(1) from script where name like ?", "%"+name+"%").Scan(&data.Total)
+    err = Database.QueryRow("select count(1) from source where name like ? and type = ?", "%"+name+"%", stype).Scan(&data.Total)
     if err != nil {
         return
     }
 
-    rows, err := Database.Query("select name, content, jscontent from script where name like ? limit ?, ?", "%"+name+"%", from, size)
+    rows, err := Database.Query("select name, type, content, compiled from source where name like ? and type = ? limit ?, ?", "%"+name+"%", stype, from, size)
     if err != nil {
         return
     }
     defer rows.Close()
     for rows.Next() {
-        script := Script{}
-        err := rows.Scan(&script.Name, &script.Content, &script.JsContent)
+        source := Source{}
+        err := rows.Scan(&source.Name, &source.Type, &source.Content, &source.Compiled)
         if err != nil {
             panic(err)
         }
-        data.Scripts = append(data.Scripts, script)
+        data.Sources = append(data.Sources, source)
     }
     err = rows.Err()
     if err != nil {
@@ -270,7 +306,7 @@ func HandleScriptGet(w http.ResponseWriter, r *http.Request) (data struct { Scri
     return
 }
 
-func HandleScriptPost(w http.ResponseWriter, r *http.Request) error {
+func HandleSourcePost(w http.ResponseWriter, r *http.Request) error {
     // 读取请求消息体
     body, err := ioutil.ReadAll(r.Body)
     defer r.Body.Close()
@@ -278,25 +314,32 @@ func HandleScriptPost(w http.ResponseWriter, r *http.Request) error {
         return err
     }
 
-    var script Script
-    err = json.Unmarshal(body, &script)
+    var source Source
+    err = json.Unmarshal(body, &source)
     if err != nil {
         return err
     }
 
     // 校验脚本名称
-    match, _ := regexp.MatchString("^(node_modules/)?\\w{2,32}$", script.Name)
-    if !match {
-        return errors.New("The name is required. It must be a letter, number, or underscore with a length of 2 to 32.")
+    if source.Type == "ts" {
+        if ok, _ := regexp.MatchString("^(node_modules/)?\\w{2,32}$", source.Name); !ok {
+            return errors.New("The name is required. It must be a letter, number, or underscore with a length of 2 to 32.")
+        }
+    } else if source.Type == "tpl" || source.Type == "vue" {
+        if ok, _ := regexp.MatchString("^\\w{2,32}$", source.Name); !ok {
+            return errors.New("The name is required. It must be a letter, number, or underscore with a length of 2 to 32.")
+        }
+    } else {
+        return errors.New("The type is required. It must be ts, tpl or vue.")
     }
 
     // 新增或修改脚本
-    stmt, err := Database.Prepare("insert or replace into script (name, content, jscontent) values(?, ?, ?)")
+    stmt, err := Database.Prepare("insert or replace into source (name, type, content, compiled) values(?, ?, ?, ?)")
     if err != nil {
         return err
     }
     defer stmt.Close()
-    _, err = stmt.Exec(script.Name, script.Content, script.JsContent)
+    _, err = stmt.Exec(source.Name, source.Type, source.Content, source.Compiled)
     if err != nil {
         return err
     }
@@ -307,19 +350,23 @@ func HandleScriptPost(w http.ResponseWriter, r *http.Request) error {
     return nil
 }
 
-func HandleScriptDelete(w http.ResponseWriter, r *http.Request) error {
+func HandleSourceDelete(w http.ResponseWriter, r *http.Request) error {
     r.ParseForm()
     name := r.Form.Get("name")
     if name == "" {
-        return errors.New("The parameter name was required.")
+        return errors.New("The parameter name is required.")
+    }
+    stype := r.Form.Get("type")
+    if stype == "" {
+        return errors.New("The parameter name is required.")
     }
 
-    res, err := Database.Exec("delete from script where name = ?", name)
+    res, err := Database.Exec("delete from source where name = ? and type = ?", name, stype)
     if err != nil {
         return err
     }
     if res == nil {
-        return errors.New("The script was not found.")
+        return errors.New("The source is not found.")
     }
 
     return nil
@@ -329,28 +376,6 @@ func HandleScriptDelete(w http.ResponseWriter, r *http.Request) error {
 
 //#region Goja 运行时
 
-func RegisterModuleLoader() {
-    registry := require.NewRegistryWithLoader(func(path string) ([]byte, error) { // 创建自定义 require loader（脚本每次修改后，registry 需要重新生成，防止 module 被缓存，从而导致 module 修改后不生效）
-        // 从数据库中查找模块
-        rows, err := Database.Query("select jscontent from script where name = ?", path)
-        if err != nil {
-            panic(err.Error())
-            return nil, err
-        }
-        defer rows.Close()
-        if rows.Next() == false {
-            return nil, errors.New("The module was not found: " + path)
-        }
-        script := Script{}
-        err = rows.Scan(&script.JsContent)
-        return []byte(script.JsContent), err
-    })
-
-    for _, runtime := range WorkerPool.Workers {
-        _ = registry.Enable(runtime.Runtime) // 启用自定义 require loader
-    }
-}
-
 func CreateJsRuntime() *goja.Runtime {
     runtime := goja.New()
 
@@ -359,17 +384,17 @@ func CreateJsRuntime() *goja.Runtime {
     runtime.Set("ServiceResponse", func (call goja.ConstructorCall) *goja.Object {
         a0, ok := call.Argument(0).Export().(int64)
         if !ok {
-            panic(runtime.NewTypeError("The status should be a int."))
+            panic(runtime.NewTypeError("Invalid argument status, not a int."))
         }
         a1, ok := call.Argument(1).Export().(map[string]interface{})
         if !ok {
-            panic(runtime.NewTypeError("The header should be a map."))
+            panic(runtime.NewTypeError("Invalid argument header, not a map."))
         }
         header := make(map[string]string, len(a1))
         for k, v := range a1 {
             s, ok := v.(string)
             if !ok {
-                panic(runtime.NewTypeError("The " + k + " should be a string."))
+                panic(runtime.NewTypeError("Invalid argument " + k + ", not a string."))
             }
             header[k] = s
         }
@@ -419,7 +444,47 @@ func CreateJsRuntime() *goja.Runtime {
                     }
                 }
             case "http":
-                module = &HttpClient{}
+                module = func(options map[string]interface{}) *HttpClient {
+                    client := &http.Client{}
+                    if options != nil {
+                        config := &tls.Config{}
+                        if caCert, ok := ExportMapValue(options, "caCert", "string"); ok { // 配置 ca 证书
+                            config.RootCAs = x509.NewCertPool()
+                            config.RootCAs.AppendCertsFromPEM(caCert.([]byte))
+                        }
+                        if cert, ok := ExportMapValue(options, "cert", "string"); ok {
+                            if key, ok := ExportMapValue(options, "key", "string"); ok {
+                                x509cert, err := tls.LoadX509KeyPair(cert.(string), key.(string))
+                                if err != nil {
+                                    panic(err)
+                                }
+                                config.Certificates = []tls.Certificate{x509cert}
+                            }
+                        }
+                        if insecureSkipVerify, ok := ExportMapValue(options, "insecureSkipVerify", "bool"); ok {
+                            config.InsecureSkipVerify = insecureSkipVerify.(bool)
+                        }
+                        httpVersion, ok := ExportMapValue(options, "version", "int")
+                        if !ok {
+                            httpVersion = 1
+                        }
+                        switch httpVersion {
+                            case 1:
+                                client.Transport = &http.Transport{
+                                    TLSClientConfig: config,
+                                }
+                            case 2:
+                                client.Transport = &http2.Transport{ // 配置使用 http 2 协议
+                                    TLSClientConfig: config,
+                                }
+                            default:
+                                panic(errors.New("Invali http version, it must be 1 or 2."))
+                        }
+                    }
+                    return &HttpClient{
+                        client: client,
+                    }
+                }
             case "image":
                 module = &ImageClient{}
             case "pipe":
@@ -434,8 +499,34 @@ func CreateJsRuntime() *goja.Runtime {
                     }
                     return PipePool[name]
                 }
+            case "template":
+                module = func(name string, input map[string]interface{}) (output string, err error) {
+                    rows, err := Database.Query("select content from source where name = ? and type = ?", name, "tpl")
+                    if err != nil {
+                        panic(err.Error())
+                    }
+                    defer rows.Close()
+                    if rows.Next() == false {
+                        err = errors.New("The template is not found: " + name)
+                        return
+                    }
+                    source := Source{}
+                    err = rows.Scan(&source.Content)
+                    if err != nil {
+                        return
+                    }
+
+                    t, err := template.New(name).Parse(source.Content)
+                    if err != nil {
+                        return
+                    }
+                    buf := new(bytes.Buffer)
+                    t.Execute(buf, input)
+                    output = buf.String()
+                    return
+                }
             default:
-                err = errors.New("The module was not found.")
+                err = errors.New("The module is not found.")
         }
         return
     })
@@ -443,6 +534,60 @@ func CreateJsRuntime() *goja.Runtime {
     runtime.SetMaxCallStackSize(2048)
 
     return runtime
+}
+
+func CreateWorkerPool(count int) {
+    WorkerPool.Workers = make([]*Worker, count) // 创建 goja 实例池
+    WorkerPool.Channels = make(chan *Worker, len(WorkerPool.Workers))
+    program, _ := goja.Compile("index", `(function (name, req) { return require("./" + name).default(req); })`, false) // 编译源码为 Program，strict 为 false
+    for i := 0; i < len(WorkerPool.Workers); i++ {
+        runtime := CreateJsRuntime() // 创建 goja 运行时
+        entry, err := runtime.RunProgram(program) // 这里使用 RunProgram，可复用已编译的代码，相比直接调用 RunString 更显著提升性能
+        if err != nil {
+            panic(err)
+        }
+        function, ok := goja.AssertFunction(entry)
+        if !ok {
+            panic(errors.New("The entry is not a function."))
+        }
+        worker := Worker{Runtime: runtime, Function: function}
+        WorkerPool.Workers[i] = &worker
+        WorkerPool.Channels <- &worker
+    }
+    RegisterModuleLoader() // 注册 Module 加载器
+}
+
+func ExportGojaValue(value goja.Value) interface{} {
+    if o, ok := value.(*goja.Object); ok {
+        if b, ok := o.Export().(goja.ArrayBuffer); ok { // 如果返回值为 ArrayBuffer 类型，则转换为 []byte
+            return b.Bytes()
+        }
+        if "Uint8Array" == o.Get("constructor").(*goja.Object).Get("name").String() { // 如果返回值为 Uint8Array 类型，则转换为 []byte
+            return o.Get("buffer").Export().(goja.ArrayBuffer).Bytes()
+        }
+    }
+    return value.Export()
+}
+
+func RegisterModuleLoader() {
+    registry := require.NewRegistryWithLoader(func(path string) ([]byte, error) { // 创建自定义 require loader（脚本每次修改后，registry 需要重新生成，防止 module 被缓存，从而导致 module 修改后不生效）
+        // 从数据库中查找模块
+        rows, err := Database.Query("select compiled from source where name = ? and type = ?", path, "ts")
+        if err != nil {
+            panic(err.Error())
+        }
+        defer rows.Close()
+        if rows.Next() == false {
+            return nil, errors.New("The module is not found: " + path)
+        }
+        source := Source{}
+        err = rows.Scan(&source.Compiled)
+        return []byte(source.Compiled), nil
+    })
+
+    for _, runtime := range WorkerPool.Workers {
+        _ = registry.Enable(runtime.Runtime) // 启用自定义 require loader
+    }
 }
 
 //#endregion
@@ -508,7 +653,7 @@ type ServiceResponse struct {
 func (s *ServiceResponse) SetStatus(status int) { // 设置响应状态码
     s.status = status
 }
-func (s *ServiceResponse) SetHeaders(header map[string]string) { // 设置响应消息头
+func (s *ServiceResponse) SetHeader(header map[string]string) { // 设置响应消息头
     s.header = header
 }
 func (s *ServiceResponse) SetData(data []byte) { // 设置响应消息体
@@ -603,20 +748,20 @@ func (b *BlockingQueueClient) Drain(size int, timeout int) (output []interface{}
 type ConsoleClient struct {
     runtime *goja.Runtime
 }
-func (c *ConsoleClient) Log(a interface{}) {
-    fmt.Println("\r"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Log", a)
+func (c *ConsoleClient) Log(a ...interface{}) {
+    fmt.Println(append([]interface{}{"\r"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Log"}, a...)...)
 }
-func (c *ConsoleClient) Debug(a interface{}) {
-    fmt.Println("\r"+"\033[1;30m"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Debug", a, "\033[m")
+func (c *ConsoleClient) Debug(a ...interface{}) {
+    fmt.Println(append(append([]interface{}{"\r"+"\033[1;30m"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Debug"}, a...), "\033[m")...)
 }
-func (c *ConsoleClient) Info(a interface{}) {
-    fmt.Println("\r"+"\033[0;34m"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Info", a, "\033[m")
+func (c *ConsoleClient) Info(a ...interface{}) {
+    fmt.Println(append(append([]interface{}{"\r"+"\033[0;34m"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Info"}, a...), "\033[m")...)
 }
-func (c *ConsoleClient) Warn(a interface{}) {
-    fmt.Println("\r"+"\033[0;33m"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Warn", a, "\033[m")
+func (c *ConsoleClient) Warn(a ...interface{}) {
+    fmt.Println(append(append([]interface{}{"\r"+"\033[0;33m"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Warn"}, a...), "\033[m")...)
 }
-func (c *ConsoleClient) Error(a interface{}) {
-    fmt.Println("\r"+"\033[0;31m"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Error", a, "\033[m")
+func (c *ConsoleClient) Error(a ...interface{}) {
+    fmt.Println(append(append([]interface{}{"\r"+"\033[0;31m"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Error"}, a...), "\033[m")...)
 }
 
 // crypto module
@@ -731,19 +876,19 @@ func (e *EmailClient) Send(receivers []string, subject string, content string) (
 }
 
 // http module
-type HttpClient struct{}
-func (d *HttpClient) Request(method string, url string, headers map[string]string, body string) (response interface{}, err error) {
-    client := &http.Client{}
-
+type HttpClient struct{
+    client *http.Client
+}
+func (h *HttpClient) Request(method string, url string, header map[string]string, body string) (response interface{}, err error) {
     req, err := http.NewRequest(strings.ToUpper(method), url, strings.NewReader(body))
     if err != nil {
         return
     }
-    for key, value := range headers {
+    for key, value := range header {
         req.Header.Set(key, value)
     }
 
-    resp, err := client.Do(req)
+    resp, err := h.client.Do(req)
     if err != nil {
         return
     }
@@ -756,14 +901,25 @@ func (d *HttpClient) Request(method string, url string, headers map[string]strin
 
     response = map[string]interface{}{
         "status": resp.StatusCode,
-        "headers": resp.Header,
-        "data": data,
+        "header": resp.Header,
+        "data": &DataBuffer{data: data},
     }
     return
 }
 
-// pipe module
-var PipePool map[string]*BlockingQueueClient
+type DataBuffer struct {
+    data []byte
+}
+func (b *DataBuffer) ToBytes() []byte {
+    return b.data
+}
+func (b *DataBuffer) ToString() string {
+    return string(b.data)
+}
+func (b *DataBuffer) ToJson() (obj interface{}, err error) {
+    err = json.Unmarshal(b.data, &obj)
+    return
+}
 
 // image module
 type ImageClient struct{}
@@ -816,5 +972,8 @@ func (e *ImageBuffer) Get(x int, y int) uint32 {
 func (e *ImageBuffer) Set(x int, y int, p uint32) {
     e.image.(*image.RGBA).Set(x+e.offsetX, y+e.offsetY, color.RGBA{uint8(p >> 24), uint8(p >> 16), uint8(p >> 8), uint8(p)})
 }
+
+// pipe module
+var PipePool map[string]*BlockingQueueClient
 
 //#endregion

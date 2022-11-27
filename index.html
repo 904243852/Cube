@@ -3,18 +3,24 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no"><!-- 网页的宽度自动适应手机屏幕的宽度 -->
+    <meta name="viewport"
+        content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
+    <!-- 网页的宽度自动适应手机屏幕的宽度 -->
     <title>Cube</title>
-    <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.1/min/vs/editor/editor.main.css">
+    <link rel="stylesheet" data-name="vs/editor/editor.main"
+        href="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.1/min/vs/editor/editor.main.css">
     <style>
         * {
             margin: 0;
             padding: 0;
         }
-        html, body {
+
+        html,
+        body {
             width: 100%;
             height: 100%;
         }
+
         html {
             overflow: hidden;
         }
@@ -23,7 +29,10 @@
 
 <body>
     <div id="container" style="width: 100%; height: 100%;"></div>
-    <div id="btn" style="position: fixed; z-index: 10; bottom: 40px; right: 40px; width: 40px; height: 40px; font-size: 18px; display: flex; line-height: 40px; justify-content: center; border-radius: 50%; box-shadow: rgb(0, 0, 0, 0.12) 0px 2px 8px 0px; cursor: pointer; background-color: white;" onclick="javascript:(() => { if (this.innerText == '🔓') { window.editor.updateOptions({ readOnly: false }); this.innerText = '💾'; return; }; document.onkeydown({ ctrlKey: true, keyCode: 83 }); })();">💾</div>
+    <div id="btn"
+        style="position: fixed; z-index: 10; bottom: 40px; right: 40px; width: 40px; height: 40px; font-size: 18px; display: flex; line-height: 40px; justify-content: center; border-radius: 50%; box-shadow: rgb(0, 0, 0, 0.12) 0px 2px 8px 0px; cursor: pointer; background-color: white; font-family: codicon;"
+        onclick="javascript:(() => { if (this.innerText == '\uEB74') { window.editor.updateOptions({ readOnly: false }); this.innerText = '\uEAB2'; return; }; document.onkeydown({ ctrlKey: true, keyCode: 83 }); })();">
+        &#60082</div>
     <script src="https://cdn.bootcdn.net/ajax/libs/typescript/4.8.4/typescript.min.js"></script>
 
     <script src="https://cdn.bootcdn.net/ajax/libs/sweetalert/2.1.2/sweetalert.min.js"></script>
@@ -35,6 +44,67 @@
 
     <script>
         (async function () {
+            // 代码示例模板
+            examples = {
+                ts: `import { user } from "./user";
+
+export default function (req: ServiceRequest): ServiceResponse | Uint8Array | any {
+    return \`hello, \${user?.name ?? "world"}\`;
+};`,
+                tpl: `<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title></title>
+</head>
+
+<body>
+    hello, {{ .name }}
+</body>
+
+</html>`,
+                vue: `<template>
+    <p>hello, {{ name }}</p>
+</template>
+
+\x3Cscript>
+    module.exports = {
+        data: function() {
+            return {
+                name: "world"
+            }
+        }
+    }
+\x3C/script>
+
+<style scoped>
+
+</style>`
+            };
+
+            // 获取请求参数
+            const input = (function () {
+                const params = new URL(window.location).searchParams,
+                    name = params.get("name");
+                return {
+                    type: name?.match(/\.(.*)$/)?.[1] || params.get("type") || "ts",
+                    name: name?.replace(/\.(\w+)$/, "")
+                };
+            })();
+            if (["ts", "tpl", "vue"].indexOf(input.type) === -1) {
+                swal("The source type must be ts, tpl or vue.", "", "error");
+                return;
+            }
+            if (input.name && (
+                (input.type === "ts" && !/^(node_modules\/)?\w{2,32}$/.test(input.name)) ||
+                !/^\w{2,32}$/.test(input.name)
+            )) {
+                swal("The name must be a letter, number, or underscore with a length of 2 to 32.", "", "error");
+                return;
+            }
+
+            // 初始化编辑器
             monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
                 allowNonTsExtensions: true,
                 experimentalDecorators: true, // 启用实验性的装饰器特性
@@ -63,43 +133,42 @@
                     close();
                 };
             `, "global.d.ts");
-
-            const scripts = await fetch("script", {
+            const sources = await fetch("source?type=" + input.type + (input.type !== "ts" && input.name ? "&name=" + input.name : ""), {
                 method: "GET"
-            }).then(r => r.json()).then(r => r.data.scripts) || [];
-            scripts.forEach(s => {
-                monaco.languages.typescript.typescriptDefaults.addExtraLib(s.content, s.name + ".ts");
-            });
-
-            const editor = monaco.editor.create(document.getElementById("container"), {
-                language: "typescript",
-                theme: "vs-dark",
-                model: monaco.editor.createModel(`import { user } from "./user";
-
-export default function (req: ServiceRequest): ServiceResponse | Uint8Array | any {
-    return \`hello, \${user?.name ?? "world"}\`;
-};`, "typescript", new monaco.Uri("main.ts")),
-                options: {
-                    selectOnLineNumbers: true,
-                    roundedSelection: false,
-                    readOnly: false,
-                    cursorStyle: "line",
-                    automaticLayout: true
-                }
-            });
+            }).then(r => r.json()).then(r => r.data.sources) || [];
+            if (input.type === "ts") {
+                // 预加载所有 ts 脚本，用于 import
+                sources.forEach(s => {
+                    monaco.languages.typescript.typescriptDefaults.addExtraLib(s.content, s.name + ".ts");
+                });
+            }
+            // 渲染编辑器
+            const lang = input.type === "ts" ? "typescript" : "html",
+                editor = monaco.editor.create(document.getElementById("container"), {
+                    language: lang,
+                    theme: "vs-dark",
+                    model: monaco.editor.createModel(examples[input.type], lang, new monaco.Uri(`main.${input.type}`)),
+                    options: {
+                        selectOnLineNumbers: true,
+                        roundedSelection: false,
+                        readOnly: false,
+                        cursorStyle: "line",
+                        automaticLayout: true
+                    }
+                });
+            // 注册事件以及按键命令
             editor.onDidFocusEditorText(() => {
-                if (document.getElementById("btn").innerText === "🔓") {
+                if (document.getElementById("btn").innerText === "\uEB74") {
                     document.activeElement.blur(); // 防止在只读模式下，移动端点击编辑框时弹出软键盘
                 }
             });
             window.onresize = () => editor.layout(); // 当浏览器窗口大小发生改变时，编辑器自动调整大小
-
             document.onkeydown = function (e) {
                 const keyCode = e.keyCode || e.which || e.charCode,
                     ctrlKey = e.ctrlKey || e.metaKey;
                 if (ctrlKey && keyCode == 83) { // Ctrl + S
-                    const tsSrc = editor.getValue(),
-                        jsSrc = ts.transpileModule(tsSrc, {
+                    const src = editor.getValue(),
+                        jsSrc = editor.getModel().getLanguageId() !== "typescript" ? "" : ts.transpileModule(src, {
                             compilerOptions: {
                                 module: ts.ModuleKind.CommonJS,
                                 inlineSourceMap: true, // 使源映射文件（即 *.js.map 文件）在生成的 js 文件中内联写入：源映射内容会以 `//#soureMappingURL=` 开头，按 base64 格式追加写入
@@ -107,53 +176,44 @@ export default function (req: ServiceRequest): ServiceResponse | Uint8Array | an
                                 removeComments: true, // 移除注释
                                 downlevelIteration: true // 当 target 为 ES5 或 ES3 时，为 for-of、spread 和 destructuring 中的迭代器提供完全支持
                             },
-                            fileName: `${window.name || "noname"}.ts`
+                            fileName: (input.name || "noname") + ".ts"
                         })?.outputText;
-                    if (!window.name) {
-                        swal({ text: "Please input the script name:", content: "input", button: { text: "Create", closeModal: false } }).then(name => {
-                            if (!name) {
-                                swal("The name was required.", "", "error");
-                                return;
-                            }
 
-                            fetch("script", {
-                                method: "POST",
-                                body: JSON.stringify({ name, content: tsSrc, jscontent: jsSrc })
-                            }).then(r => r.json()).then(r => {
-                                if (r.code === "0") {
-                                    swal("Saved successfully.", "", "success");
-                                    window.name = name;
-                                } else {
-                                    swal(r.message, "", "error");
-                                }
-                            });
-                        });
-                    } else {
-                        fetch("script", {
+                    const onSourceSaving = function (name) {
+                        fetch("source", {
                             method: "POST",
-                            body: JSON.stringify({ name, content: tsSrc, jscontent: jsSrc })
+                            body: JSON.stringify({ name, type: input.type, content: src, compiled: jsSrc })
                         }).then(r => r.json()).then(r => {
                             if (r.code === "0") {
                                 swal("Saved successfully.", "", "success");
-                                window.name = name;
+                                input.name = name;
                             } else {
                                 swal(r.message, "", "error");
                             }
                         });
                     }
-                    e.preventDefault();
+                    if (!input.name) {
+                        swal({ text: "Please input name:", content: "input", button: { text: "Create", closeModal: false } }).then(name => {
+                            if (!name) {
+                                swal("The name is required.", "", "error");
+                                return;
+                            }
+                            onSourceSaving(name);
+                        });
+                    } else {
+                        onSourceSaving(input.name);
+                    }
                     return false;
                 }
                 if (ctrlKey && keyCode == 48) { // Ctrl + 0
                     if (window.name) {
-                        swal({ title: "Are you sure?", text: "Once deleted, you will not be able to recover this script!", icon: "warning", buttons: true, dangerMode: true }).then(confirm => {
+                        swal({ title: "Are you sure?", text: "Once deleted, you will not be able to recover this source!", icon: "warning", buttons: true, dangerMode: true }).then(confirm => {
                             if (confirm) {
-                                fetch("script?name=" + window.name, {
+                                fetch("source?name=" + input.name, {
                                     method: "DELETE"
                                 }).then(r => r.json()).then(r => {
                                     if (r.code === "0") {
                                         swal("Deleted successfully.", { icon: "success" });
-                                        delete window.name;
                                     } else {
                                         swal(r.message, "", "error");
                                     }
@@ -164,20 +224,19 @@ export default function (req: ServiceRequest): ServiceResponse | Uint8Array | an
                 }
             }
 
-            const name = window.location.search.substr(1).match(/(^|&)name=(?<name>[^&]*)(&|$)/i)?.groups?.name;
-            if (!name) {
-                swal("No name specified. A new script will be created soon.", "", "warning");
-                delete window.name;
+            if (!input.name) {
+                swal("No name specified. A new source will be created soon.", "", "warning");
                 return;
             }
-            const script = scripts.filter(s => s.name == name).pop();
-            if (script != null) {
-                editor.setValue(script.content);
+            const source = sources.filter(s => s.name == input.name).pop();
+            if (source != null) {
+                editor.setValue(source.content);
                 editor.updateOptions({ readOnly: true });
-                document.getElementById("btn").innerText = "🔓";
+                document.getElementById("btn").innerText = "\uEB74";
+            } else {
+                swal(`Source "${input.name}.${input.type}" is not existed. It will be created soon.`, "", "warning");
             }
 
-            window.name = name;
             window.editor = editor;
         })();
     </script>
