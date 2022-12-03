@@ -2,7 +2,11 @@ package main
 
 import (
     "bytes"
+    "crypto"
+    "crypto/hmac"
     "crypto/md5"
+    "crypto/rand"
+    "crypto/rsa"
     "crypto/sha256"
     "crypto/tls"
     "crypto/x509"
@@ -10,6 +14,7 @@ import (
     "embed"
     "encoding/base64"
     "encoding/json"
+    "encoding/pem"
     "errors"
     "flag"
     "fmt"
@@ -176,41 +181,55 @@ func main() {
     }()
 
     // 启动服务
-    if arguments.Secure {
-        fmt.Println("server has started on https://127.0.0.1:" + arguments.Port + " 🚀")
-        http.ListenAndServeTLS(":" + arguments.Port, arguments.ServerCert, arguments.ServerKey, nil)
-    } else {
+    if !arguments.Secure {
         fmt.Println("server has started on http://127.0.0.1:" + arguments.Port + " 🚀")
         http.ListenAndServe(":" + arguments.Port, nil)
+    } else {
+        fmt.Println("server has started on https://127.0.0.1:" + arguments.Port + " 🚀")
+        config := &tls.Config{
+            ClientAuth: tls.RequestClientCert, // 可通过 request.TLS.PeerCertificates 获取客户端证书
+        }
+        if arguments.ClientCertVerify { // 设置对服务端证书校验
+            config.ClientAuth = tls.RequireAndVerifyClientCert
+            b, _ := ioutil.ReadFile("./ca.crt")
+            config.ClientCAs = x509.NewCertPool()
+            config.ClientCAs.AppendCertsFromPEM(b)
+        }
+        server := &http.Server{
+            Addr: ":" + arguments.Port,
+            TLSConfig: config,
+        }
+        server.ListenAndServeTLS(arguments.ServerCert, arguments.ServerKey)
     }
 }
 
-func ParseStartupArguments() (a struct { Count int; Port string; Secure bool; ServerKey string; ServerCert string; }) {
+func ParseStartupArguments() (a struct { Count int; Port string; Secure bool; ServerKey string; ServerCert string; ClientCertVerify bool; }) {
     flag.IntVar(&a.Count, "n", 1, "The total count of virtual machines.") // 定义命令行参数 c，表示虚拟机的总个数，返回 Int 类型指针，默认值为 1，其值在 Parse 后会被修改为命令参数指定的值
     flag.StringVar(&a.Port, "p", "8090", "Port to use.")
     flag.BoolVar(&a.Secure, "s", false, "Enable https.")
     flag.StringVar(&a.ServerKey, "k", "server.key", "SSL key file.")
     flag.StringVar(&a.ServerCert, "c", "server.crt", "SSL cert file.")
+    flag.BoolVar(&a.ClientCertVerify, "v", false, "Enable client cert verify.")
     flag.Parse() // 在定义命令行参数之后，调用 Parse 方法对所有命令行参数进行解析
     return
 }
 
-func ExportMapValue(obj map[string]interface{}, name string, t string) (value interface{}, ok bool) {
+func ExportMapValue(obj map[string]interface{}, name string, t string) (value interface{}, success bool) {
     if obj == nil {
         return
     }
-    if o, ok := obj[name]; ok {
+    if o, k := obj[name]; k {
         switch t {
             case "string":
-                value, ok = o.(string)
+                value, success = o.(string)
             case "bool":
-                value, ok = o.(bool)
+                value, success = o.(bool)
             case "int":
-                value, ok = o.(int)
+                value, success = o.(int)
             default:
                 panic(errors.New("Unsupported type " + t + "."))
         }
-        if !ok {
+        if !success {
             panic(errors.New("The " + name + " is not a " + t + "."))
         }
     }
@@ -450,18 +469,37 @@ func CreateJsRuntime() *goja.Runtime {
                         config := &tls.Config{}
                         if caCert, ok := ExportMapValue(options, "caCert", "string"); ok { // 配置 ca 证书
                             config.RootCAs = x509.NewCertPool()
-                            config.RootCAs.AppendCertsFromPEM(caCert.([]byte))
+                            config.RootCAs.AppendCertsFromPEM([]byte(caCert.(string)))
                         }
                         if cert, ok := ExportMapValue(options, "cert", "string"); ok {
-                            if key, ok := ExportMapValue(options, "key", "string"); ok {
-                                x509cert, err := tls.LoadX509KeyPair(cert.(string), key.(string))
-                                if err != nil {
-                                    panic(err)
-                                }
-                                config.Certificates = []tls.Certificate{x509cert}
+                            var c tls.Certificate // 参考实现 https://github.com/sideshow/apns2/blob/HEAD/certificate/certificate.go
+                            b1, _ := pem.Decode([]byte(cert.(string))) // 读取公钥
+                            if b1 == nil {
+                                panic(errors.New("No public key found."))
                             }
+                            c.Certificate = append(c.Certificate, b1.Bytes) // tls.Certificate 存储了一个证书链（类型为 [][]byte），包含一个或多个 x509.Certificate（类型为 []byte）
+                            if key, ok := ExportMapValue(options, "key", "string"); ok {
+                                b2, _ := pem.Decode([]byte(key.(string))) // 读取私钥
+                                if b2 == nil {
+                                    panic(errors.New("No private key found."))
+                                }
+                                c.PrivateKey, err = x509.ParsePKCS1PrivateKey(b2.Bytes) // 使用 PKCS#1 格式
+                                if err != nil {
+                                    c.PrivateKey, err = x509.ParsePKCS8PrivateKey(b2.Bytes) // 使用 PKCS#8 格式
+                                    if err != nil {
+                                        panic(errors.New("Failed to parse private key."))
+                                    }
+                                }
+                            }
+                            if len(c.Certificate) == 0 || c.PrivateKey == nil {
+                                panic(errors.New("No private key or public key found."))
+                            }
+                            if a, err := x509.ParseCertificate(c.Certificate[0]); err == nil {
+                                c.Leaf = a
+                            }
+                            config.Certificates = []tls.Certificate{c} // 配置客户端证书
                         }
-                        if insecureSkipVerify, ok := ExportMapValue(options, "insecureSkipVerify", "bool"); ok {
+                        if insecureSkipVerify, ok := ExportMapValue(options, "insecureSkipVerify", "bool"); ok { // 忽略服务端证书校验
                             config.InsecureSkipVerify = insecureSkipVerify.(bool)
                         }
                         httpVersion, ok := ExportMapValue(options, "version", "int")
@@ -633,6 +671,9 @@ func (s *ServiceRequest) GetForm() interface{} {
     s.request.ParseForm() // 需要转换后才能获取表单
     return s.request.Form
 }
+func (s *ServiceRequest) GetCerts() interface{} { // 获取客户端证书
+    return s.request.TLS.PeerCertificates
+}
 func (s *ServiceRequest) UpgradeToWebSocket() (ws *ServiceWebSocket, err error) {
     s.isWebSocket = true // upgrader.Upgrade 内部已经调用过 WriteHeader 方法了，后续不应再次调用，否则将会出现 http: superfluous response.WriteHeader call from ... 的异常
     s.timer.Stop() // 关闭定时器，WebSocket 不需要设置超时时间
@@ -696,7 +737,7 @@ type Base64Struct struct{}
 func (b *Base64Struct) Encode(input []byte) string {
     return base64.StdEncoding.EncodeToString(input)
 }
-func (b *Base64Struct) Decode(input string) ([]byte, error) {
+func (b *Base64Struct) Decode(input string) ([]byte, error) { // 返回类型 []byte 将隐式地转换为 js/ts 中的 number[]
     return base64.StdEncoding.DecodeString(input)
 }
 
@@ -773,6 +814,89 @@ func (d *CryptoClient) Sha256(input []byte) []byte {
     h := sha256.New()
     h.Write(input)
     return h.Sum(nil)
+}
+func (d *CryptoClient) HmacWithSha256(input []byte, key []byte) []byte {
+    h := hmac.New(sha256.New, key)
+    h.Write(input)
+    return h.Sum(nil)
+}
+func (d *CryptoClient) RsaWithSha256(input []byte, key []byte) (sign []byte, err error) {
+    block, _  := pem.Decode(key)
+    privateKey, _ := x509.ParsePKCS1PrivateKey(block.Bytes)
+    h := sha256.New()
+    h.Write(input)
+    digest := h.Sum(nil)
+    sign, _ = rsa.SignPKCS1v15(nil, privateKey, crypto.SHA256, digest)
+    return
+}
+func (d *CryptoClient) RsaWithSha256Verify(input []byte, sign []byte, key []byte) bool {
+    block, _ := pem.Decode(key)
+    if block == nil {
+        panic(errors.New("The public key is invalid."))
+    }
+    publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
+    if err != nil {
+        panic(err)
+    }
+    digest := sha256.Sum256(input)
+    err = rsa.VerifyPKCS1v15(publicKey.(*rsa.PublicKey), crypto.SHA256, digest[:], sign)
+    if err != nil {
+        return false
+    }
+    return true
+}
+func (d *CryptoClient) RsaEncrypt(input []byte, key []byte) []byte {
+    block, _ := pem.Decode(key)
+    if block == nil {
+        panic(errors.New("The public key is invalid."))
+    }
+    publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
+    if err != nil {
+        panic(err)
+    }
+    cipher, err := rsa.EncryptPKCS1v15(rand.Reader, publicKey.(*rsa.PublicKey), input)
+    if err != nil {
+        panic(err)
+    }
+    return cipher
+}
+func (d *CryptoClient) RsaDecrypt(input []byte, key []byte) []byte {
+    block, _ := pem.Decode(key)
+    if block == nil {
+        panic(errors.New("The private key is invalid."))
+    }
+    privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+    if err != nil {
+        panic(err)
+    }
+    output, err := rsa.DecryptPKCS1v15(rand.Reader, privateKey, input)
+    if err != nil {
+        panic(err)
+    }
+    return output
+}
+func (d *CryptoClient) GenerateRsaKey() (prvkey []byte, pubKey []byte) {
+    privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+    if err != nil {
+        panic(err)
+    }
+    derStream := x509.MarshalPKCS1PrivateKey(privateKey)
+    block := &pem.Block{
+        Type:  "RSA PRIVATE KEY",
+        Bytes: derStream,
+    }
+    prvkey = pem.EncodeToMemory(block)
+    publicKey := &privateKey.PublicKey
+    derPkix, err := x509.MarshalPKIXPublicKey(publicKey)
+    if err != nil {
+        panic(err)
+    }
+    block = &pem.Block{
+        Type:  "PUBLIC KEY",
+        Bytes: derPkix,
+    }
+    pubKey = pem.EncodeToMemory(block)
+    return
 }
 
 // db module

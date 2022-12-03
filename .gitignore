@@ -3,3 +3,5 @@ cube
 *.log
 *.key
 *.crt
+*.srl
+*.csr

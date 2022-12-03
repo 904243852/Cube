@@ -119,6 +119,7 @@ export default function (req: ServiceRequest): ServiceResponse | Uint8Array | an
                     getBody(): any;
                     getMethod(): "GET" | "POST" | "PUT" | "DELETE";
                     getForm(): { [name: string]: string[]; };
+                    getCerts(): { raw: number[]; }[];
                     upgradeToWebSocket(): ServiceWebSocket;
                 };
                 declare class ServiceResponse {

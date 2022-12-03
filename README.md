@@ -245,7 +245,11 @@ A simple web server that can be developed online using typescript.
     crypto.sha256("hello, world").map(c => c.toString(16).padStart(2, "0")).join("") // 09ca7e4eaa6e8ae9c7d261167129184883644d07dfba7cbfbc4c8a2e08360d5b
 
     // http
-    const { status, header, data } = $native("http")({}).request("GET", "https://www.baidu.com")
+    const { status, header, data } = $native("http")({
+        //caCert: "", // ca certificates for http client
+        //cert: "", key: "", // private key and certificate/public key for http client auth
+        //insecureSkipVerify: true // disable verify server certificate
+    }).request("GET", "https://www.baidu.com")
     status // 200
     header // {"Content-Length":["227"],"Content-Type":["text/html"]...]}
     data.toString() // "<html>..."
@@ -295,6 +299,8 @@ A simple web server that can be developed online using typescript.
     curl -XPOST http://127.0.0.1:8090/service/greeting -H 'Content-Type: application/x-www-form-urlencoded' -d 'name=zhangsan&age=26&name=lisi'
 
     curl -XPOST http://127.0.0.1:8090/service/greeting -H 'Content-Type: application/json' -d '{"name":"zhangsan","age":26}'
+
+    curl --cacert ./ca.crt --cert ./client.crt --key ./client.key https://127.0.0.1:8090/service/greeting
     ```
 
 - Commands of source using curl
