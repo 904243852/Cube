@@ -25,6 +25,7 @@ import (
     "image/jpeg" // 需要导入 "image/jpeg"、"image/gif"、"image/png" 去解码 jpg、gif、png 图片，否则当使用 image.Decode 处理图片文件时，会报 image: unknown format 错误
     _ "image/png"
     "io/ioutil"
+    "log"
     "net/http"
     "net/smtp"
     "os"
@@ -81,6 +82,14 @@ func init() {
 func main() {
     // 获取启动参数
     arguments := ParseStartupArguments()
+
+    // 初始化日志文件
+    logFile, err := os.OpenFile("cube.log", os.O_CREATE | os.O_WRONLY | os.O_APPEND, 0644)
+    if err != nil {
+        panic(err)
+        return
+    }
+    log.SetOutput(logFile)
 
     // 创建虚拟机池
     CreateWorkerPool(arguments.Count)
@@ -790,19 +799,19 @@ type ConsoleClient struct {
     runtime *goja.Runtime
 }
 func (c *ConsoleClient) Log(a ...interface{}) {
-    fmt.Println(append([]interface{}{"\r"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Log"}, a...)...)
+    log.Println(append([]interface{}{"\r"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Log"}, a...)...)
 }
 func (c *ConsoleClient) Debug(a ...interface{}) {
-    fmt.Println(append(append([]interface{}{"\r"+"\033[1;30m"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Debug"}, a...), "\033[m")...)
+    log.Println(append(append([]interface{}{"\r"+"\033[1;30m"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Debug"}, a...), "\033[m")...)
 }
 func (c *ConsoleClient) Info(a ...interface{}) {
-    fmt.Println(append(append([]interface{}{"\r"+"\033[0;34m"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Info"}, a...), "\033[m")...)
+    log.Println(append(append([]interface{}{"\r"+"\033[0;34m"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Info"}, a...), "\033[m")...)
 }
 func (c *ConsoleClient) Warn(a ...interface{}) {
-    fmt.Println(append(append([]interface{}{"\r"+"\033[0;33m"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Warn"}, a...), "\033[m")...)
+    log.Println(append(append([]interface{}{"\r"+"\033[0;33m"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Warn"}, a...), "\033[m")...)
 }
 func (c *ConsoleClient) Error(a ...interface{}) {
-    fmt.Println(append(append([]interface{}{"\r"+"\033[0;31m"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Error"}, a...), "\033[m")...)
+    log.Println(append(append([]interface{}{"\r"+"\033[0;31m"+time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Error"}, a...), "\033[m")...)
 }
 
 // crypto module

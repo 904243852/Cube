@@ -148,7 +148,7 @@ A simple web server that can be developed online using typescript.
                     }
                     router.addRoute({ // 动态添加路由
                         path: to.path,
-                        component: httpVueLoader(`view${to.path === "/" ? "/index" : to.path}.vue`) // 远程加载组件
+                        component: httpVueLoader(`../resource${to.path === "/" ? "/index" : to.path}.vue`) // 远程加载组件
                     });
                     next(to.path); // 重新进入 beforeEach 方法
                 });
