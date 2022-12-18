@@ -203,7 +203,7 @@ export default function (req: ServiceRequest): ServiceResponse | Uint8Array | an
                     if (input.name) {
                         swal({ title: "Are you sure?", text: "Once deleted, you will not be able to recover this source!", icon: "warning", buttons: true, dangerMode: true }).then(confirm => {
                             if (confirm) {
-                                fetch("source?name=" + input.name, {
+                                fetch(`source?name=${input.name}&type=${input.type}`, {
                                     method: "DELETE"
                                 }).then(r => r.json()).then(r => {
                                     if (r.code === "0") {
