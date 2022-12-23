@@ -89,10 +89,7 @@ export default function (req: ServiceRequest): ServiceResponse | Uint8Array | an
                 swal("The source type must be ts, tpl or vue.", "", "error");
                 return;
             }
-            if (input.name && (
-                (input.type === "ts" && !/^(node_modules\/)?\w{2,32}$/.test(input.name)) ||
-                !/^\w{2,32}$/.test(input.name)
-            )) {
+            if (input.name && !(input.type === "ts" && /^(node_modules\/)?\w{2,32}$/.test(input.name) || /^\w{2,32}$/.test(input.name))) {
                 swal("The name must be a letter, number, or underscore with a length of 2 to 32.", "", "error");
                 return;
             }
