@@ -4,10 +4,10 @@ go 1.17
 
 require (
 	github.com/dop251/goja v0.0.0-20221106173738-3b8a68ca89b4
-	github.com/dop251/goja_nodejs v0.0.0-20221009164102-3aa5028e57f6
 	github.com/gorilla/websocket v1.5.0
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/shirou/gopsutil v3.21.11+incompatible
+	github.com/shopspring/decimal v1.3.1
 	golang.org/x/net v0.2.0
 )
 

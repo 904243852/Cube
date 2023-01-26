@@ -3,234 +3,389 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
-    <!-- 网页的宽度自动适应手机屏幕的宽度 -->
+    <link rel="stylesheet" href="//unpkg.com/element-ui/lib/theme-chalk/index.css">
     <title>Cube</title>
-    <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.1/min/vs/editor/editor.main.css">
+    <base target="_blank" /><!-- 网页中所有的超链接的目标地址都在新建窗口中打开 -->
     <style>
-        * {
-            margin: 0;
+        html, body {
+            height: 100%;
+            margin: 0px;
+            background-color: #f0f2f5;
+        }
+        .el-table__header .cell {
+            padding-right: 0 !important;
+        }
+        .el-pagination .el-pagination__total {
+            float: left;
+        }
+        .el-table button {
             padding: 0;
         }
-        html, body {
-            width: 100%;
-            height: 100%;
+        .el-table .disabled {
+            border-color: #e4e7ed;
+            color: #c0c4cc;
+            cursor: not-allowed;
         }
-        html {
-            overflow: hidden;
+        .danger {
+            color: #F56C6C;
         }
     </style>
 </head>
 
 <body>
-    <div id="container" style="width: 100%; height: 100%;"></div>
-    <div id="btn" style="position: fixed; z-index: 10; bottom: 40px; right: 40px; width: 40px; height: 40px; font-size: 18px; display: flex; line-height: 40px; justify-content: center; border-radius: 50%; box-shadow: rgb(0, 0, 0, 0.12) 0px 2px 8px 0px; cursor: pointer; background-color: white; font-family: codicon;" onclick="javascript:(() => { if (this.innerText == '\uEB74') { window.editor.updateOptions({ readOnly: false }); this.innerText = '\uEAB2'; return; }; document.onkeydown({ ctrlKey: true, keyCode: 83 }); })();">&#60082</div>
-
-    <script src="https://cdn.bootcdn.net/ajax/libs/typescript/4.8.4/typescript.min.js"></script>
-
-    <script src="https://cdn.bootcdn.net/ajax/libs/sweetalert/2.1.2/sweetalert.min.js"></script>
-
-    <script>var require = { paths: { "vs": "https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.1/min/vs" } };</script>
-    <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.1/min/vs/loader.js"></script>
-    <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.1/min/vs/editor/editor.main.nls.js"></script>
-    <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.1/min/vs/editor/editor.main.js"></script>
-
-    <script>
-        (async function () {
-            // 代码示例模板
-            examples = {
-                ts: `import { user } from "./user";
-
-export default function (req: ServiceRequest): ServiceResponse | Uint8Array | any {
-    return \`hello, \${user?.name ?? "world"}\`;
-};`,
-                tpl: `<!DOCTYPE html>
-<html>
-
-<head>
-    <meta charset="utf-8" />
-    <title></title>
-</head>
-
-<body>
-    hello, {{ .name }}
+    <div id="app" v-cloak>
+        <div style="height: 100%; padding: 32px; position: relative;">
+            <h3 style="margin: 0 0 20px; font-weight: 400; color: #1f2f3d; font-size: 22px; border-left: 5px solid #50bfff; padding: 8px 16px;">
+                Cube
+            </h3>
+            <el-card>
+                <el-row style="border-bottom: 1px solid #DCDFE6; padding-bottom: 10px;">
+                    <el-dropdown @command="onCreate" placement="bottom-start">
+                        <el-button icon="el-icon-plus">New</el-button>
+                        <el-dropdown-menu slot="dropdown">
+                            <el-dropdown-item command="controller">Controller</el-dropdown-item>
+                            <el-dropdown-item command="interceptor" disabled>Interceptor</el-dropdown-item>
+                            <el-dropdown-item command="daemon">Daemon</el-dropdown-item>
+                            <el-dropdown-item command="crontab" disabled>Crontab</el-dropdown-item>
+                            <el-dropdown-item command="module">Module</el-dropdown-item>
+                            <el-dropdown-item command="template,html" divided>Template(Html)</el-dropdown-item>
+                            <el-dropdown-item command="resource,vue" divided>Resource(Vue)</el-dropdown-item>
+                        </el-dropdown-menu>
+                    </el-dropdown>
+                    <el-upload :auto-upload="false" action="" :on-change="onImport" :show-file-list="false" accept="application/json" style="display: inline-block;">
+                        <el-button icon="el-icon-upload2">Import</el-button>
+                    </el-upload>
+                    <el-button icon="el-icon-download" @click="onExport">Export</el-button>
+                    <div style="float: right; display: flex;">
+                        <el-select v-model="search.type" placeholder="Select a type" clearable @change="onFetch(true)">
+                            <el-option label="Controller" value="controller">
+                            </el-option>
+                            <el-option label="Interceptor" value="interceptor">
+                            </el-option>
+                            <el-option label="Daemon" value="daemon">
+                            </el-option>
+                            <el-option label="Crontab" value="crontab">
+                            </el-option>
+                            <el-option label="Module" value="module">
+                            </el-option>
+                            <el-option label="Template" value="template">
+                            </el-option>
+                            <el-option label="Resource" value="resource">
+                            </el-option>
+                        </el-select>
+                        <el-input v-model="search.keyword" placeholder="Enter keyword here" clearable @change="onFetch(true)">
+                            <i class="el-icon-search el-input__icon" slot="suffix"></i>
+                        </el-input>
+                    </div>
+                </el-row>
+                <el-row style="padding-top: 0;">
+                    <el-table v-loading="visible.loading4fetch" :data="records" stripe :row-class-name="onRowClassName" style="width: 100%;">
+                        <el-table-column type="expand">
+                            <template slot-scope="scope">
+                                <el-descriptions style="margin-left: 56px;" :column="4" border>
+                                    <el-descriptions-item label="Name">
+                                        {{ scope.row.name }}
+                                    </el-descriptions-item>
+                                    <el-descriptions-item label="Type">
+                                        {{ scope.row.type }}
+                                    </el-descriptions-item>
+                                    <el-descriptions-item label="Language">
+                                        {{ scope.row.lang }}
+                                    </el-descriptions-item>
+                                    <el-descriptions-item label="Active">
+                                        {{ scope.row.active }}
+                                    </el-descriptions-item>
+                                    <el-descriptions-item label="Url" v-if='["controller", "interceptor", "resource"].indexOf(scope.row.type) != -1' :span="2">
+                                        <el-link type="primary" :href='({ controller: "/service/", resource: "/resource/" }[scope.row.type] || "") + scope.row.url'>{{ ({ controller: "/service/", resource: "/resource/" }[scope.row.type] || "") + scope.row.url }}</el-link>
+                                    </el-descriptions-item>
+                                    <el-descriptions-item label="Method" v-if='scope.row.type == "controller"'>
+                                        {{ scope.row.method || "Any" }}
+                                    </el-descriptions-item>
+                                    <el-descriptions-item label="Cron" v-if="scope.row.cron">
+                                        {{ scope.row.cron }}
+                                    </el-descriptions-item>
+                                </el-descriptions>
+                            </template>
+                        </el-table-column>
+                        <el-table-column label="Name" prop="name" sortable>
+                        </el-table-column>
+                        <el-table-column label="Type" prop="type">
+                        </el-table-column>
+                        <el-table-column label="Language" prop="lang">
+                        </el-table-column>
+                        <el-table-column label="Operation">
+                            <template slot-scope="scope">
+                                <el-switch v-model="scope.row.active" @change="onRowActiveSwitch(scope.row)" style="margin-right: 12px;" :disabled='scope.row.status == "true"'>
+                                </el-switch>
+                                <el-button type="text" @click="onRowSetting(scope.row)" icon="el-icon-setting" v-if="!scope.row.active">
+                                </el-button>
+                                <el-button type="text" @click="onRowEdit(scope.row)" icon="el-icon-edit" v-if="!scope.row.active">
+                                </el-button>
+                                <el-button type="text" @click="onRowDelete(scope.row)" icon="el-icon-delete" v-if="!scope.row.active" class="danger">
+                                </el-button>
+                                <el-button type="text" @click="onRowStatusSwitch(scope.row)" :icon='scope.row.status == "true" ? "el-icon-video-pause" : "el-icon-video-play"' v-if='scope.row.type == "daemon" && scope.row.active' :class='{ danger: scope.row.status == "true" }'>
+                                </el-button>
+                            </template>
+                        </el-table-column>
+                    </el-table>
+                    <el-pagination @size-change="onPageSizeChange" @current-change="onPageCurrentChange"
+                        :current-page="pagination.index" :page-sizes="[5, 10, 20, 50]" :page-size="pagination.size"
+                        layout="total, sizes, prev, pager, next, jumper" :total="pagination.count"
+                        style="text-align: right; margin-top: 13px;">
+                    </el-pagination>
+                </el-row>
+            </el-card>
+            <el-drawer title="Setting" :visible.sync="visible.setting" size="36">
+                <el-form ref="form" :model="record" label-position="right" label-width="80px" style="padding: 30px;">
+                    <el-form-item label="Name">
+                        <el-input v-model="record.name" disabled></el-input>
+                    </el-form-item>
+                    <el-form-item label="Type">
+                        <el-input v-model="record.type" disabled></el-input>
+                    </el-form-item>
+                    <el-form-item label="Language">
+                        <el-input v-model="record.lang" disabled></el-input>
+                    </el-form-item>
+                    <el-form-item label="Method" v-if='record.type == "controller"'>
+                        <el-select v-model="record.method" placeholder="Please select a method">
+                            <el-option label="Any" value=""></el-option>
+                            <el-option label="Get" value="GET"></el-option>
+                            <el-option label="Post" value="POST"></el-option>
+                            <el-option label="Put" value="PUT"></el-option>
+                            <el-option label="Delete" value="DELETE"></el-option>
+                          </el-select>
+                    </el-form-item>
+                    <el-form-item label="Url" v-if='["controller", "interceptor", "resource"].indexOf(record.type) != -1'>
+                        <el-input v-model="record.url">
+                            <template slot="prepend" v-if="record.type != 'interceptor'">{{ { controller: "/service/", resource: "/resource/" }[record.type] }}</template>
+                        </el-input>
+                    </el-form-item>
+                    <el-form-item label="Cron" v-if="record.type == 'crontab'">
+                        <el-input v-model="record.cron"></el-input>
+                    </el-form-item>
+                    <el-form-item>
+                        <el-button type="primary" :loading="visible.loading4setting" @click="onSettingSubmit">Submit</el-button>
+                        <el-button @click="visible.setting = !visible.setting">Cancel</el-button>
+                    </el-form-item>
+                </el-form>
+            </el-drawer>
+        </div>
+    </div>
 </body>
-
-</html>`,
-                vue: `<template>
-    <p>hello, {{ name }}</p>
-</template>
-
-\x3Cscript>
-    module.exports = {
-        data: function() {
+<script src="//cdn.bootcdn.net/ajax/libs/vue/2.7.14/vue.js"></script>
+<script src="//unpkg.com/element-ui"></script>
+<script>
+    new Vue({
+        el: "#app",
+        data() {
             return {
-                name: "world"
+                records: [],
+                pagination: {
+                    index: 1,
+                    size: 5,
+                    count: 0
+                },
+                search: {
+                    keyword: "",
+                    type: ""
+                },
+                visible: {
+                    setting: false,
+                    loading4fetch: true,
+                    loading4setting: false
+                },
+                record: {}
             }
-        }
-    }
-\x3C/script>
-
-<style scoped>
-
-</style>`
-            };
-
-            // 获取请求参数
-            const input = (function () {
-                const params = new URL(window.location).searchParams,
-                    name = params.get("name");
-                return {
-                    type: name?.match(/\.(.*)$/)?.[1] || params.get("type") || "ts",
-                    name: name?.replace(/\.(\w+)$/, "")
-                };
-            })();
-            if (["ts", "tpl", "vue"].indexOf(input.type) === -1) {
-                swal("The source type must be ts, tpl or vue.", "", "error");
-                return;
-            }
-            if (input.name && !(input.type === "ts" && /^(node_modules\/)?\w{2,32}$/.test(input.name) || /^\w{2,32}$/.test(input.name))) {
-                swal("The name must be a letter, number, or underscore with a length of 2 to 32.", "", "error");
-                return;
-            }
-
-            // 初始化编辑器
-            monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
-                allowNonTsExtensions: true,
-                experimentalDecorators: true, // 启用实验性的装饰器特性
-                typeRoots: ["."],
-                downlevelIteration: true // 允许迭代器进行迭代
-            });
-            monaco.languages.typescript.typescriptDefaults.addExtraLib(`
-                declare function $native(name: string): any;
-                declare class ServiceRequest {
-                    getHeader(): { [name: string]: string[]; };
-                    getURL(): { path: string; params: { [name: string]: string[]; }; };
-                    getBody(): any;
-                    getMethod(): "GET" | "POST" | "PUT" | "DELETE";
-                    getForm(): { [name: string]: string[]; };
-                    getCerts(): { raw: number[]; }[];
-                    upgradeToWebSocket(): ServiceWebSocket;
-                };
-                declare class ServiceResponse {
-                    constructor(status: number, header: { [name: string]: string; }, data: Uint8Array | string);
-                    setStatus(status: number): void;
-                    setHeader(header: { [name: string]: string; }): void;
-                    setData(data: Uint8Array | string): void;
-                };
-                declare class ServiceWebSocket {
-                    read(): { messageType: number; data: Uint8Array; };
-                    send(data: Uint8Array | string);
-                    close();
-                };
-            `, "global.d.ts");
-            const sources = await fetch("source?type=" + input.type + (input.type !== "ts" && input.name ? "&name=" + input.name : ""), {
-                method: "GET"
-            }).then(r => r.json()).then(r => r.data.sources) || [];
-            if (input.type === "ts") {
-                // 预加载所有 ts 脚本，用于 import
-                sources.forEach(s => {
-                    monaco.languages.typescript.typescriptDefaults.addExtraLib(s.content, s.name + ".ts");
-                });
-            }
-            // 渲染编辑器
-            const lang = input.type === "ts" ? "typescript" : "html",
-                editor = monaco.editor.create(document.getElementById("container"), {
-                    language: lang,
-                    theme: "vs-dark",
-                    model: monaco.editor.createModel(examples[input.type], lang, new monaco.Uri(`main.${input.type}`)),
-                    options: {
-                        selectOnLineNumbers: true,
-                        roundedSelection: false,
-                        readOnly: false,
-                        cursorStyle: "line",
-                        automaticLayout: true
-                    }
-                });
-            // 注册事件以及按键命令
-            editor.onDidFocusEditorText(() => {
-                if (document.getElementById("btn").innerText === "\uEB74") {
-                    document.activeElement.blur(); // 防止在只读模式下，移动端点击编辑框时弹出软键盘
+        },
+        methods: {
+            onFetch(reset) {
+                const that = this;
+                if (reset) {
+                    that.pagination.index = 1;
                 }
-            });
-            window.onresize = () => editor.layout(); // 当浏览器窗口大小发生改变时，编辑器自动调整大小
-            document.onkeydown = function (e) {
-                const keyCode = e.keyCode || e.which || e.charCode,
-                    ctrlKey = e.ctrlKey || e.metaKey;
-                if (ctrlKey && keyCode == 83) { // Ctrl + S
-                    const src = editor.getValue(),
-                        jsSrc = editor.getModel().getLanguageId() !== "typescript" ? "" : ts.transpileModule(src, {
-                            compilerOptions: {
-                                module: ts.ModuleKind.CommonJS,
-                                inlineSourceMap: true, // 使源映射文件（即 *.js.map 文件）在生成的 js 文件中内联写入：源映射内容会以 `//#soureMappingURL=` 开头，按 base64 格式追加写入
-                                inlineSources: true, // 指定进一步将 ts 文件的内容也包含到输出文件中
-                                removeComments: true, // 移除注释
-                                downlevelIteration: true // 当 target 为 ES5 或 ES3 时，为 for-of、spread 和 destructuring 中的迭代器提供完全支持
-                            },
-                            fileName: (input.name || "noname") + ".ts"
-                        })?.outputText;
-
-                    const onSourceSaving = function (name) {
-                        fetch("source", {
-                            method: "POST",
-                            body: JSON.stringify({ name, type: input.type, content: src, compiled: jsSrc })
-                        }).then(r => r.json()).then(r => {
-                            if (r.code === "0") {
-                                swal("Saved successfully.", "", "success");
-                                input.name = name;
-                            } else {
-                                swal(r.message, "", "error");
-                            }
-                        });
+                that.visible.loading4fetch = true;
+                fetch(`source?name=${that.search.keyword}&type=${that.search.type}&from=${(that.pagination.index - 1) * that.pagination.size}&size=${that.pagination.size}`, {
+                    method: "GET"
+                }).then(r => r.json()).then(r => {
+                    that.records = r.data.sources;
+                    that.visible.loading4fetch = false;
+                    that.pagination.count = r.data.total;
+                }).catch(e => {
+                    that.$message({
+                        type: "error",
+                        message: r.message
+                    });
+                    that.visible.loading4fetch = false;
+                });
+            },
+            onImport(file) {
+                const that = this;
+                const reader = new FileReader();
+                reader.onload = function() {
+                    fetch("source?bulk", {
+                        method: "POST",
+                        body: this.result
+                    }).then(r => r.json()).then(r => {
+                        if (r.code === "0") {
+                            that.$message({
+                                type: "success",
+                                message: "Import succeeded."
+                            });
+                            that.onFetch();
+                        } else {
+                            that.$message({
+                                type: "error",
+                                message: r.message
+                            });
+                        }
+                    });
+                };
+                reader.readAsText(file.raw, "utf-8");
+            },
+            onExport() {
+                fetch(`source?name=${this.search.keyword}&type=${this.search.type}&size=5000`, {
+                    method: "GET"
+                }).then(r => r.json()).then(r => {
+                    const url = window.URL.createObjectURL(new Blob([JSON.stringify(r.data.sources)]));
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = `source-${new Date().getTime()}.json`;
+                    a.click();
+                    window.URL.revokeObjectURL(url); // 释放 url 对象内存
+                });
+            },
+            onPageSizeChange(value) {
+                this.pagination.size = value;
+                this.onFetch();
+            },
+            onPageCurrentChange(value) {
+                this.pagination.index = value;
+                this.onFetch();
+            },
+            onCreate(c) {
+                const [type, lang] = c.split(",");
+                window.open(`editor.html?type=${type}&lang=${lang || "typescript"}`);
+            },
+            onRowClassName({ row: record }) {
+                return record.active ? "" : "disabled";
+            },
+            onRowSetting(record) {
+                this.record = { ...record };
+                this.visible.setting = true;
+            },
+            onRowEdit(record) {
+                window.open(`editor.html?name=${record.name}&lang=${record.lang}&type=${record.type}`)
+            },
+            onRowDelete(record) {
+                const that = this;
+                that.$confirm("This operation will permanently delete the record. Do you want to continue?", "Tips", {
+                    confirmButtonText: "Confirm",
+                    cancelButtonText: "Cancel",
+                    type: "warning",
+                    beforeClose: (action, instance, done) => {
+                        if (action === "confirm") {
+                            instance.confirmButtonLoading = true;
+                            instance.confirmButtonText = "Delete...";
+                            fetch(`source?name=${record.name}&lang=${record.lang}`, {
+                                method: "DELETE"
+                            }).then(r => r.json()).then(r => {
+                                if (r.code === "0") {
+                                    that.$message({
+                                        type: "success",
+                                        message: "Delete succeeded."
+                                    });
+                                    that.onFetch();
+                                } else {
+                                    that.$message({
+                                        type: "error",
+                                        message: r.message
+                                    });
+                                }
+                                instance.confirmButtonLoading = false;
+                            });
+                        }
+                        done();
                     }
-                    if (!input.name) {
-                        swal({ text: "Please input name:", content: "input", button: { text: "Create", closeModal: false } }).then(name => {
-                            if (!name) {
-                                swal("The name is required.", "", "error");
-                                return;
-                            }
-                            onSourceSaving(name);
+                }).catch(()=>{});
+            },
+            onRowActiveSwitch(record) {
+                const that = this;
+                fetch("source", {
+                    method: "PATCH",
+                    body: JSON.stringify(record)
+                }).then(r => r.json()).then(r => {
+                    if (r.code === "0") {
+                        that.$message({
+                            type: "success",
+                            message: (record.active ? "Active" : "Inactive") + " succeeded."
                         });
                     } else {
-                        onSourceSaving(input.name);
+                        that.$message({
+                            type: "error",
+                            message: r.message
+                        });
+                        record.active = !record.active;
                     }
-                    return false;
-                }
-                if (ctrlKey && keyCode == 48) { // Ctrl + 0
-                    if (input.name) {
-                        swal({ title: "Are you sure?", text: "Once deleted, you will not be able to recover this source!", icon: "warning", buttons: true, dangerMode: true }).then(confirm => {
-                            if (confirm) {
-                                fetch(`source?name=${input.name}&type=${input.type}`, {
-                                    method: "DELETE"
-                                }).then(r => r.json()).then(r => {
-                                    if (r.code === "0") {
-                                        swal("Deleted successfully.", { icon: "success" });
-                                    } else {
-                                        swal(r.message, "", "error");
-                                    }
-                                });
-                            }
+                });
+            },
+            onRowStatusSwitch(record) {
+                const that = this,
+                    status = record.status == "true" ? "false" : "true";
+                fetch("source", {
+                    method: "PATCH",
+                    body: JSON.stringify({
+                        ...record,
+                        status,
+                    })
+                }).then(r => r.json()).then(r => {
+                    if (r.code === "0") {
+                        that.$message({
+                            type: "success",
+                            message: (status == "true" ? "Run" : "Stop") + " succeeded."
+                        });
+                        record.status = status;
+                    } else {
+                        that.$message({
+                            type: "error",
+                            message: r.message
                         });
                     }
-                }
+                });
+            },
+            onSettingSubmit() {
+                const that = this;
+                fetch("source", {
+                    method: "PATCH",
+                    body: JSON.stringify({
+                        name: that.record.name,
+                        type: that.record.type,
+                        lang: that.record.lang,
+                        active: that.record.active,
+                        method: that.record.method,
+                        url: that.record.url,
+                        cron: that.record.cron
+                    })
+                }).then(r => r.json()).then(r => {
+                    if (r.code === "0") {
+                        that.$message({
+                            type: "success",
+                            message: "Setting succeeded."
+                        });
+                        that.visible.setting = false;
+                        that.onFetch();
+                    } else {
+                        that.$message({
+                            type: "error",
+                            message: r.message
+                        });
+                    }
+                });
             }
-
-            if (!input.name) {
-                swal("No name specified. A new source will be created soon.", "", "warning");
-                return;
-            }
-            const source = sources.filter(s => s.name == input.name).pop();
-            if (source != null) {
-                editor.setValue(source.content);
-                editor.updateOptions({ readOnly: true });
-                document.getElementById("btn").innerText = "\uEB74";
-            } else {
-                swal(`Source "${input.name}.${input.type}" is not existed. It will be created soon.`, "", "warning");
-            }
-
-            window.editor = editor;
-        })();
-    </script>
-</body>
+        },
+        mounted: function () {
+            this.onFetch();
+        }
+    });
+</script>
 
 </html>

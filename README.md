@@ -13,10 +13,52 @@ A simple web server that can be developed online using typescript.
 
 3. Start the server:
     ```bash
+    # Build
+    make build
+
+    # Run
+    ./cube
+    ```
+    Or start from source code:
+    ```bash
     make run
     ```
 
-4. Open `http://127.0.0.1:8090/` in browser and code what you want.
+4. For more startup parameters, please refer to:
+    ```bash
+    ./cube --help
+    ``` 
+
+4. Open `http://127.0.0.1:8090/` in browser.
+
+## Run using https
+
+1. Make sure `ca.key`, `ca.crt`, `server.key` and `server.crt` is created:
+    ```bash
+    make crt
+    ```
+
+2. Start the server:
+    ```bash
+    ./cube \
+        -n 5 \ # using 5 virtual machines
+        -p 8443 \ # server with port 8443
+        -s \ # enable https
+        -v # enable client cert verification
+    ```
+
+3. If you are using a self-signed certificate, you can install the `ca.crt` to the local root certificate library.
+
+4. Open `https://127.0.0.1:8443/` in browser.
+
+5. You can run your service with client certificate using curl:
+    ```bash
+    # Create client.key and client.crt
+    make ccrt
+
+    # Run the service with client.crt and ca.crt
+    curl --cacert ./ca.crt --cert ./client.crt --key ./client.key https://127.0.0.1:8443/service/foo
+    ```
 
 ## Shortcut key of Editor Online
 
@@ -24,17 +66,26 @@ A simple web server that can be developed online using typescript.
 
 - Delete this script: `Ctrl` + `0`
 
-## Example of script
+## Examples
 
-- A example of a custom module.
+- A simple controller.
     ```typescript
-    // http://127.0.0.1:8090/?name=user
+    // http://127.0.0.1:8090/editor.html?name=foo
+    export default function (req: ServiceRequest): ServiceResponse | Uint8Array | any {
+        console.info("The body of request is:", String.fromCharCode(...req.getBody()))
+        return `hello, world`;
+    };
+    ```
+
+- A custom module.
+    ```typescript
+    // http://127.0.0.1:8090/editor.html?name=user&type=module
     export const user = {
         name: "zhangsan"
     };
     ```
     ```typescript
-    // http://127.0.0.1:8090/?name=foo
+    // http://127.0.0.1:8090/editor.html?name=foo
     import { user } from "./user";
 
     export default function (req: ServiceRequest): ServiceResponse | Uint8Array | any {
@@ -42,9 +93,9 @@ A simple web server that can be developed online using typescript.
     };
     ```
 
-- A example of a custom module that extends Date.
+- A custom module extends Date.
     ```typescript
-    // http://127.0.0.1:8090/?name=node_modules/date
+    // http://127.0.0.1:8090/editor.html?name=node_modules/date&type=module
     declare global {
         interface Date {
             toString(layout?: string): string;
@@ -93,7 +144,7 @@ A simple web server that can be developed online using typescript.
     export default { Date };
     ```
     ```typescript
-    // http://127.0.0.1:8090/?name=foo
+    // http://127.0.0.1:8090/editor.html?name=foo
     import "date";
 
     export default function (req) {
@@ -101,7 +152,7 @@ A simple web server that can be developed online using typescript.
     };
     ```
 
-- A simple example of return a custom response.
+- Return a custom response.
     ```typescript
     export default function (req: ServiceRequest): ServiceResponse | Uint8Array | any {
         // return new Uint8Array([104, 101, 108, 108, 111]);
@@ -109,10 +160,10 @@ A simple web server that can be developed online using typescript.
     }
     ```
 
-- A example of return a view with asynchronous vues.
-    1. Create a template with name `index.tpl`.
+- Return a view with asynchronous vues.
+    1. Create a template with name `index`, type `template` and lang `html`.
         ```html
-        <!-- http://127.0.0.1:8090/?name=index.tpl -->
+        <!-- http://127.0.0.1:8090/editor.html?name=index&type=template&lang=html -->
         <!DOCTYPE html>
         <html>
         <head>
@@ -157,9 +208,9 @@ A simple web server that can be developed online using typescript.
         </body>
         </html>
         ```
-    2. Create a vue SFC resource with name `greeting.vue`.
+    2. Create a vue SFC resource with name `greeting`, type `resource`, lang `vue` and url `/resource/greeting.vue`.
         ```html
-        <!-- http://127.0.0.1:8090/?name=greeting.vue -->
+        <!-- http://127.0.0.1:8090/editor.html?name=greeting&type=reaource&lang=vue -->
         <template>
             <p>hello, {{ name }}</p>
         </template>
@@ -180,18 +231,18 @@ A simple web server that can be developed online using typescript.
             }
         </style>
         ```
-    3. Create a typescript service with name `index` or `index.ts`.
+    3. Create a controller with name `index`, type `controller` and url `/service/`.
         ```typescript
-        // http://127.0.0.1:8090/?name=index
+        // http://127.0.0.1:8090/editor.html?name=index
         export default function (req: ServiceRequest): ServiceResponse | Uint8Array | any {
             return $native("template")("index", {
                 title: "this is title"
             });
         }
         ```
-    4. You can preview at http://127.0.0.1:8090/service/index#/greeting
+    4. You can preview at `http://127.0.0.1:8090/service/#/greeting`
 
-- A simple example of websocket server.
+- Websocket server.
     ```typescript
     export default function (req: ServiceRequest) {
         const ws = req.upgradeToWebSocket() // upgrade http and get a websocket
@@ -201,13 +252,13 @@ A simple web server that can be developed online using typescript.
     }
     ```
 
-- A simple example of using console.
+- Using console.
     ```typescript
     // ...
     console.error("this is a error message")
     ```
 
-- A simple example of using error.
+- Using error.
     ```typescript
     // ...
     throw new Error("error message")
@@ -219,7 +270,92 @@ A simple web server that can be developed online using typescript.
     }
     ```
 
-- Examples of using native module.
+- Upload file.
+    1. Create a resource with name `foo`, type `resource`, lang `html` and url `/resource/foo.html`.
+        ```html
+        <!-- http://127.0.0.1:8090/editor.html?name=foo&type=resource&lang=html -->
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="UTF-8">
+            <link rel="stylesheet" href="//unpkg.com/element-ui/lib/theme-chalk/index.css">
+        </head>
+        <body>
+            <div id="app" v-cloak>
+                <el-upload
+                    action="/service/foo"
+                    accept="image/jpeg"
+                    :auto-upload="true">
+                    <el-button icon="el-icon-upload2">Upload</el-button>
+                </el-upload>
+            </div>
+        </body>
+        <script src="//cdn.bootcdn.net/ajax/libs/vue/2.7.14/vue.js"></script>
+        <script src="//unpkg.com/element-ui"></script>
+        <script>
+            new Vue({ el: "#app" });
+        </script>
+        </html>
+        ```
+    2. Create a controller with name `foo`, type `controller` and url `/service/foo`.
+        ```typescript
+        // http://127.0.0.1:8090/editor.html?name=foo
+        export default function (req: ServiceRequest) {
+            let file = req.getFile("file"),
+                hash = $native("crypto").md5(file.data).map(c => c.toString(16).padStart(2, "0")).join("")
+            console.info(hash)
+        }
+        ```
+    3. You can preview at `http://127.0.0.1:8090/resource/foo.html`. You can also run it using curl:
+        ```bash
+        # Upload a file
+        curl -F "file=@./abc.txt; filename=abc.txt;" http://127.0.0.1:8090/service/foo
+
+        # Upload files
+        # curl -F "files=@./a.txt" -F "files=@./b.txt" http://127.0.0.1:8090/service/foo
+        ```
+
+- Download a mp4 with http range.
+    1. Create a controller with name `foo`, type `controller` and url `/service/foo`.
+        ```typescript
+        // http://127.0.0.1:8090/editor.html?name=foo
+        export default function (req: ServiceRequest) {
+            const buf = $native("file").read("a.mp4")
+
+            const range = req.getHeader().Range
+            if (!range) {
+                return new ServiceResponse(200, {
+                    "Accept-Ranges": "bytes",
+                    "Content-Length": buf.length + "",
+                    "Content-Type": "video/mp4"
+                })
+            }
+
+            const ranges = range.substring(6).split("-"),
+                slice = 1024 * 1024 * 2, // 切片大小为 2 MB
+                start = Number(ranges[0]),
+                end = Math.min(Number(ranges[1]) || (start + slice - 1), buf.length - 1)
+            return new ServiceResponse(206, {
+                "Content-Range": `bytes ${start}-${end}/${buf.length}`,
+                "Content-Length": end - start + 1 + "",
+                "Content-Type": "video/mp4"
+            }, new Uint8Array(buf.slice(start, end + 1))) // 截取文件 [start, end) 的片段作为新的 Uint8Array
+        }
+        ```
+    2. You can preview at `http://127.0.0.1:8090/service/foo` in browser.
+
+- Create a daemon.
+    ```typescript
+    // http://127.0.0.1:8090/editor.html?name=foo&type=daemon
+    export default function () {
+        const b = $native("pipe")("default")
+        while (true) {
+            console.info(b.drain(100, 5000))
+        }
+    }
+    ```
+
+- Using native module.
     ```typescript
     // base64
     const base64 = $native("base64")
@@ -236,13 +372,33 @@ A simple web server that can be developed online using typescript.
     // db
     $native("db").query("select name from script") // [{"name":"foo"}, {"name":"user"}]
 
+    // decimal
+    const Decimal = $native("decimal"),
+        d1 = Decimal("0.1"),
+        d2 = Decimal("0.2")
+    d2.add(d1) // 0.3
+    d2.sub(d1) // 0.1
+    d2.mul(d1) // 0.02
+    d2.div(d1) // 2
+
     // email
-    $native("email")("smtp.163.com", 465, username, password).send(["zhangsan@abc.com"], "greeting", "hello, world")
+    const c = $native("email")("smtp.163.com", 465, username, password)
+    c.send(["zhangsan@abc.com"], "greeting", "hello, world")
+    c.send(["zhangsan@abc.com"], "greeting", "hello, world", [{
+        name: "hello.txt",
+        contentType: "text/plain",
+        base64: "aGVsbG8="
+    }])
 
     // crypto
     const crypto = $native("crypto")
     crypto.md5("hello, world").map(c => c.toString(16).padStart(2, "0")).join("") // e4d7f1b4ed2e42d15898f4b27b019da4
     crypto.sha256("hello, world").map(c => c.toString(16).padStart(2, "0")).join("") // 09ca7e4eaa6e8ae9c7d261167129184883644d07dfba7cbfbc4c8a2e08360d5b
+
+    // file
+    const file = $native("file")
+    file.write("greeting.txt", "hello, world")
+    String.fromCharCode(...file.read("greeting.txt")) // "hello, world"
 
     // http
     const { status, header, data } = $native("http")({
@@ -256,8 +412,7 @@ A simple web server that can be developed online using typescript.
 
     // image
     const image = $native("image")
-    const
-        img0 = image.new(100, 200), // create a picture with width 100 and height 200
+    const img0 = image.new(100, 200), // create a picture with width 100 and height 200
         img1 = image.parse(request("GET", "https://www.baidu.com/img/flexible/logo/plus_logo_web_2.png").data) // read a picture from network
     image.toBytes(img0) // convert this picture to a byte array
 
@@ -266,46 +421,3 @@ A simple web server that can be developed online using typescript.
         name: "this is name"
     })
     ```
-
-<!--
-
-## Other
-
-- Register a module loader
-    ```go
-    registry := require.NewRegistryWithLoader(func(path string) ([]byte, error) { // 创建自定义 require loader（脚本每次修改后，registry 需要重新生成，防止 module 被缓存，从而导致 module 修改后不生效）
-        // 从数据库中查找模块
-        rows, err := Db.Query("select jscontent from script where name = ?", path)
-        if err != nil {
-            panic(err.Error())
-            return nil, err
-        }
-        defer rows.Close()
-        if rows.Next() == false {
-            // 读取 node_modules 目录下模块或文件
-            if strings.HasPrefix(path, "node_modules/") {
-                return require.DefaultSourceLoader(path)
-            }
-            return nil, errors.New("The module was not found: " + path)
-        }
-        script := Script{}
-        err = rows.Scan(&script.JsContent)
-        return []byte(script.JsContent), err
-    })
-    ```
-
-- Commands of example service using curl
-    ```bash
-    curl -XPOST http://127.0.0.1:8090/service/greeting -H 'Content-Type: application/x-www-form-urlencoded' -d 'name=zhangsan&age=26&name=lisi'
-
-    curl -XPOST http://127.0.0.1:8090/service/greeting -H 'Content-Type: application/json' -d '{"name":"zhangsan","age":26}'
-
-    curl --cacert ./ca.crt --cert ./client.crt --key ./client.key https://127.0.0.1:8090/service/greeting
-    ```
-
-- Commands of source using curl
-    ```bash
-    curl -XDELETE "http://127.0.0.1:8090/source?name=greeting&type=tpl"
-    ```
-
--->

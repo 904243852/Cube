@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
+    <!-- 网页的宽度自动适应手机屏幕的宽度 -->
+    <title>Cube</title>
+    <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.1/min/vs/editor/editor.main.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+        html, body {
+            width: 100%;
+            height: 100%;
+        }
+        html {
+            overflow: hidden;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container" style="width: 100%; height: 100%;"></div>
+    <div id="btn" style="position: fixed; z-index: 10; bottom: 40px; right: 40px; width: 40px; height: 40px; font-size: 18px; display: flex; line-height: 40px; justify-content: center; border-radius: 50%; box-shadow: rgb(0, 0, 0, 0.12) 0px 2px 8px 0px; cursor: pointer; background-color: white; font-family: codicon;" onclick="javascript:(() => { if (this.innerText == '\uEB74') { window.editor.updateOptions({ readOnly: false }); this.innerText = '\uEAB2'; return; }; document.onkeydown({ ctrlKey: true, keyCode: 83 }); })();">&#60082</div>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/typescript/4.8.4/typescript.min.js"></script>
+
+    <script src="https://cdn.bootcdn.net/ajax/libs/sweetalert/2.1.2/sweetalert.min.js"></script>
+
+    <script>var require = { paths: { "vs": "https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.1/min/vs" } };</script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.1/min/vs/loader.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.1/min/vs/editor/editor.main.nls.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.1/min/vs/editor/editor.main.js"></script>
+
+    <script>
+        (async function () {
+            // 代码示例模板
+            const examples = {
+                controller: `import { user } from "./user";\n\nexport default function (req: ServiceRequest): ServiceResponse | Uint8Array | any {\n    return \`hello, \${user?.name ?? "world"}\`;\n};`,
+                typescript: `export default function () {\n    \n};`,
+                html: `<!DOCTYPE html>\n<html>\n\n<head>\n    <meta charset="utf-8" />\n    <title></title>\n</head>\n\n<body>\n    hello, {{ .name }}\n</body>\n\n</html>`,
+                vue: `<template>\n    <p>hello, {{ name }}</p>\n</template>\n\n\x3Cscript>\n    module.exports = {\n        data: function() {\n            return {\n                name: "world"\n            }\n        }\n    }\n\x3C/script>\n\n<style scoped>\n\n</style>`
+            };
+
+            // 获取请求参数
+            const input = (function () {
+                const params = new URL(window.location).searchParams,
+                    name = params.get("name"),
+                    type = params.get("type") || "controller",
+                    lang = params.get("lang") || { template: "text", resource: "text" }[type] || "typescript";
+                return { name, type, lang };
+            })();
+            // 校验类型和名称
+            if (["module", "controller", "interceptor", "daemon", "crontab", "template", "resource"].indexOf(input.type) === -1) {
+                swal("The source type must be module, controller, interceptor, daemon, crontab, template or resource.", "", "error");
+                return;
+            }
+            if (input.name && !(input.type === "module" && /^(node_modules\/)?\w{2,32}$/.test(input.name) || /^\w{2,32}$/.test(input.name))) {
+                swal("The name must be a letter, number, or underscore with a length of 2 to 32.", "", "error");
+                return;
+            }
+
+            // 初始化编辑器
+            monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+                allowNonTsExtensions: true,
+                experimentalDecorators: true, // 启用实验性的装饰器特性
+                typeRoots: ["."],
+                downlevelIteration: true // 允许迭代器进行迭代
+            });
+            monaco.languages.typescript.typescriptDefaults.addExtraLib(`
+                declare function $native(name: string): any;
+                declare class ServiceRequest {
+                    getHeader(): { [name: string]: string; };
+                    getURL(): { path: string; params: { [name: string]: string[]; }; };
+                    getBody(): Uint8Array;
+                    getJsonBody(): any;
+                    getMethod(): "GET" | "POST" | "PUT" | "DELETE";
+                    getForm(): { [name: string]: string[]; };
+                    getFile(name: string): { name: string; size: number; data: Uint8Array; };
+                    getCerts(): { raw: number[]; }[];
+                    upgradeToWebSocket(): ServiceWebSocket;
+                };
+                declare class ServiceResponse {
+                    constructor(status: number, header: { [name: string]: string | number; }, data?: Uint8Array | string);
+                    setStatus(status: number): void;
+                    setHeader(header: { [name: string]: string; }): void;
+                    setData(data: Uint8Array | string): void;
+                };
+                declare class ServiceWebSocket {
+                    read(): { messageType: number; data: Uint8Array; };
+                    send(data: Uint8Array | string);
+                    close();
+                };
+            `, "global.d.ts");
+            // 预加载所有 module source，用于 import
+            if (input.lang === "typescript") {
+                (await fetch("source?lang=typescript&type=module&size=100", {
+                    method: "GET"
+                }).then(r => r.json()).then(r => r.data.sources) || []).forEach(s => {
+                    monaco.languages.typescript.typescriptDefaults.addExtraLib(s.content, s.name + ".ts");
+                });
+            }
+            // 渲染编辑器
+            const lang = { vue: "html" }[input.lang] || input.lang,
+                editor = monaco.editor.create(document.getElementById("container"), {
+                    language: lang,
+                    theme: "vs-dark",
+                    model: monaco.editor.createModel(examples[input.type] || examples[input.lang] || "", lang, new monaco.Uri("noname")),
+                    options: {
+                        selectOnLineNumbers: true,
+                        roundedSelection: false,
+                        readOnly: false,
+                        cursorStyle: "line",
+                        automaticLayout: true
+                    }
+                });
+            // 注册事件以及按键命令
+            editor.onDidFocusEditorText(() => {
+                if (document.getElementById("btn").innerText === "\uEB74") {
+                    document.activeElement.blur(); // 防止在只读模式下，移动端点击编辑框时弹出软键盘
+                }
+            });
+            window.onresize = () => editor.layout(); // 当浏览器窗口大小发生改变时，编辑器自动调整大小
+            document.onkeydown = function (e) {
+                const keyCode = e.keyCode || e.which || e.charCode,
+                    ctrlKey = e.ctrlKey || e.metaKey;
+                if (ctrlKey && keyCode == 83) { // Ctrl + S
+                    const src = editor.getValue(),
+                        jsSrc = editor.getModel().getLanguageId() !== "typescript" ? "" : ts.transpileModule(src, {
+                            compilerOptions: {
+                                module: ts.ModuleKind.CommonJS,
+                                inlineSourceMap: true, // 使源映射文件（即 *.js.map 文件）在生成的 js 文件中内联写入：源映射内容会以 `//#soureMappingURL=` 开头，按 base64 格式追加写入
+                                inlineSources: true, // 指定进一步将 ts 文件的内容也包含到输出文件中
+                                removeComments: true, // 移除注释
+                                downlevelIteration: true // 当 target 为 ES5 或 ES3 时，为 for-of、spread 和 destructuring 中的迭代器提供完全支持
+                            },
+                            fileName: (input.name || "noname") + ".ts"
+                        })?.outputText;
+
+                    const onSourceSaving = function (name) {
+                        fetch("source", {
+                            method: "POST",
+                            body: JSON.stringify({ name, type: input.type, lang: input.lang, content: src, compiled: jsSrc })
+                        }).then(r => r.json()).then(r => {
+                            if (r.code === "0") {
+                                swal("Saved successfully.", "", "success");
+                                input.name = name;
+                            } else {
+                                swal(r.message, "", "error");
+                            }
+                        });
+                    }
+                    if (!input.name) {
+                        swal({ text: "Please input name:", content: "input", button: { text: "Create", closeModal: false } }).then(name => {
+                            if (!name) {
+                                swal("The name is required.", "", "error");
+                                return;
+                            }
+                            onSourceSaving(name);
+                        });
+                    } else {
+                        onSourceSaving(input.name);
+                    }
+                    return false;
+                }
+                if (ctrlKey && keyCode == 48) { // Ctrl + 0
+                    if (input.name) {
+                        swal({ title: "Are you sure?", text: "Once deleted, you will not be able to recover this source!", icon: "warning", buttons: true, dangerMode: true }).then(confirm => {
+                            if (confirm) {
+                                fetch(`source?name=${input.name}&lang=${input.lang}`, {
+                                    method: "DELETE"
+                                }).then(r => r.json()).then(r => {
+                                    if (r.code === "0") {
+                                        swal("Deleted successfully.", { icon: "success" });
+                                    } else {
+                                        swal(r.message, "", "error");
+                                    }
+                                });
+                            }
+                        });
+                    }
+                }
+            }
+
+            if (!input.name) {
+                swal("No name specified. A new source will be created soon.", "", "warning");
+                return;
+            }
+            const source = (await fetch(`source?name=${input.name}&type=${input.type}&lang=${input.lang}`, {
+                method: "GET"
+            }).then(r => r.json()).then(r => r.data.sources) || []).pop();
+            if (source != null) {
+                editor.setValue(source.content);
+                editor.updateOptions({ readOnly: true });
+                document.getElementById("btn").innerText = "\uEB74";
+            } else {
+                swal(`Source "${input.name}" with ${input.lang} is not existed. It will be created soon.`, "", "warning");
+            }
+
+            window.editor = editor;
+        })();
+    </script>
+</body>
+
+</html>
