@@ -13,11 +13,7 @@ A simple web server that can be developed online using typescript.
 
 3. Start the server:
     ```bash
-    # Build
-    make build
-
-    # Run
-    ./cube
+    make build && ./cube
     ```
     Or start from source code:
     ```bash
@@ -31,7 +27,7 @@ A simple web server that can be developed online using typescript.
 
 4. Open `http://127.0.0.1:8090/` in browser.
 
-## Run using https
+## Run with SSL/TLS
 
 1. Make sure `ca.key`, `ca.crt`, `server.key` and `server.crt` is created:
     ```bash
@@ -41,9 +37,9 @@ A simple web server that can be developed online using typescript.
 2. Start the server:
     ```bash
     ./cube \
-        -n 5 \ # using 5 virtual machines
+        -n 8 \ # create a pool with 8 virtual machines
         -p 8443 \ # server with port 8443
-        -s \ # enable https
+        -s \ # enable SSL/TLS
         -v # enable client cert verification
     ```
 
@@ -60,7 +56,7 @@ A simple web server that can be developed online using typescript.
     curl --cacert ./ca.crt --cert ./client.crt --key ./client.key https://127.0.0.1:8443/service/foo
     ```
 
-## Shortcut key of Editor Online
+## Shortcut key of [Editor Online](http://127.0.0.1:8090/editor.html)
 
 - Save as a script: `Ctrl` + `S`
 
@@ -68,29 +64,47 @@ A simple web server that can be developed online using typescript.
 
 ## Examples
 
+### Controller
+
+You can create a controller as a http/https service.
+
 - A simple controller.
     ```typescript
     // http://127.0.0.1:8090/editor.html?name=foo
     export default function (req: ServiceRequest): ServiceResponse | Uint8Array | any {
-        console.info("The body of request is:", String.fromCharCode(...req.getBody()))
-        return `hello, world`;
-    };
+        console.info("The body of request is:", String.fromCharCode(...req.getBody())) // print http request body
+        return `hello, world`
+    }
     ```
+
+- Return a custom response.
+    ```typescript
+    export default function (req: ServiceRequest): ServiceResponse | Uint8Array | any {
+        // return new Uint8Array([104, 101, 108, 108, 111]) // response with body "hello"
+        return new ServiceResponse(500, {
+            "Content-Type": "text/plain"
+        }, new Uint8Array([104, 101, 108, 108, 111]))
+    }
+    ```
+
+### Module
+
+A module can be imported in the controller.
 
 - A custom module.
     ```typescript
     // http://127.0.0.1:8090/editor.html?name=user&type=module
     export const user = {
         name: "zhangsan"
-    };
+    }
     ```
     ```typescript
     // http://127.0.0.1:8090/editor.html?name=foo
-    import { user } from "./user";
+    import { user } from "./user"
 
     export default function (req: ServiceRequest): ServiceResponse | Uint8Array | any {
-        return `hello, ${user?.name ?? "world"}`;
-    };
+        return `hello, ${user?.name ?? "world"}`
+    }
     ```
 
 - A custom module extends Date.
@@ -145,20 +159,118 @@ A simple web server that can be developed online using typescript.
     ```
     ```typescript
     // http://127.0.0.1:8090/editor.html?name=foo
-    import "date";
+    import "date"
 
     export default function (req) {
-        return new Date().toString("yyyy-MM-dd HH:mm:ss.S");
-    };
-    ```
-
-- Return a custom response.
-    ```typescript
-    export default function (req: ServiceRequest): ServiceResponse | Uint8Array | any {
-        // return new Uint8Array([104, 101, 108, 108, 111]);
-        return new ServiceResponse(500, {}, new Uint8Array([104, 101, 108, 108, 111]));
+        return new Date().toString("yyyy-MM-dd HH:mm:ss.S")
     }
     ```
+
+### Daemon
+
+The daemon is a backend running service with no timeout limit.
+
+- Create a daemon.
+    ```typescript
+    // http://127.0.0.1:8090/editor.html?name=foo&type=daemon
+    export default function () {
+        const b = $native("pipe")("default")
+        while (true) {
+            console.info(b.drain(100, 5000))
+        }
+    }
+    ```
+
+### Builtin
+
+Here are some built-in methods and modules.
+
+- Using console.
+    ```typescript
+    // ...
+    console.error("this is a error message")
+    ```
+
+- Using error.
+    ```typescript
+    // ...
+    throw new Error("error message")
+
+    // ...
+    throw {
+        code: "error code",
+        message: "error message"
+    }
+    ```
+
+- Using native module.
+    ```typescript
+    // base64
+    const base64 = $native("base64")
+    base64.encode("hello") // aGVsbG8=
+    base64.decode("aGVsbG8=") // [104, 101, 108, 108, 111]
+
+    // bqueue or pipe
+    const b = $native("pipe")("default")
+    //const b = $native("bqueue")(99)
+    b.put(1)
+    b.put(2)
+    b.drain(4, 2000) // [1, 2]
+
+    // db
+    $native("db").query("select name from script") // [{"name":"foo"}, {"name":"user"}]
+
+    // decimal
+    const Decimal = $native("decimal"),
+        d1 = Decimal("0.1"),
+        d2 = Decimal("0.2")
+    d2.add(d1) // 0.3
+    d2.sub(d1) // 0.1
+    d2.mul(d1) // 0.02
+    d2.div(d1) // 2
+
+    // email
+    const c = $native("email")("smtp.163.com", 465, username, password)
+    c.send(["zhangsan@abc.com"], "greeting", "hello, world")
+    c.send(["zhangsan@abc.com"], "greeting", "hello, world", [{
+        name: "hello.txt",
+        contentType: "text/plain",
+        base64: "aGVsbG8="
+    }])
+
+    // crypto
+    const crypto = $native("crypto")
+    crypto.md5("hello, world").map(c => c.toString(16).padStart(2, "0")).join("") // e4d7f1b4ed2e42d15898f4b27b019da4
+    crypto.sha256("hello, world").map(c => c.toString(16).padStart(2, "0")).join("") // 09ca7e4eaa6e8ae9c7d261167129184883644d07dfba7cbfbc4c8a2e08360d5b
+
+    // file
+    const file = $native("file")
+    file.write("greeting.txt", "hello, world")
+    String.fromCharCode(...file.read("greeting.txt")) // "hello, world"
+
+    // http
+    const { status, header, data } = $native("http")({
+        //caCert: "", // ca certificates for http client
+        //cert: "", key: "", // private key and certificate/public key for http client auth
+        //insecureSkipVerify: true // disable verify server certificate
+    }).request("GET", "https://www.baidu.com")
+    status // 200
+    header // {"Content-Length":["227"],"Content-Type":["text/html"]...]}
+    data.toString() // "<html>..."
+
+    // image
+    const image = $native("image")
+    const img0 = image.new(100, 200), // create a picture with width 100 and height 200
+        img1 = image.parse(request("GET", "https://www.baidu.com/img/flexible/logo/plus_logo_web_2.png").data) // read a picture from network
+    image.toBytes(img0) // convert this picture to a byte array
+
+    // template
+    const content = $native("template")("greeting", { // read template greeting.tpl and render with input
+        name: "this is name"
+    })
+    ```
+
+### Advance
 
 - Return a view with asynchronous vues.
     1. Create a template with name `index`, type `template` and lang `html`.
@@ -237,36 +349,19 @@ A simple web server that can be developed online using typescript.
         export default function (req: ServiceRequest): ServiceResponse | Uint8Array | any {
             return $native("template")("index", {
                 title: "this is title"
-            });
+            })
         }
         ```
     4. You can preview at `http://127.0.0.1:8090/service/#/greeting`
 
 - Websocket server.
     ```typescript
+    // http://127.0.0.1:8090/editor.html?name=foo
     export default function (req: ServiceRequest) {
         const ws = req.upgradeToWebSocket() // upgrade http and get a websocket
         console.info(ws.read()) // read a message
         ws.send("hello, world") // write a message
         ws.close() // close the connection
-    }
-    ```
-
-- Using console.
-    ```typescript
-    // ...
-    console.error("this is a error message")
-    ```
-
-- Using error.
-    ```typescript
-    // ...
-    throw new Error("error message")
-
-    // ...
-    throw {
-        code: "error code",
-        message: "error message"
     }
     ```
 
@@ -301,7 +396,7 @@ A simple web server that can be developed online using typescript.
         ```typescript
         // http://127.0.0.1:8090/editor.html?name=foo
         export default function (req: ServiceRequest) {
-            let file = req.getFile("file"),
+            const file = req.getFile("file"),
                 hash = $native("crypto").md5(file.data).map(c => c.toString(16).padStart(2, "0")).join("")
             console.info(hash)
         }
@@ -310,9 +405,6 @@ A simple web server that can be developed online using typescript.
         ```bash
         # Upload a file
         curl -F "file=@./abc.txt; filename=abc.txt;" http://127.0.0.1:8090/service/foo
-
-        # Upload files
-        # curl -F "files=@./a.txt" -F "files=@./b.txt" http://127.0.0.1:8090/service/foo
         ```
 
 - Download a mp4 with http range.
@@ -332,92 +424,14 @@ A simple web server that can be developed online using typescript.
             }
 
             const ranges = range.substring(6).split("-"),
-                slice = 1024 * 1024 * 2, // 切片大小为 2 MB
+                slice = 1024 * 1024 * 2, // The slice size is 2 MB
                 start = Number(ranges[0]),
                 end = Math.min(Number(ranges[1]) || (start + slice - 1), buf.length - 1)
             return new ServiceResponse(206, {
                 "Content-Range": `bytes ${start}-${end}/${buf.length}`,
                 "Content-Length": end - start + 1 + "",
                 "Content-Type": "video/mp4"
-            }, new Uint8Array(buf.slice(start, end + 1))) // 截取文件 [start, end) 的片段作为新的 Uint8Array
+            }, new Uint8Array(buf.slice(start, end + 1))) // slice the mp4 file from [start, end) as a Uint8Array
         }
         ```
     2. You can preview at `http://127.0.0.1:8090/service/foo` in browser.
-
-- Create a daemon.
-    ```typescript
-    // http://127.0.0.1:8090/editor.html?name=foo&type=daemon
-    export default function () {
-        const b = $native("pipe")("default")
-        while (true) {
-            console.info(b.drain(100, 5000))
-        }
-    }
-    ```
-
-- Using native module.
-    ```typescript
-    // base64
-    const base64 = $native("base64")
-    base64.encode("hello") // aGVsbG8=
-    base64.decode("aGVsbG8=") // [104, 101, 108, 108, 111]
-
-    // bqueue or pipe
-    const b = $native("pipe")("default")
-    //const b = $native("bqueue")(99)
-    b.put(1)
-    b.put(2)
-    b.drain(4, 2000) // [1, 2]
-
-    // db
-    $native("db").query("select name from script") // [{"name":"foo"}, {"name":"user"}]
-
-    // decimal
-    const Decimal = $native("decimal"),
-        d1 = Decimal("0.1"),
-        d2 = Decimal("0.2")
-    d2.add(d1) // 0.3
-    d2.sub(d1) // 0.1
-    d2.mul(d1) // 0.02
-    d2.div(d1) // 2
-
-    // email
-    const c = $native("email")("smtp.163.com", 465, username, password)
-    c.send(["zhangsan@abc.com"], "greeting", "hello, world")
-    c.send(["zhangsan@abc.com"], "greeting", "hello, world", [{
-        name: "hello.txt",
-        contentType: "text/plain",
-        base64: "aGVsbG8="
-    }])
-
-    // crypto
-    const crypto = $native("crypto")
-    crypto.md5("hello, world").map(c => c.toString(16).padStart(2, "0")).join("") // e4d7f1b4ed2e42d15898f4b27b019da4
-    crypto.sha256("hello, world").map(c => c.toString(16).padStart(2, "0")).join("") // 09ca7e4eaa6e8ae9c7d261167129184883644d07dfba7cbfbc4c8a2e08360d5b
-
-    // file
-    const file = $native("file")
-    file.write("greeting.txt", "hello, world")
-    String.fromCharCode(...file.read("greeting.txt")) // "hello, world"
-
-    // http
-    const { status, header, data } = $native("http")({
-        //caCert: "", // ca certificates for http client
-        //cert: "", key: "", // private key and certificate/public key for http client auth
-        //insecureSkipVerify: true // disable verify server certificate
-    }).request("GET", "https://www.baidu.com")
-    status // 200
-    header // {"Content-Length":["227"],"Content-Type":["text/html"]...]}
-    data.toString() // "<html>..."
-
-    // image
-    const image = $native("image")
-    const img0 = image.new(100, 200), // create a picture with width 100 and height 200
-        img1 = image.parse(request("GET", "https://www.baidu.com/img/flexible/logo/plus_logo_web_2.png").data) // read a picture from network
-    image.toBytes(img0) // convert this picture to a byte array
-
-    // template
-    const content = $native("template")("greeting", { // read template greeting.tpl and render with input
-        name: "this is name"
-    })
-    ```

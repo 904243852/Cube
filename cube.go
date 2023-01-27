@@ -137,7 +137,7 @@ func main() {
 		Success(w, data)
 	})
 	http.HandleFunc("/service/", func(w http.ResponseWriter, r *http.Request) {
-		name := strings.TrimPrefix(r.URL.Path[9:], "/service/")
+		name := strings.TrimPrefix(r.URL.Path, "/service/")
 
 		// 查询 controller
 		source := Source{}
@@ -185,7 +185,7 @@ func main() {
 		Success(w, ExportGojaValue(value))
 	})
 	http.HandleFunc("/resource/", func(w http.ResponseWriter, r *http.Request) {
-		name := r.URL.Path[10:]
+		name := strings.TrimPrefix(r.URL.Path, "/resource/")
 
 		var content string
 		if err := Database.QueryRow("select content from source where url = ? and type = 'resource' and active = true", name).Scan(&content); err != nil {
