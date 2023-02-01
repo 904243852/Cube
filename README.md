@@ -458,8 +458,8 @@ Here are some built-in methods and modules.
     1. Create a flv file under `files/` using ffmpeg:
         ```bash
         ffmpeg \
-            -vcodec libx264 \ # We need encode with libx264. Otherwise, using flv.js to pull the stream may cause an error: "DemuxException: type = CodecUnsupported, info = Flv: Unsupported codec in video frame: 2"
             -i a.mp4 \
+            -vcodec libx264 \ # We need encode with libx264. Otherwise, using flv.js to pull the stream may cause an error: "DemuxException: type = CodecUnsupported, info = Flv: Unsupported codec in video frame: 2"
             a.flv
         ```
     2. Create a controller with name `foo`, type `controller` and url `/service/foo`. 
