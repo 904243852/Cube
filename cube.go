@@ -22,6 +22,7 @@ import (
 	"github.com/dop251/goja/parser"
 	"github.com/gorilla/websocket"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/robfig/cron/v3"
 	"github.com/shirou/gopsutil/process"
 	"github.com/shopspring/decimal"
 	"golang.org/x/net/http2"
@@ -47,7 +48,7 @@ import (
 type Source struct {
 	Name     string `json:"name"`
 	Lang     string `json:"lang"` // typescript, html, text, vue
-	Type     string `json:"type"` // module, controller, interceptor, daemon, crontab, template, resource
+	Type     string `json:"type"` // module, controller, daemon, crontab, template, resource
 	Content  string `json:"content"`
 	Compiled string `json:"compiled"`
 	Active   bool   `json:"active"`
@@ -71,9 +72,11 @@ var WorkerPool struct {
 	Workers  []*Worker
 }
 
-var Modules map[string]*goja.Program = make(map[string]*goja.Program)
+var Crontab *cron.Cron = cron.New() // 定时任务
 
-var Daemons map[string]*Worker = make(map[string]*Worker)
+var Cache4Crontab map[string]cron.EntryID = make(map[string]cron.EntryID)
+var Cache4Daemon map[string]*Worker = make(map[string]*Worker)
+var Cache4Module map[string]*goja.Program = make(map[string]*goja.Program)
 
 func init() {
 	// 初始化数据库
@@ -156,6 +159,12 @@ func main() {
 			WorkerPool.Channels <- worker
 		}()
 
+		// 监听客户端是否已断开或取消连接（包括且不限于 TCP 链路断开）
+		go func() {
+			<-r.Context().Done() // 该功能并不能总是感知到客户端已取消连接：服务端需读完链路上堆积的数据（在 Handler 中读取 Request.Body 完毕，无论是 Content-Length 或 chunk），才能感知 TCP 链路上的 RST、EOF，即 Request.Context 已经 Done
+			worker.Runtime.Interrupt("Client cancelled.")
+		}()
+
 		// 允许最大执行的时间为 60 秒
 		timer := time.AfterFunc(60000*time.Millisecond, func() {
 			worker.Runtime.Interrupt("The service executed timeout.")
@@ -163,7 +172,7 @@ func main() {
 		defer timer.Stop()
 
 		// 执行
-		request := ServiceRequest{
+		context := ServiceContext{
 			request:        r,
 			responseWriter: w,
 			timer:          timer,
@@ -171,14 +180,14 @@ func main() {
 		value, err := worker.Function(
 			nil,
 			worker.Runtime.ToValue("./controller/"+source.Name),
-			worker.Runtime.ToValue(&request),
+			worker.Runtime.ToValue(&context),
 		)
 		if err != nil {
 			Error(w, err)
 			return
 		}
 
-		if request.isWebSocket == true { // 如果是 WebSocket，不需要封装响应
+		if context.returnless == true { // 如果是 WebSocket 或 chunk 响应，不需要封装响应
 			return
 		}
 
@@ -211,8 +220,12 @@ func main() {
 		}
 	}()
 
-	// 启动守护进程
+	// 启动守护任务
 	RunDaemons("")
+
+	// 启动定时服务
+	Crontab.Start()
+	RunCrontabs("")
 
 	// 启动服务
 	if !arguments.Secure {
@@ -319,7 +332,7 @@ func Error(w http.ResponseWriter, err error) {
 	})
 }
 
-//#region 守护进程
+//#region 守护任务
 
 func RunDaemons(name string) {
 	if name == "" {
@@ -328,18 +341,14 @@ func RunDaemons(name string) {
 
 	rows, err := Database.Query("select name from source where name like ? and type = 'daemon' and active = true", name)
 	if err != nil {
-		return
+		panic(err)
 	}
 	defer rows.Close()
-	var names []string
 	for rows.Next() {
 		var n string
 		rows.Scan(&n)
-		names = append(names, n)
-	}
 
-	for _, n := range names {
-		if Daemons[n] != nil { // 防止重复执行
+		if Cache4Daemon[n] != nil { // 防止重复执行
 			continue
 		}
 
@@ -349,15 +358,56 @@ func RunDaemons(name string) {
 				WorkerPool.Channels <- worker
 			}()
 
-			Daemons[n] = worker
+			Cache4Daemon[n] = worker
 
 			worker.Function(
 				nil,
 				worker.Runtime.ToValue("./daemon/"+n),
 			)
 
-			delete(Daemons, n)
+			delete(Cache4Daemon, n)
 		}()
+	}
+}
+
+//#endregion
+
+//#region 定时服务
+
+func RunCrontabs(name string) {
+	if name == "" {
+		name = "%"
+	}
+
+	rows, err := Database.Query("select name, cron from source where name like ? and type = 'crontab' and active = true", name)
+	if err != nil {
+		panic(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var n, c string
+		rows.Scan(&n, &c)
+
+		if _, ok := Cache4Crontab[n]; ok { // 防止重复添加任务
+			continue
+		}
+
+		id, err := Crontab.AddFunc(c, func() {
+			worker := <-WorkerPool.Channels
+			defer func() {
+				WorkerPool.Channels <- worker
+			}()
+
+			worker.Function(
+				nil,
+				worker.Runtime.ToValue("./crontab/"+n),
+			)
+		})
+		if err != nil {
+			panic(err)
+		} else {
+			Cache4Crontab[n] = id
+		}
 	}
 }
 
@@ -397,7 +447,7 @@ func HandleSourceGet(w http.ResponseWriter, r *http.Request) (data struct {
 		source := Source{}
 		rows.Scan(&source.Name, &source.Lang, &source.Type, &source.Content, &source.Compiled, &source.Active, &source.Method, &source.Url, &source.Cron)
 		if source.Type == "daemon" {
-			source.Status = fmt.Sprintf("%v", Daemons[source.Name] != nil)
+			source.Status = fmt.Sprintf("%v", Cache4Daemon[source.Name] != nil)
 		}
 		data.Sources = append(data.Sources, source)
 	}
@@ -421,8 +471,8 @@ func HandleSourcePost(w http.ResponseWriter, r *http.Request) error {
 		}
 
 		// 校验类型
-		if ok, _ := regexp.MatchString("^(module|controller|interceptor|daemon|crontab|template|resource)$", source.Type); !ok {
-			return errors.New("The type of the source is required. It must be module, controller, interceptor, daemon, crontab, template or resource.")
+		if ok, _ := regexp.MatchString("^(module|controller|daemon|crontab|template|resource)$", source.Type); !ok {
+			return errors.New("The type of the source is required. It must be module, controller, daemon, crontab, template or resource.")
 		}
 		// 校验名称
 		if source.Type == "module" {
@@ -466,7 +516,11 @@ func HandleSourcePost(w http.ResponseWriter, r *http.Request) error {
 		}
 
 		// 批量导入后，需要清空 module 缓存以重建
-		Modules = make(map[string]*goja.Program)
+		Cache4Module = make(map[string]*goja.Program)
+		// 启动守护任务
+		RunDaemons("")
+		// 启动定时任务
+		RunCrontabs("")
 	}
 
 	return nil
@@ -528,16 +582,27 @@ func HandleSourcePatch(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	// 清空 module 缓存以重建
-	Modules = make(map[string]*goja.Program)
+	Cache4Module = make(map[string]*goja.Program)
 	// 如果是 daemon，需要启动或停止
 	if source.Type == "daemon" {
 		if source.Active {
-			if Daemons[source.Name] == nil && source.Status == "true" {
+			if Cache4Daemon[source.Name] == nil && source.Status == "true" {
 				RunDaemons(source.Name)
 			}
-			if Daemons[source.Name] != nil && source.Status == "false" {
-				Daemons[source.Name].Runtime.Interrupt("Daemon stopped.")
+			if Cache4Daemon[source.Name] != nil && source.Status == "false" {
+				Cache4Daemon[source.Name].Runtime.Interrupt("Daemon stopped.")
 			}
+		}
+	}
+	// 如果是 crontab，需要启动或停止
+	if source.Type == "crontab" {
+		id, ok := Cache4Crontab[source.Name]
+		if !ok && source.Active {
+			RunCrontabs(source.Name)
+		}
+		if ok && !source.Active {
+			Crontab.Remove(id)
+			delete(Cache4Crontab, source.Name)
 		}
 	}
 
@@ -552,7 +617,7 @@ func CreateJsRuntime() *goja.Runtime {
 	runtime := goja.New()
 
 	runtime.Set("require", func(id string) (goja.Value, error) {
-		program := Modules[id]
+		program := Cache4Module[id]
 		if program == nil { // 如果已被缓存，直接从缓存中获取
 			// 获取名称、类型
 			var name, stype string
@@ -560,6 +625,8 @@ func CreateJsRuntime() *goja.Runtime {
 				name, stype = id[13:], "controller"
 			} else if strings.HasPrefix(id, "./daemon/") {
 				name, stype = id[9:], "daemon"
+			} else if strings.HasPrefix(id, "./crontab/") {
+				name, stype = id[10:], "crontab"
 			} else {
 				name, stype = path.Clean(id), "module"
 			}
@@ -587,7 +654,7 @@ func CreateJsRuntime() *goja.Runtime {
 
 			// 缓存当前 module 的 program
 			// 这里不应该直接缓存 module，因为 module 依赖当前 vm 实例，在开启多个 vm 实例池的情况下，调用会错乱从而导致异常 "TypeError: Illegal runtime transition of an Object at ..."
-			Modules[id] = program
+			Cache4Module[id] = program
 		}
 
 		exports := runtime.NewObject()
@@ -824,16 +891,16 @@ func ExportGojaValue(value goja.Value) interface{} {
 
 //#region Service 请求、响应
 
-// service http request
-type ServiceRequest struct {
+// service http context
+type ServiceContext struct {
 	request        *http.Request
 	responseWriter http.ResponseWriter
 	timer          *time.Timer
-	isWebSocket    bool
+	returnless     bool
 	body           interface{} // 用于缓存请求消息体，防止重复读取和关闭 body 流
 }
 
-func (s *ServiceRequest) GetHeader() map[string]string {
+func (s *ServiceContext) GetHeader() map[string]string {
 	var headers = make(map[string]string)
 	for name, values := range s.request.Header {
 		for _, value := range values {
@@ -842,35 +909,35 @@ func (s *ServiceRequest) GetHeader() map[string]string {
 	}
 	return headers
 }
-func (s *ServiceRequest) GetURL() interface{} {
+func (s *ServiceContext) GetURL() interface{} {
 	u := s.request.URL
 	return map[string]interface{}{
 		"path":   u.Path,
 		"params": u.Query(),
 	}
 }
-func (s *ServiceRequest) GetBody() ([]byte, error) {
+func (s *ServiceContext) GetBody() ([]byte, error) {
 	if s.body != nil {
 		return s.body.([]byte), nil
 	}
 	defer s.request.Body.Close()
 	return ioutil.ReadAll(s.request.Body)
 }
-func (s *ServiceRequest) GetJsonBody() (interface{}, error) {
+func (s *ServiceContext) GetJsonBody() (interface{}, error) {
 	bytes, err := s.GetBody()
 	if err != nil {
 		return nil, err
 	}
 	return s.body, json.Unmarshal(bytes, &s.body)
 }
-func (s *ServiceRequest) GetMethod() string {
+func (s *ServiceContext) GetMethod() string {
 	return s.request.Method
 }
-func (s *ServiceRequest) GetForm() interface{} {
+func (s *ServiceContext) GetForm() interface{} {
 	s.request.ParseForm() // 需要转换后才能获取表单
 	return s.request.Form
 }
-func (s *ServiceRequest) GetFile(name string) (interface{}, error) {
+func (s *ServiceContext) GetFile(name string) (interface{}, error) {
 	file, header, err := s.request.FormFile(name)
 	if err != nil {
 		return nil, err
@@ -888,12 +955,12 @@ func (s *ServiceRequest) GetFile(name string) (interface{}, error) {
 		"data": data,
 	}, nil
 }
-func (s *ServiceRequest) GetCerts() interface{} { // 获取客户端证书
+func (s *ServiceContext) GetCerts() interface{} { // 获取客户端证书
 	return s.request.TLS.PeerCertificates
 }
-func (s *ServiceRequest) UpgradeToWebSocket() (*ServiceWebSocket, error) {
-	s.isWebSocket = true // upgrader.Upgrade 内部已经调用过 WriteHeader 方法了，后续不应再次调用，否则将会出现 http: superfluous response.WriteHeader call from ... 的异常
-	s.timer.Stop()       // 关闭定时器，WebSocket 不需要设置超时时间
+func (s *ServiceContext) UpgradeToWebSocket() (*ServiceWebSocket, error) {
+	s.returnless = true // upgrader.Upgrade 内部已经调用过 WriteHeader 方法了，后续不应再次调用，否则将会出现 http: superfluous response.WriteHeader call from ... 的异常
+	s.timer.Stop()      // 关闭定时器，WebSocket 不需要设置超时时间
 	upgrader := websocket.Upgrader{}
 	if conn, err := upgrader.Upgrade(s.responseWriter, s.request, nil); err != nil {
 		return nil, err
@@ -903,12 +970,27 @@ func (s *ServiceRequest) UpgradeToWebSocket() (*ServiceWebSocket, error) {
 		}, nil
 	}
 }
-func (s *ServiceRequest) GetPusher() (http.Pusher, error) {
+func (s *ServiceContext) GetPusher() (http.Pusher, error) {
 	pusher, ok := s.responseWriter.(http.Pusher)
 	if !ok {
 		return nil, errors.New("The server side push is not supported.")
 	}
 	return pusher, nil
+}
+func (s *ServiceContext) Write(data []byte) (int, error) {
+	return s.responseWriter.Write(data)
+}
+func (s *ServiceContext) Flush() error {
+	flusher, ok := s.responseWriter.(http.Flusher)
+	if !ok {
+		return errors.New("Failed to get a http flusher.")
+	}
+	if !s.returnless {
+		s.returnless = true
+		s.responseWriter.Header().Set("X-Content-Type-Options", "nosniff") // https://stackoverflow.com/questions/18337630/what-is-x-content-type-options-nosniff
+	}
+	flusher.Flush() // 改操作将自动设置响应头 Transfer-Encoding: chunked，并发送一个 chunk
+	return nil
 }
 
 // service http response

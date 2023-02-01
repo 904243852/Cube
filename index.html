@@ -44,9 +44,8 @@
                         <el-button icon="el-icon-plus">New</el-button>
                         <el-dropdown-menu slot="dropdown">
                             <el-dropdown-item command="controller">Controller</el-dropdown-item>
-                            <el-dropdown-item command="interceptor" disabled>Interceptor</el-dropdown-item>
                             <el-dropdown-item command="daemon">Daemon</el-dropdown-item>
-                            <el-dropdown-item command="crontab" disabled>Crontab</el-dropdown-item>
+                            <el-dropdown-item command="crontab">Crontab</el-dropdown-item>
                             <el-dropdown-item command="module">Module</el-dropdown-item>
                             <el-dropdown-item command="template,html" divided>Template(Html)</el-dropdown-item>
                             <el-dropdown-item command="resource,vue" divided>Resource(Vue)</el-dropdown-item>
@@ -59,8 +58,6 @@
                     <div style="float: right; display: flex;">
                         <el-select v-model="search.type" placeholder="Select a type" clearable @change="onFetch(true)">
                             <el-option label="Controller" value="controller">
-                            </el-option>
-                            <el-option label="Interceptor" value="interceptor">
                             </el-option>
                             <el-option label="Daemon" value="daemon">
                             </el-option>
@@ -95,7 +92,7 @@
                                     <el-descriptions-item label="Active">
                                         {{ scope.row.active }}
                                     </el-descriptions-item>
-                                    <el-descriptions-item label="Url" v-if='["controller", "interceptor", "resource"].indexOf(scope.row.type) != -1' :span="2">
+                                    <el-descriptions-item label="Url" v-if='["controller", "resource"].indexOf(scope.row.type) != -1' :span="2">
                                         <el-link type="primary" :href='({ controller: "/service/", resource: "/resource/" }[scope.row.type] || "") + scope.row.url'>{{ ({ controller: "/service/", resource: "/resource/" }[scope.row.type] || "") + scope.row.url }}</el-link>
                                     </el-descriptions-item>
                                     <el-descriptions-item label="Method" v-if='scope.row.type == "controller"'>
@@ -146,7 +143,8 @@
                     <el-form-item label="Language">
                         <el-input v-model="record.lang" disabled></el-input>
                     </el-form-item>
-                    <el-form-item label="Method" v-if='record.type == "controller"'>
+                    <el-form-item label="Method"
+                        v-if='record.type == "controller"'>
                         <el-select v-model="record.method" placeholder="Please select a method">
                             <el-option label="Any" value=""></el-option>
                             <el-option label="Get" value="GET"></el-option>
@@ -155,12 +153,17 @@
                             <el-option label="Delete" value="DELETE"></el-option>
                           </el-select>
                     </el-form-item>
-                    <el-form-item label="Url" v-if='["controller", "interceptor", "resource"].indexOf(record.type) != -1'>
+                    <el-form-item label="Url"
+                        v-if='["controller", "resource"].indexOf(record.type) != -1'>
                         <el-input v-model="record.url">
-                            <template slot="prepend" v-if="record.type != 'interceptor'">{{ { controller: "/service/", resource: "/resource/" }[record.type] }}</template>
+                            <template slot="prepend">{{ { controller: "/service/", resource: "/resource/" }[record.type] }}</template>
                         </el-input>
                     </el-form-item>
-                    <el-form-item label="Cron" v-if="record.type == 'crontab'">
+                    <el-form-item label="Cron"
+                        prop="cron"
+                        :rules='[{ required: true, message: "Cron is required.", trigger: "blur" }, { pattern: /^(\*|([0-9]|1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9])|\*\/([0-9]|1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9])) (\*|([0-9]|1[0-9]|2[0-3])|\*\/([0-9]|1[0-9]|2[0-3])) (\*|([1-9]|1[0-9]|2[0-9]|3[0-1])|\*\/([1-9]|1[0-9]|2[0-9]|3[0-1])) (\*|([1-9]|1[0-2])|\*\/([1-9]|1[0-2])) (\*|([0-6])|\*\/([0-6]))$/, message: "Invalid cron expression.", trigger: ["blur", "change"] }]'
+                        placeholder="For example: */5 * * * *"
+                        v-if='record.type == "crontab"'>
                         <el-input v-model="record.cron"></el-input>
                     </el-form-item>
                     <el-form-item>
@@ -207,14 +210,15 @@
                 fetch(`source?name=${that.search.keyword}&type=${that.search.type}&from=${(that.pagination.index - 1) * that.pagination.size}&size=${that.pagination.size}`, {
                     method: "GET"
                 }).then(r => r.json()).then(r => {
-                    that.records = r.data.sources;
-                    that.visible.loading4fetch = false;
                     that.pagination.count = r.data.total;
+                    that.pagination.index = Math.min(that.pagination.index, Math.ceil(r.data.total / that.pagination.size));
+                    that.records = r.data.sources;
                 }).catch(e => {
                     that.$message({
                         type: "error",
                         message: r.message
                     });
+                }).finally(() => {
                     that.visible.loading4fetch = false;
                 });
             },
@@ -274,7 +278,7 @@
                 this.visible.setting = true;
             },
             onRowEdit(record) {
-                window.open(`editor.html?name=${record.name}&lang=${record.lang}&type=${record.type}`)
+                window.open(`editor.html?name=${record.name}&type=${record.type}&lang=${record.lang}`)
             },
             onRowDelete(record) {
                 const that = this;
@@ -286,7 +290,7 @@
                         if (action === "confirm") {
                             instance.confirmButtonLoading = true;
                             instance.confirmButtonText = "Delete...";
-                            fetch(`source?name=${record.name}&lang=${record.lang}`, {
+                            fetch(`source?name=${record.name}&type=${record.type}`, {
                                 method: "DELETE"
                             }).then(r => r.json()).then(r => {
                                 if (r.code === "0") {
@@ -354,31 +358,36 @@
             },
             onSettingSubmit() {
                 const that = this;
-                fetch("source", {
-                    method: "PATCH",
-                    body: JSON.stringify({
-                        name: that.record.name,
-                        type: that.record.type,
-                        lang: that.record.lang,
-                        active: that.record.active,
-                        method: that.record.method,
-                        url: that.record.url,
-                        cron: that.record.cron
-                    })
-                }).then(r => r.json()).then(r => {
-                    if (r.code === "0") {
-                        that.$message({
-                            type: "success",
-                            message: "Setting succeeded."
-                        });
-                        that.visible.setting = false;
-                        that.onFetch();
-                    } else {
-                        that.$message({
-                            type: "error",
-                            message: r.message
-                        });
+                that.$refs["form"].validate(valid => {
+                    if (!valid) {
+                        return false;
                     }
+                    fetch("source", {
+                        method: "PATCH",
+                        body: JSON.stringify({
+                            name: that.record.name,
+                            type: that.record.type,
+                            lang: that.record.lang,
+                            active: that.record.active,
+                            method: that.record.method,
+                            url: that.record.url,
+                            cron: that.record.cron
+                        })
+                    }).then(r => r.json()).then(r => {
+                        if (r.code === "0") {
+                            that.$message({
+                                type: "success",
+                                message: "Setting succeeded."
+                            });
+                            that.visible.setting = false;
+                            that.onFetch();
+                        } else {
+                            that.$message({
+                                type: "error",
+                                message: r.message
+                            });
+                        }
+                    });
                 });
             }
         },

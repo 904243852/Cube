@@ -3,9 +3,10 @@ module cube
 go 1.17
 
 require (
-	github.com/dop251/goja v0.0.0-20221106173738-3b8a68ca89b4
+	github.com/dop251/goja v0.0.0-20230128084908-78b980256d04
 	github.com/gorilla/websocket v1.5.0
 	github.com/mattn/go-sqlite3 v1.14.16
+	github.com/robfig/cron/v3 v3.0.0
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/shopspring/decimal v1.3.1
 	golang.org/x/net v0.2.0

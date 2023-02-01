@@ -71,21 +71,50 @@ You can create a controller as a http/https service.
 - A simple controller.
     ```typescript
     // http://127.0.0.1:8090/editor.html?name=foo
-    export default function (req: ServiceRequest): ServiceResponse | Uint8Array | any {
-        console.info("The body of request is:", String.fromCharCode(...req.getBody())) // print http request body
+    export default function (ctx: ServiceContext): ServiceResponse | Uint8Array | any {
+        console.info("The body of request is:", String.fromCharCode(...ctx.getBody())) // print http request body
         return `hello, world`
     }
     ```
 
 - Return a custom response.
     ```typescript
-    export default function (req: ServiceRequest): ServiceResponse | Uint8Array | any {
+    export default function (ctx: ServiceContext): ServiceResponse | Uint8Array | any {
         // return new Uint8Array([104, 101, 108, 108, 111]) // response with body "hello"
         return new ServiceResponse(500, {
             "Content-Type": "text/plain"
         }, new Uint8Array([104, 101, 108, 108, 111]))
     }
     ```
+
+- Websocket server.
+    ```typescript
+    // http://127.0.0.1:8090/editor.html?name=foo
+    export default function (ctx: ServiceContext) {
+        const ws = ctx.upgradeToWebSocket() // upgrade http and get a websocket
+        console.info(ws.read()) // read a message
+        ws.send("hello, world") // write a message
+        ws.close() // close the connection
+    }
+    ```
+
+- Http chunk.
+    1. Create a controller with name `foo`, type `controller` and url `/service/foo`.
+        ```typescript
+        // http://127.0.0.1:8090/editor.html?name=foo
+        export default function (ctx: ServiceContext) {
+            ctx.write("hello, chunk 0")
+            ctx.flush()
+            ctx.write("hello, chunk 1")
+            ctx.flush()
+            ctx.write("hello, chunk 2")
+            ctx.flush()
+        }
+        ```
+    2. You can test it using telnet:
+        ```bash
+        { echo "GET /service/foo HTTP/1.1"; echo "Host: 127.0.0.1"; echo ""; sleep 1; echo exit; } | telnet 127.0.0.1 8090
+        ```
 
 ### Module
 
@@ -102,7 +131,7 @@ A module can be imported in the controller.
     // http://127.0.0.1:8090/editor.html?name=foo
     import { user } from "./user"
 
-    export default function (req: ServiceRequest): ServiceResponse | Uint8Array | any {
+    export default function (ctx: ServiceContext): ServiceResponse | Uint8Array | any {
         return `hello, ${user?.name ?? "world"}`
     }
     ```
@@ -161,7 +190,7 @@ A module can be imported in the controller.
     // http://127.0.0.1:8090/editor.html?name=foo
     import "date"
 
-    export default function (req) {
+    export default function (ctx) {
         return new Date().toString("yyyy-MM-dd HH:mm:ss.S")
     }
     ```
@@ -346,24 +375,13 @@ Here are some built-in methods and modules.
     3. Create a controller with name `index`, type `controller` and url `/service/`.
         ```typescript
         // http://127.0.0.1:8090/editor.html?name=index
-        export default function (req: ServiceRequest): ServiceResponse | Uint8Array | any {
+        export default function (ctx: ServiceContext): ServiceResponse | Uint8Array | any {
             return $native("template")("index", {
                 title: "this is title"
             })
         }
         ```
     4. You can preview at `http://127.0.0.1:8090/service/#/greeting`
-
-- Websocket server.
-    ```typescript
-    // http://127.0.0.1:8090/editor.html?name=foo
-    export default function (req: ServiceRequest) {
-        const ws = req.upgradeToWebSocket() // upgrade http and get a websocket
-        console.info(ws.read()) // read a message
-        ws.send("hello, world") // write a message
-        ws.close() // close the connection
-    }
-    ```
 
 - Upload file.
     1. Create a resource with name `foo`, type `resource`, lang `html` and url `/resource/foo.html`.
@@ -395,8 +413,8 @@ Here are some built-in methods and modules.
     2. Create a controller with name `foo`, type `controller` and url `/service/foo`.
         ```typescript
         // http://127.0.0.1:8090/editor.html?name=foo
-        export default function (req: ServiceRequest) {
-            const file = req.getFile("file"),
+        export default function (ctx: ServiceContext) {
+            const file = ctx.getFile("file"),
                 hash = $native("crypto").md5(file.data).map(c => c.toString(16).padStart(2, "0")).join("")
             console.info(hash)
         }
@@ -407,14 +425,14 @@ Here are some built-in methods and modules.
         curl -F "file=@./abc.txt; filename=abc.txt;" http://127.0.0.1:8090/service/foo
         ```
 
-- Download a mp4 with http range.
+- Download a mp4 using HTTP Range.
     1. Create a controller with name `foo`, type `controller` and url `/service/foo`.
         ```typescript
         // http://127.0.0.1:8090/editor.html?name=foo
-        export default function (req: ServiceRequest) {
+        export default function (ctx: ServiceContext) {
             const buf = $native("file").read("a.mp4")
 
-            const range = req.getHeader().Range
+            const range = ctx.getHeader().Range
             if (!range) {
                 return new ServiceResponse(200, {
                     "Accept-Ranges": "bytes",
@@ -431,7 +449,60 @@ Here are some built-in methods and modules.
                 "Content-Range": `bytes ${start}-${end}/${buf.length}`,
                 "Content-Length": end - start + 1 + "",
                 "Content-Type": "video/mp4"
-            }, new Uint8Array(buf.slice(start, end + 1))) // slice the mp4 file from [start, end) as a Uint8Array
+            }, new Uint8Array(buf.slice(start, end + 1))) // slice the mp4 file from [start, end + 1) as a Uint8Array
         }
         ```
     2. You can preview at `http://127.0.0.1:8090/service/foo` in browser.
+
+- Play a video online using HTTP-FLV.
+    1. Create a flv file under `files/` using ffmpeg:
+        ```bash
+        ffmpeg \
+            -vcodec libx264 \ # We need encode with libx264. Otherwise, using flv.js to pull the stream may cause an error: "DemuxException: type = CodecUnsupported, info = Flv: Unsupported codec in video frame: 2"
+            -i a.mp4 \
+            a.flv
+        ```
+    2. Create a controller with name `foo`, type `controller` and url `/service/foo`. 
+        ```typescript
+        export default function (ctx: ServiceContext) {
+            const buf = $native("file").read("a.flv")
+
+            // send a chunk: flv header, total 9 + 4 bytes
+            ctx.write(new Uint8Array(buf.slice(0, 9 + 4)))
+            ctx.flush()
+
+            let i = 9 + 4;
+            while (i < buf.length) {
+                const dataSize = (buf[i + 1] << 16) + (buf[i + 2] << 8) + buf[i + 3],
+                    tagSize = 11 + dataSize,
+                    previousTagSize = (buf[i + tagSize] << 24) + (buf[i + tagSize + 1] << 16) + (buf[i + tagSize + 2] << 8) + buf[i + tagSize + 3];
+                if (tagSize != previousTagSize) {
+                    throw new Error("Invalid previous tag size: " + tagSize + ", expected: " + previousTagSize);
+                }
+
+                // send a chunk: flv tag, total 11 + dataSize + 4 bytes
+                ctx.write(new Uint8Array(buf.slice(i, i + tagSize + 4)))
+                ctx.flush()
+
+                i = i + tagSize + 4;
+            }
+        }
+        ```
+    3. Create a resource with name `foo`, type `resource`, lang `html` and url `/resource/foo.html`.
+        ```html
+        <script src="https://cdn.bootcdn.net/ajax/libs/flv.js/1.6.2/flv.min.js"></script>
+        <video id="videoElement"></video>
+        <script>
+            if (flvjs.isSupported()) {
+                const flvPlayer = flvjs.createPlayer({
+                    type: "flv",
+                    url: "/service/foo",
+                    enableWorker: true // https://github.com/bilibili/flv.js/issues/322
+                });
+                flvPlayer.attachMediaElement(document.getElementById("videoElement"));
+                flvPlayer.load();
+                flvPlayer.play();
+            }
+        </script>
+        ```
+    4. You can preview at `http://127.0.0.1:8090/resource/foo.html`.

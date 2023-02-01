@@ -39,7 +39,7 @@
         (async function () {
             // 代码示例模板
             const examples = {
-                controller: `import { user } from "./user";\n\nexport default function (req: ServiceRequest): ServiceResponse | Uint8Array | any {\n    return \`hello, \${user?.name ?? "world"}\`;\n};`,
+                controller: `import { user } from "./user";\n\nexport default function (ctx: ServiceContext): ServiceResponse | Uint8Array | any {\n    return \`hello, \${user?.name ?? "world"}\`;\n};`,
                 typescript: `export default function () {\n    \n};`,
                 html: `<!DOCTYPE html>\n<html>\n\n<head>\n    <meta charset="utf-8" />\n    <title></title>\n</head>\n\n<body>\n    hello, {{ .name }}\n</body>\n\n</html>`,
                 vue: `<template>\n    <p>hello, {{ name }}</p>\n</template>\n\n\x3Cscript>\n    module.exports = {\n        data: function() {\n            return {\n                name: "world"\n            }\n        }\n    }\n\x3C/script>\n\n<style scoped>\n\n</style>`
@@ -54,8 +54,8 @@
                 return { name, type, lang };
             })();
             // 校验类型和名称
-            if (["module", "controller", "interceptor", "daemon", "crontab", "template", "resource"].indexOf(input.type) === -1) {
-                swal("The source type must be module, controller, interceptor, daemon, crontab, template or resource.", "", "error");
+            if (["module", "controller", "daemon", "crontab", "template", "resource"].indexOf(input.type) === -1) {
+                swal("The source type must be module, controller, daemon, crontab, template or resource.", "", "error");
                 return;
             }
             if (input.name && !(input.type === "module" && /^(node_modules\/)?\w{2,32}$/.test(input.name) || /^\w{2,32}$/.test(input.name))) {
@@ -72,7 +72,7 @@
             });
             monaco.languages.typescript.typescriptDefaults.addExtraLib(`
                 declare function $native(name: string): any;
-                declare class ServiceRequest {
+                declare class ServiceContext {
                     getHeader(): { [name: string]: string; };
                     getURL(): { path: string; params: { [name: string]: string[]; }; };
                     getBody(): Uint8Array;
@@ -82,6 +82,8 @@
                     getFile(name: string): { name: string; size: number; data: Uint8Array; };
                     getCerts(): { raw: number[]; }[];
                     upgradeToWebSocket(): ServiceWebSocket;
+                    write(data: Uint8Array | string): number;
+                    flush(): void;
                 };
                 declare class ServiceResponse {
                     constructor(status: number, header: { [name: string]: string | number; }, data?: Uint8Array | string);
