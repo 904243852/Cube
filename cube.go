@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"crypto"
 	"crypto/hmac"
@@ -32,8 +33,10 @@ import (
 	_ "image/gif"
 	"image/jpeg" // 需要导入 "image/jpeg"、"image/gif"、"image/png" 去解码 jpg、gif、png 图片，否则当使用 image.Decode 处理图片文件时，会报 image: unknown format 错误
 	_ "image/png"
+	"io"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"net/smtp"
 	"os"
@@ -157,12 +160,6 @@ func main() {
 		worker := <-WorkerPool.Channels
 		defer func() {
 			WorkerPool.Channels <- worker
-		}()
-
-		// 监听客户端是否已断开或取消连接（包括且不限于 TCP 链路断开）
-		go func() {
-			<-r.Context().Done() // 该功能并不能总是感知到客户端已取消连接：服务端需读完链路上堆积的数据（在 Handler 中读取 Request.Body 完毕，无论是 Content-Length 或 chunk），才能感知 TCP 链路上的 RST、EOF，即 Request.Context 已经 Done
-			worker.Runtime.Interrupt("Client cancelled.")
 		}()
 
 		// 允许最大执行的时间为 60 秒
@@ -627,8 +624,10 @@ func CreateJsRuntime() *goja.Runtime {
 				name, stype = id[9:], "daemon"
 			} else if strings.HasPrefix(id, "./crontab/") {
 				name, stype = id[10:], "crontab"
-			} else {
+			} else if strings.HasPrefix(id, "./") {
 				name, stype = path.Clean(id), "module"
+			} else { // 如果没有 "./" 前缀，则视为 node_modules
+				name, stype = "node_modules/"+id, "module"
 			}
 
 			// 根据名称查找源码
@@ -829,6 +828,8 @@ func CreateJsRuntime() *goja.Runtime {
 				}
 				return PipePool[name]
 			}
+		case "socket":
+			module = &Socket{}
 		case "template":
 			module = func(name string, input map[string]interface{}) (string, error) {
 				var content string
@@ -891,6 +892,26 @@ func ExportGojaValue(value goja.Value) interface{} {
 
 //#region Service 请求、响应
 
+type ServiceContextReader struct {
+	reader *bufio.Reader
+}
+
+func (s *ServiceContextReader) Read(count int) ([]byte, error) {
+	buf := make([]byte, count)
+	_, err := s.reader.Read(buf)
+	if err == io.EOF {
+		return nil, nil
+	}
+	return buf, err
+}
+func (s *ServiceContextReader) ReadByte() (interface{}, error) {
+	b, err := s.reader.ReadByte() // 如果是 chunk 传输，该方法不会返回 chunk size 和 "\r\n"，而是按 chunk data 到达顺序依次读取每个 chunk data 中的每个字节，如果已到达的 chunk 已读完且下一个 chunk 未到达，该方法将阻塞
+	if err == io.EOF {
+		return -1, nil
+	}
+	return b, err
+}
+
 // service http context
 type ServiceContext struct {
 	request        *http.Request
@@ -911,9 +932,15 @@ func (s *ServiceContext) GetHeader() map[string]string {
 }
 func (s *ServiceContext) GetURL() interface{} {
 	u := s.request.URL
+
+	var params = make(map[string][]string)
+	for name, values := range u.Query() {
+		params[name] = values
+	}
+
 	return map[string]interface{}{
 		"path":   u.Path,
-		"params": u.Query(),
+		"params": params,
 	}
 }
 func (s *ServiceContext) GetBody() ([]byte, error) {
@@ -935,7 +962,13 @@ func (s *ServiceContext) GetMethod() string {
 }
 func (s *ServiceContext) GetForm() interface{} {
 	s.request.ParseForm() // 需要转换后才能获取表单
-	return s.request.Form
+
+	var params = make(map[string][]string)
+	for name, values := range s.request.Form {
+		params[name] = values
+	}
+
+	return params
 }
 func (s *ServiceContext) GetFile(name string) (interface{}, error) {
 	file, header, err := s.request.FormFile(name)
@@ -968,6 +1001,11 @@ func (s *ServiceContext) UpgradeToWebSocket() (*ServiceWebSocket, error) {
 		return &ServiceWebSocket{
 			connection: conn,
 		}, nil
+	}
+}
+func (s *ServiceContext) GetReader() *ServiceContextReader {
+	return &ServiceContextReader{
+		reader: bufio.NewReader(s.request.Body),
 	}
 }
 func (s *ServiceContext) GetPusher() (http.Pusher, error) {
@@ -1039,10 +1077,10 @@ func (s *ServiceWebSocket) Close() {
 // base64 module
 type Base64Struct struct{}
 
-func (b *Base64Struct) Encode(input []byte) string {
+func (b *Base64Struct) Encode(input []byte) string { // 在 js 中调用该方法时，入参可接受 string 或 Uint8Array 类型
 	return base64.StdEncoding.EncodeToString(input)
 }
-func (b *Base64Struct) Decode(input string) ([]byte, error) { // 返回类型 []byte 将隐式地转换为 js/ts 中的 number[]
+func (b *Base64Struct) Decode(input string) ([]byte, error) { // 返回的 []byte 类型将隐式地转换为 js/ts 中的 Uint8Array 类型
 	return base64.StdEncoding.DecodeString(input)
 }
 
@@ -1447,5 +1485,56 @@ func (e *ImageBuffer) Set(x int, y int, p uint32) {
 
 // pipe module
 var PipePool map[string]*BlockingQueueClient
+
+// socket module
+type Socket struct{}
+type SocketListener struct {
+	listener *net.Listener
+}
+
+func (s *Socket) Listen(protocol string, port int) (*SocketListener, error) {
+	listener, err := net.Listen(protocol, fmt.Sprintf(":%d", port))
+	return &SocketListener{
+		listener: &listener,
+	}, err
+}
+func (s *Socket) Dial(protocol string, host string, port int) (*SocketConn, error) {
+	conn, err := net.Dial(protocol, fmt.Sprintf("%s:%d", host, port))
+	return &SocketConn{
+		conn:   &conn,
+		reader: bufio.NewReader(conn),
+		writer: bufio.NewWriter(conn),
+	}, err
+}
+
+type SocketConn struct {
+	conn   *net.Conn
+	reader *bufio.Reader
+	writer *bufio.Writer
+}
+
+func (s *SocketListener) Accept() (*SocketConn, error) {
+	conn, err := (*s.listener).Accept()
+	return &SocketConn{
+		conn:   &conn,
+		reader: bufio.NewReader(conn),
+		writer: bufio.NewWriter(conn),
+	}, err
+}
+func (s *SocketConn) ReadLine() ([]byte, error) {
+	line, err := s.reader.ReadBytes('\n')
+	if err == io.EOF {
+		return nil, nil
+	}
+	return line, err
+}
+func (s *SocketConn) Write(data []byte) (int, error) {
+	count, err := s.writer.Write(data)
+	s.writer.Flush()
+	return count, err
+}
+func (s *SocketConn) Close() {
+	(*s.conn).Close()
+}
 
 //#endregion

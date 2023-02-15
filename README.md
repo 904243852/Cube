@@ -77,6 +77,17 @@ You can create a controller as a http/https service.
     }
     ```
 
+- Get request parameters.
+    ```bash
+    curl -XPOST -H "Content-Type: application/x-www-form-urlencoded" "http://127.0.0.1:8090/service/foo?a=1&b=2&c&a=3" -d "d=4&e=5&f&d=6"
+    ```
+    ```typescript
+    export default function (ctx: ServiceContext): ServiceResponse | Uint8Array | any {
+        ctx.getForm() // {"a":["1","3"],"b":["2"],"c":[""],"d":["4","6"],"e":["5"],"f":[""]}
+        ctx.getURL() // {"params":{"a":["1","3"],"b":["2"],"c":[""]},"path":"/service/foo"}
+    }
+    ```
+
 - Return a custom response.
     ```typescript
     export default function (ctx: ServiceContext): ServiceResponse | Uint8Array | any {
@@ -115,6 +126,25 @@ You can create a controller as a http/https service.
         ```bash
         { echo "GET /service/foo HTTP/1.1"; echo "Host: 127.0.0.1"; echo ""; sleep 1; echo exit; } | telnet 127.0.0.1 8090
         ```
+
+- Read byte(s) from request body. It also can be used as read chunks from a chunked request.
+    ```typescript
+    export default function (ctx: ServiceContext) {
+        const reader = ctx.getReader()
+
+        // String.fromCharCode(...reader.read(10)) // Read 10 bytes from request body as a Uint8Array. Return null if got EOF.
+
+        const arr = []
+
+        let byte = reader.readByte()
+        while (byte != -1) { // Return -1 if got EOF
+            arr.push(byte)
+            byte = reader.readByte()
+        }
+        
+        console.debug(String.fromCharCode(...arr))
+    }
+    ```
 
 ### Module
 
@@ -238,6 +268,7 @@ Here are some built-in methods and modules.
     const base64 = $native("base64")
     base64.encode("hello") // aGVsbG8=
     base64.decode("aGVsbG8=") // [104, 101, 108, 108, 111]
+    String.fromCharCode(...base64.decode("aGVsbG8=")) // hello
 
     // bqueue or pipe
     const b = $native("pipe")("default")
@@ -302,7 +333,7 @@ Here are some built-in methods and modules.
 ### Advance
 
 - Return a view with asynchronous vues.
-    1. Create a template with name `index`, type `template` and lang `html`.
+    1. Create a template with lang `html`.
         ```html
         <!-- http://127.0.0.1:8090/editor.html?name=index&type=template&lang=html -->
         <!DOCTYPE html>
@@ -349,13 +380,13 @@ Here are some built-in methods and modules.
         </body>
         </html>
         ```
-    2. Create a vue SFC resource with name `greeting`, type `resource`, lang `vue` and url `/resource/greeting.vue`.
+    2. Create a resource with lang `vue` and url `/resource/greeting.vue`.
         ```html
         <!-- http://127.0.0.1:8090/editor.html?name=greeting&type=reaource&lang=vue -->
         <template>
             <p>hello, {{ name }}</p>
         </template>
-        
+
         <script>
             module.exports = {
                 data: function() {
@@ -365,14 +396,14 @@ Here are some built-in methods and modules.
                 }
             }
         </script>
-        
+
         <style scoped>
             p {
                 color: #000;
             }
         </style>
         ```
-    3. Create a controller with name `index`, type `controller` and url `/service/`.
+    3. Create a controller with url `/service/`.
         ```typescript
         // http://127.0.0.1:8090/editor.html?name=index
         export default function (ctx: ServiceContext): ServiceResponse | Uint8Array | any {
@@ -384,7 +415,7 @@ Here are some built-in methods and modules.
     4. You can preview at `http://127.0.0.1:8090/service/#/greeting`
 
 - Upload file.
-    1. Create a resource with name `foo`, type `resource`, lang `html` and url `/resource/foo.html`.
+    1. Create a resource with lang `html` and url `/resource/foo.html`.
         ```html
         <!-- http://127.0.0.1:8090/editor.html?name=foo&type=resource&lang=html -->
         <!DOCTYPE html>
@@ -410,7 +441,7 @@ Here are some built-in methods and modules.
         </script>
         </html>
         ```
-    2. Create a controller with name `foo`, type `controller` and url `/service/foo`.
+    2. Create a controller with url `/service/foo`.
         ```typescript
         // http://127.0.0.1:8090/editor.html?name=foo
         export default function (ctx: ServiceContext) {
@@ -426,7 +457,7 @@ Here are some built-in methods and modules.
         ```
 
 - Download a mp4 using HTTP Range.
-    1. Create a controller with name `foo`, type `controller` and url `/service/foo`.
+    1. Create a controller with url `/service/foo`.
         ```typescript
         // http://127.0.0.1:8090/editor.html?name=foo
         export default function (ctx: ServiceContext) {
@@ -459,10 +490,12 @@ Here are some built-in methods and modules.
         ```bash
         ffmpeg \
             -i a.mp4 \
-            -vcodec libx264 \ # We need encode with libx264. Otherwise, using flv.js to pull the stream may cause an error: "DemuxException: type = CodecUnsupported, info = Flv: Unsupported codec in video frame: 2"
+            -vcodec libx264 -r 25 -b 800000 \ # We need encode with libx264. Otherwise, using flv.js to pull the stream may cause an error: "DemuxException: type = CodecUnsupported, info = Flv: Unsupported codec in video frame: 2"
+            -acodec aac -ac 2 -ar 44100 -ab 128k \
+            -af "loudnorm" \
             a.flv
         ```
-    2. Create a controller with name `foo`, type `controller` and url `/service/foo`. 
+    2. Create a controller with url `/service/foo`. 
         ```typescript
         export default function (ctx: ServiceContext) {
             const buf = $native("file").read("a.flv")
@@ -488,7 +521,7 @@ Here are some built-in methods and modules.
             }
         }
         ```
-    3. Create a resource with name `foo`, type `resource`, lang `html` and url `/resource/foo.html`.
+    3. Create a resource with lang `html` and url `/resource/foo.html`.
         ```html
         <script src="https://cdn.bootcdn.net/ajax/libs/flv.js/1.6.2/flv.min.js"></script>
         <video id="videoElement"></video>
@@ -506,3 +539,81 @@ Here are some built-in methods and modules.
         </script>
         ```
     4. You can preview at `http://127.0.0.1:8090/resource/foo.html`.
+
+- Create a smtpd using socket module.
+    1. Create a daemon.
+        ```typescript
+        export default function (ctx: ServiceContext) {
+            const listener = $native("socket").listen("tcp", 25)
+            while(true) {
+                const conn = listener.accept()
+                console.debug(onParseEmail(onReadData(conn)))
+            }
+        }
+
+        function onReadData(conn) {
+            conn.write("220 My Mail Sever\n")
+
+            let data = "",
+                s = String.fromCharCode(...conn.readLine())
+            while (s.length) {
+                switch (s.substring(0, 4).replace(/[\r\n]*$/, "")) {
+                    case "HELO":
+                    case "EHLO":
+                        conn.write("250 OK\n")
+                        break
+                    case "MAIL":
+                        conn.write("250 OK\n")
+                        break
+                    case "RCPT":
+                        conn.write("250 OK\n")
+                        break
+                    case "DATA":
+                        conn.write("354 OK\n")
+                        break
+                    case ".":
+                        conn.write("250 OK\n")
+                        break
+                    case "QUIT":
+                        conn.write("221 Bye\n")
+                        conn.close()
+                        return data
+                    default:
+                        data += s
+                        break
+                }
+                s = String.fromCharCode(...conn.readLine())
+            }
+            return null
+        }
+
+        function onParseEmail(data) {
+            if (!data) {
+                return null
+            }
+            data = data.replace(/\r\n/g, "\n")
+            return {
+                subject: data.match(/^Subject: (.*)$/m)?.[1],
+                from: data.match(/^From: .*(<.*>)$/m)?.[1],
+                to: data.match(/^To: .*(<.*>)$/m)?.[1],
+                body: String.fromCharCode(...$native("base64").decode(data.match(/\n\n(.*)/m)?.[1] || ""))
+            }
+        }
+        ```
+    2. You can test it using telnet such as:
+        ```bash
+        telnet 127.0.0.1 25
+        ```
+        ```
+        HELO abc.com
+        MAIL FROM: <noone@abc.com>
+        RCPT TO: <zhangsan@127.0.0.1>
+        DATA
+        To: zhangsan@127.0.0.1
+        From: noone@abc.com
+        Subject: greeting
+
+        aGVsbG8=
+        .
+        QUIT
+        ```
