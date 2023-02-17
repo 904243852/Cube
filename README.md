@@ -58,9 +58,9 @@ A simple web server that can be developed online using typescript.
 
 ## Shortcut key of [Editor Online](http://127.0.0.1:8090/editor.html)
 
-- Save as a script: `Ctrl` + `S`
+- Create or save a source: `Ctrl` + `S`
 
-- Delete this script: `Ctrl` + `0`
+- Delete a source: `Ctrl` + `0`
 
 ## Examples
 
@@ -82,7 +82,7 @@ You can create a controller as a http/https service.
     curl -XPOST -H "Content-Type: application/x-www-form-urlencoded" "http://127.0.0.1:8090/service/foo?a=1&b=2&c&a=3" -d "d=4&e=5&f&d=6"
     ```
     ```typescript
-    export default function (ctx: ServiceContext): ServiceResponse | Uint8Array | any {
+    export default function (ctx: ServiceContext) {
         ctx.getForm() // {"a":["1","3"],"b":["2"],"c":[""],"d":["4","6"],"e":["5"],"f":[""]}
         ctx.getURL() // {"params":{"a":["1","3"],"b":["2"],"c":[""]},"path":"/service/foo"}
     }
@@ -90,7 +90,7 @@ You can create a controller as a http/https service.
 
 - Return a custom response.
     ```typescript
-    export default function (ctx: ServiceContext): ServiceResponse | Uint8Array | any {
+    export default function (ctx: ServiceContext): ServiceResponse {
         // return new Uint8Array([104, 101, 108, 108, 111]) // response with body "hello"
         return new ServiceResponse(500, {
             "Content-Type": "text/plain"
@@ -161,7 +161,7 @@ A module can be imported in the controller.
     // http://127.0.0.1:8090/editor.html?name=foo
     import { user } from "./user"
 
-    export default function (ctx: ServiceContext): ServiceResponse | Uint8Array | any {
+    export default function (ctx: ServiceContext) {
         return `hello, ${user?.name ?? "world"}`
     }
     ```

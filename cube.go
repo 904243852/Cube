@@ -63,6 +63,7 @@ type Source struct {
 type Worker struct {
 	Runtime  *goja.Runtime
 	Function goja.Callable
+	Handles  []interface{}
 }
 
 //go:embed index.html editor.html
@@ -164,7 +165,7 @@ func main() {
 
 		// 允许最大执行的时间为 60 秒
 		timer := time.AfterFunc(60000*time.Millisecond, func() {
-			worker.Runtime.Interrupt("The service executed timeout.")
+			worker.Interrupt("The service executed timeout.")
 		})
 		defer timer.Stop()
 
@@ -587,7 +588,7 @@ func HandleSourcePatch(w http.ResponseWriter, r *http.Request) error {
 				RunDaemons(source.Name)
 			}
 			if Cache4Daemon[source.Name] != nil && source.Status == "false" {
-				Cache4Daemon[source.Name].Runtime.Interrupt("Daemon stopped.")
+				Cache4Daemon[source.Name].Interrupt("Daemon stopped.")
 			}
 		}
 	}
@@ -610,8 +611,10 @@ func HandleSourcePatch(w http.ResponseWriter, r *http.Request) error {
 
 //#region Goja 运行时
 
-func CreateJsRuntime() *goja.Runtime {
+func CreateWorker() *Worker {
 	runtime := goja.New()
+
+	worker := Worker{Runtime: runtime, Handles: make([]interface{}, 0)}
 
 	runtime.Set("require", func(id string) (goja.Value, error) {
 		program := Cache4Module[id]
@@ -829,7 +832,7 @@ func CreateJsRuntime() *goja.Runtime {
 				return PipePool[name]
 			}
 		case "socket":
-			module = &Socket{}
+			module = &Socket{worker: &worker}
 		case "template":
 			module = func(name string, input map[string]interface{}) (string, error) {
 				var content string
@@ -853,7 +856,7 @@ func CreateJsRuntime() *goja.Runtime {
 
 	runtime.SetMaxCallStackSize(2048)
 
-	return runtime
+	return &worker
 }
 
 func CreateWorkerPool(count int) {
@@ -861,8 +864,8 @@ func CreateWorkerPool(count int) {
 	WorkerPool.Channels = make(chan *Worker, count)
 	program, _ := goja.Compile("index", "(function (id, ...params) { return require(id).default(...params); })", false) // 编译源码为 Program，strict 为 false
 	for i := 0; i < count; i++ {
-		runtime := CreateJsRuntime()              // 创建 goja 运行时
-		entry, err := runtime.RunProgram(program) // 这里使用 RunProgram，可复用已编译的代码，相比直接调用 RunString 更显著提升性能
+		worker := CreateWorker()                         // 创建 goja 运行时
+		entry, err := worker.Runtime.RunProgram(program) // 这里使用 RunProgram，可复用已编译的代码，相比直接调用 RunString 更显著提升性能
 		if err != nil {
 			panic(err)
 		}
@@ -870,9 +873,10 @@ func CreateWorkerPool(count int) {
 		if !ok {
 			panic(errors.New("The program is not a function."))
 		}
-		worker := Worker{Runtime: runtime, Function: function}
-		WorkerPool.Workers[i] = &worker
-		WorkerPool.Channels <- &worker
+		worker.Function = function
+
+		WorkerPool.Workers[i] = worker
+		WorkerPool.Channels <- worker
 	}
 }
 
@@ -886,6 +890,18 @@ func ExportGojaValue(value goja.Value) interface{} {
 		}
 	}
 	return value.Export()
+}
+
+func (w *Worker) Interrupt(reason string) {
+	for _, v := range w.Handles {
+		if l, ok := v.(*net.Listener); ok { // 如果已存在监听端口服务，这里需要先关闭，否则将导致 goja.Runtime.Interrupt 无法关闭
+			(*l).Close()
+		}
+	}
+	w.Runtime.Interrupt(reason)
+	if len(w.Handles) > 0 {
+		w.Handles = make([]interface{}, 0) // 清空所有句柄
+	}
 }
 
 //#endregion
@@ -1487,13 +1503,19 @@ func (e *ImageBuffer) Set(x int, y int, p uint32) {
 var PipePool map[string]*BlockingQueueClient
 
 // socket module
-type Socket struct{}
+type Socket struct {
+	worker *Worker
+}
 type SocketListener struct {
 	listener *net.Listener
 }
 
 func (s *Socket) Listen(protocol string, port int) (*SocketListener, error) {
 	listener, err := net.Listen(protocol, fmt.Sprintf(":%d", port))
+	if err != nil {
+		return nil, err
+	}
+	s.worker.Handles = append(s.worker.Handles, &listener)
 	return &SocketListener{
 		listener: &listener,
 	}, err
