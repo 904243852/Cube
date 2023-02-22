@@ -60,11 +60,6 @@ type Source struct {
 	Cron     string `json:"cron"`
 	Status   string `json:"status"`
 }
-type Worker struct {
-	Runtime  *goja.Runtime
-	Function goja.Callable
-	Handles  []interface{}
-}
 
 //go:embed index.html editor.html
 var FileList embed.FS
@@ -78,9 +73,7 @@ var WorkerPool struct {
 
 var Crontab *cron.Cron = cron.New() // 定时任务
 
-var Cache4Crontab map[string]cron.EntryID = make(map[string]cron.EntryID)
-var Cache4Daemon map[string]*Worker = make(map[string]*Worker)
-var Cache4Module map[string]*goja.Program = make(map[string]*goja.Program)
+var Cache *CacheClient
 
 func init() {
 	// 初始化数据库
@@ -109,6 +102,14 @@ func init() {
 		panic(err)
 	} else {
 		log.SetOutput(fd)
+	}
+
+	// 初始化缓存
+	Cache = &CacheClient{
+		controllers: make(map[string]*Source),
+		crontabs:    make(map[string]cron.EntryID),
+		daemons:     make(map[string]*Worker),
+		modules:     make(map[string]*goja.Program),
 	}
 }
 
@@ -147,8 +148,8 @@ func main() {
 		name := strings.TrimPrefix(r.URL.Path, "/service/")
 
 		// 查询 controller
-		source := Source{}
-		if err := Database.QueryRow("select name, method from source where url = ? and type = 'controller' and active = true", name).Scan(&source.Name, &source.Method); err != nil {
+		source := Cache.GetController(name)
+		if source == nil {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		}
@@ -169,14 +170,14 @@ func main() {
 		})
 		defer timer.Stop()
 
-		// 执行
 		context := ServiceContext{
 			request:        r,
 			responseWriter: w,
 			timer:          timer,
 		}
-		value, err := worker.Function(
-			nil,
+
+		// 执行
+		value, err := worker.Run(
 			worker.Runtime.ToValue("./controller/"+source.Name),
 			worker.Runtime.ToValue(&context),
 		)
@@ -346,7 +347,7 @@ func RunDaemons(name string) {
 		var n string
 		rows.Scan(&n)
 
-		if Cache4Daemon[n] != nil { // 防止重复执行
+		if Cache.daemons[n] != nil { // 防止重复执行
 			continue
 		}
 
@@ -356,14 +357,13 @@ func RunDaemons(name string) {
 				WorkerPool.Channels <- worker
 			}()
 
-			Cache4Daemon[n] = worker
+			Cache.daemons[n] = worker
 
-			worker.Function(
-				nil,
-				worker.Runtime.ToValue("./daemon/"+n),
-			)
+			worker.Run(worker.Runtime.ToValue("./daemon/" + n))
 
-			delete(Cache4Daemon, n)
+			worker.Runtime.ClearInterrupt()
+
+			delete(Cache.daemons, n)
 		}()
 	}
 }
@@ -386,7 +386,7 @@ func RunCrontabs(name string) {
 		var n, c string
 		rows.Scan(&n, &c)
 
-		if _, ok := Cache4Crontab[n]; ok { // 防止重复添加任务
+		if _, ok := Cache.crontabs[n]; ok { // 防止重复添加任务
 			continue
 		}
 
@@ -396,15 +396,12 @@ func RunCrontabs(name string) {
 				WorkerPool.Channels <- worker
 			}()
 
-			worker.Function(
-				nil,
-				worker.Runtime.ToValue("./crontab/"+n),
-			)
+			worker.Run(worker.Runtime.ToValue("./crontab/" + n))
 		})
 		if err != nil {
 			panic(err)
 		} else {
-			Cache4Crontab[n] = id
+			Cache.crontabs[n] = id
 		}
 	}
 }
@@ -445,7 +442,7 @@ func HandleSourceGet(w http.ResponseWriter, r *http.Request) (data struct {
 		source := Source{}
 		rows.Scan(&source.Name, &source.Lang, &source.Type, &source.Content, &source.Compiled, &source.Active, &source.Method, &source.Url, &source.Cron)
 		if source.Type == "daemon" {
-			source.Status = fmt.Sprintf("%v", Cache4Daemon[source.Name] != nil)
+			source.Status = fmt.Sprintf("%v", Cache.daemons[source.Name] != nil)
 		}
 		data.Sources = append(data.Sources, source)
 	}
@@ -514,7 +511,7 @@ func HandleSourcePost(w http.ResponseWriter, r *http.Request) error {
 		}
 
 		// 批量导入后，需要清空 module 缓存以重建
-		Cache4Module = make(map[string]*goja.Program)
+		Cache.modules = make(map[string]*goja.Program)
 		// 启动守护任务
 		RunDaemons("")
 		// 启动定时任务
@@ -580,27 +577,27 @@ func HandleSourcePatch(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	// 清空 module 缓存以重建
-	Cache4Module = make(map[string]*goja.Program)
+	Cache.modules = make(map[string]*goja.Program)
 	// 如果是 daemon，需要启动或停止
 	if source.Type == "daemon" {
 		if source.Active {
-			if Cache4Daemon[source.Name] == nil && source.Status == "true" {
+			if Cache.daemons[source.Name] == nil && source.Status == "true" {
 				RunDaemons(source.Name)
 			}
-			if Cache4Daemon[source.Name] != nil && source.Status == "false" {
-				Cache4Daemon[source.Name].Interrupt("Daemon stopped.")
+			if Cache.daemons[source.Name] != nil && source.Status == "false" {
+				Cache.daemons[source.Name].Interrupt("Daemon stopped.")
 			}
 		}
 	}
 	// 如果是 crontab，需要启动或停止
 	if source.Type == "crontab" {
-		id, ok := Cache4Crontab[source.Name]
+		id, ok := Cache.crontabs[source.Name]
 		if !ok && source.Active {
 			RunCrontabs(source.Name)
 		}
 		if ok && !source.Active {
 			Crontab.Remove(id)
-			delete(Cache4Crontab, source.Name)
+			delete(Cache.crontabs, source.Name)
 		}
 	}
 
@@ -611,13 +608,22 @@ func HandleSourcePatch(w http.ResponseWriter, r *http.Request) error {
 
 //#region Goja 运行时
 
-func CreateWorker() *Worker {
+func CreateWorker(program *goja.Program) *Worker {
 	runtime := goja.New()
 
-	worker := Worker{Runtime: runtime, Handles: make([]interface{}, 0)}
+	entry, err := runtime.RunProgram(program) // 这里使用 RunProgram，可复用已编译的代码，相比直接调用 RunString 更显著提升性能
+	if err != nil {
+		panic(err)
+	}
+	function, ok := goja.AssertFunction(entry)
+	if !ok {
+		panic(errors.New("The program is not a function."))
+	}
+
+	worker := Worker{Runtime: runtime, function: function, handles: make([]interface{}, 0)}
 
 	runtime.Set("require", func(id string) (goja.Value, error) {
-		program := Cache4Module[id]
+		program := Cache.modules[id]
 		if program == nil { // 如果已被缓存，直接从缓存中获取
 			// 获取名称、类型
 			var name, stype string
@@ -656,7 +662,7 @@ func CreateWorker() *Worker {
 
 			// 缓存当前 module 的 program
 			// 这里不应该直接缓存 module，因为 module 依赖当前 vm 实例，在开启多个 vm 实例池的情况下，调用会错乱从而导致异常 "TypeError: Illegal runtime transition of an Object at ..."
-			Cache4Module[id] = program
+			Cache.modules[id] = program
 		}
 
 		exports := runtime.NewObject()
@@ -862,18 +868,12 @@ func CreateWorker() *Worker {
 func CreateWorkerPool(count int) {
 	WorkerPool.Workers = make([]*Worker, count) // 创建 goja 实例池
 	WorkerPool.Channels = make(chan *Worker, count)
+
+	// 编译程序
 	program, _ := goja.Compile("index", "(function (id, ...params) { return require(id).default(...params); })", false) // 编译源码为 Program，strict 为 false
+
 	for i := 0; i < count; i++ {
-		worker := CreateWorker()                         // 创建 goja 运行时
-		entry, err := worker.Runtime.RunProgram(program) // 这里使用 RunProgram，可复用已编译的代码，相比直接调用 RunString 更显著提升性能
-		if err != nil {
-			panic(err)
-		}
-		function, ok := goja.AssertFunction(entry)
-		if !ok {
-			panic(errors.New("The program is not a function."))
-		}
-		worker.Function = function
+		worker := CreateWorker(program) // 创建 goja 运行时
 
 		WorkerPool.Workers[i] = worker
 		WorkerPool.Channels <- worker
@@ -892,17 +892,56 @@ func ExportGojaValue(value goja.Value) interface{} {
 	return value.Export()
 }
 
+//#region worker
+
+type Worker struct {
+	Runtime  *goja.Runtime
+	function goja.Callable
+	handles  []interface{}
+}
+
+func (w *Worker) Run(params ...goja.Value) (goja.Value, error) {
+	return w.function(nil, params...)
+}
+func (w *Worker) AddHandle(handle interface{}) {
+	w.handles = append(w.handles, handle)
+}
 func (w *Worker) Interrupt(reason string) {
-	for _, v := range w.Handles {
+	w.Runtime.Interrupt(reason)
+	for _, v := range w.handles {
 		if l, ok := v.(*net.Listener); ok { // 如果已存在监听端口服务，这里需要先关闭，否则将导致 goja.Runtime.Interrupt 无法关闭
 			(*l).Close()
 		}
 	}
-	w.Runtime.Interrupt(reason)
-	if len(w.Handles) > 0 {
-		w.Handles = make([]interface{}, 0) // 清空所有句柄
+	if len(w.handles) > 0 {
+		w.handles = make([]interface{}, 0) // 清空所有句柄
 	}
 }
+
+//#endregion
+
+//#region cache client
+
+type CacheClient struct {
+	controllers map[string]*Source
+	crontabs    map[string]cron.EntryID
+	daemons     map[string]*Worker
+	modules     map[string]*goja.Program
+}
+
+func (c *CacheClient) GetController(id string) *Source {
+	source := c.controllers[id]
+	if source == nil {
+		source = &Source{}
+		if err := Database.QueryRow("select name, method from source where url = ? and type = 'controller' and active = true", id).Scan(&source.Name, &source.Method); err != nil {
+			return nil
+		}
+		c.controllers[id] = source
+	}
+	return source
+}
+
+//#endregion
 
 //#endregion
 
@@ -1515,7 +1554,7 @@ func (s *Socket) Listen(protocol string, port int) (*SocketListener, error) {
 	if err != nil {
 		return nil, err
 	}
-	s.worker.Handles = append(s.worker.Handles, &listener)
+	s.worker.AddHandle(&listener)
 	return &SocketListener{
 		listener: &listener,
 	}, err
