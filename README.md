@@ -313,6 +313,7 @@ Here are some built-in methods and modules.
         //caCert: "", // ca certificates for http client
         //cert: "", key: "", // private key and certificate/public key for http client auth
         //insecureSkipVerify: true // disable verify server certificate
+        //proxy: "http://127.0.0.1:5566" // proxy server
     }).request("GET", "https://www.baidu.com")
     status // 200
     header // {"Content-Length":["227"],"Content-Type":["text/html"]...]}
@@ -321,7 +322,7 @@ Here are some built-in methods and modules.
     // image
     const image = $native("image")
     const img0 = image.new(100, 200), // create a picture with width 100 and height 200
-        img1 = image.parse(request("GET", "https://www.baidu.com/img/flexible/logo/plus_logo_web_2.png").data) // read a picture from network
+        img1 = image.parse($native("http")().request("GET", "https://www.baidu.com/img/flexible/logo/plus_logo_web_2.png").data.toBytes()) // read a picture from network
     image.toBytes(img0) // convert this picture to a byte array
 
     // template
@@ -588,10 +589,7 @@ Here are some built-in methods and modules.
         }
 
         function onParseEmail(data) {
-            if (!data) {
-                return null
-            }
-            data = data.replace(/\r\n/g, "\n")
+            data = (data || "").replace(/\r\n/g, "\n")
             return {
                 subject: data.match(/^Subject: (.*)$/m)?.[1],
                 from: data.match(/^From: .*(<.*>)$/m)?.[1],

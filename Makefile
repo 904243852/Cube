@@ -27,4 +27,4 @@ update: # 更新依赖
 	@go get -u .
 
 wrk:
-	@wrk -t1 -c1 -R 20000 -d5s http://127.0.0.1:8090/service/greeting
+	@wrk -t8 -c256 -R 20000 -d5s http://127.0.0.1:8090/service/greeting

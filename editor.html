@@ -135,8 +135,8 @@
                     read(name: string): Uint8Array;
                     write(name: string, content: string | Uint8Array): void;
                 };
-                declare function $native(name: "http"): (options?: { caCert?: string; cert?: string; key?: string; insecureSkipVerify?: boolean; version?: 1 | 2; }) => {
-                    request(method: string, url: string, header: { [name: string]: string; }, body: string): { status: number; header: { [name: string]: string; }; data: { toBytes(): Uint8Array; toString(): string; toJson(): any; }; };
+                declare function $native(name: "http"): (options?: { caCert?: string; cert?: string; key?: string; insecureSkipVerify?: boolean; proxy?: string; }) => {
+                    request(method: string, url: string, header?: { [name: string]: string; }, body?: string | Uint8Array): { status: number; header: { [name: string]: string; }; data: { toBytes(): Uint8Array; toString(): string; toJson(): any; }; };
                 };
                 type Image = {
                     width: number;

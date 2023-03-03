@@ -9,7 +9,6 @@ require (
 	github.com/robfig/cron/v3 v3.0.0
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/shopspring/decimal v1.3.1
-	golang.org/x/net v0.7.0
 )
 
 require (

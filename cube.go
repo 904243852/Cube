@@ -26,7 +26,6 @@ import (
 	"github.com/robfig/cron/v3"
 	"github.com/shirou/gopsutil/process"
 	"github.com/shopspring/decimal"
-	"golang.org/x/net/http2"
 	"html/template"
 	"image"
 	"image/color"
@@ -39,6 +38,7 @@ import (
 	"net"
 	"net/http"
 	"net/smtp"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -767,10 +767,12 @@ func CreateWorker(program *goja.Program) *Worker {
 				client := &http.Client{}
 				if options != nil {
 					config := &tls.Config{}
+					// 设置 ca 证书
 					if caCert, ok := ExportMapValue(options, "caCert", "string"); ok { // 配置 ca 证书
 						config.RootCAs = x509.NewCertPool()
 						config.RootCAs.AppendCertsFromPEM([]byte(caCert.(string)))
 					}
+					// 设置客户端证书和密钥
 					if cert, ok := ExportMapValue(options, "cert", "string"); ok {
 						var c tls.Certificate                      // 参考实现 https://github.com/sideshow/apns2/blob/HEAD/certificate/certificate.go
 						b1, _ := pem.Decode([]byte(cert.(string))) // 读取公钥
@@ -799,25 +801,20 @@ func CreateWorker(program *goja.Program) *Worker {
 						}
 						config.Certificates = []tls.Certificate{c} // 配置客户端证书
 					}
+					// 设置是否忽略服务端证书错误
 					if insecureSkipVerify, ok := ExportMapValue(options, "insecureSkipVerify", "bool"); ok { // 忽略服务端证书校验
 						config.InsecureSkipVerify = insecureSkipVerify.(bool)
 					}
-					httpVersion, ok := ExportMapValue(options, "version", "int")
-					if !ok {
-						httpVersion = 1
+					// 创建 transport
+					transport := &http.Transport{
+						TLSClientConfig: config,
 					}
-					switch httpVersion {
-					case 1:
-						client.Transport = &http.Transport{
-							TLSClientConfig: config,
-						}
-					case 2:
-						client.Transport = &http2.Transport{ // 配置使用 http 2 协议
-							TLSClientConfig: config,
-						}
-					default:
-						return nil, errors.New("Invali http version, it must be 1 or 2.")
+					// 设置代理服务器
+					if proxy, ok := ExportMapValue(options, "proxy", "string"); ok {
+						u, _ := url.Parse(proxy.(string))
+						transport.Proxy = http.ProxyURL(u)
 					}
+					client.Transport = transport
 				}
 				return &HttpClient{
 					client: client,
