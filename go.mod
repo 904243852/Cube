@@ -3,7 +3,7 @@ module cube
 go 1.17
 
 require (
-	github.com/dop251/goja v0.0.0-20230216180835-5937a312edda
+	github.com/dop251/goja v0.0.0-20230304130813-e2f543bf4b4c
 	github.com/gorilla/websocket v1.5.0
 	github.com/mattn/go-sqlite3 v1.14.16
 	github.com/robfig/cron/v3 v3.0.0
@@ -15,6 +15,7 @@ require (
 	github.com/dlclark/regexp2 v1.8.1 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
+	github.com/google/pprof v0.0.0-20230207041349-798e818bf904 // indirect
 	github.com/stretchr/testify v1.8.1 // indirect
 	github.com/tklauser/go-sysconf v0.3.11 // indirect
 	github.com/tklauser/numcpus v0.6.0 // indirect

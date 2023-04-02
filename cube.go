@@ -5,10 +5,8 @@ import (
 	"bytes"
 	"crypto"
 	"crypto/hmac"
-	"crypto/md5"
 	"crypto/rand"
 	"crypto/rsa"
-	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"database/sql"
@@ -50,8 +48,8 @@ import (
 
 type Source struct {
 	Name     string `json:"name"`
-	Lang     string `json:"lang"` // typescript, html, text, vue
 	Type     string `json:"type"` // module, controller, daemon, crontab, template, resource
+	Lang     string `json:"lang"` // typescript, html, text, vue
 	Content  string `json:"content"`
 	Compiled string `json:"compiled"`
 	Active   bool   `json:"active"`
@@ -71,7 +69,7 @@ var WorkerPool struct {
 	Workers  []*Worker
 }
 
-var Crontab *cron.Cron = cron.New() // 定时任务
+var Crontab *cron.Cron // 定时任务
 
 var Cache *CacheClient
 
@@ -223,7 +221,6 @@ func main() {
 	RunDaemons("")
 
 	// 启动定时服务
-	Crontab.Start()
 	RunCrontabs("")
 
 	// 启动服务
@@ -373,6 +370,11 @@ func RunDaemons(name string) {
 //#region 定时服务
 
 func RunCrontabs(name string) {
+	if Crontab == nil { // 首次执行时，先初始化 Crontab
+		Crontab = cron.New()
+		Crontab.Start()
+	}
+
 	if name == "" {
 		name = "%"
 	}
@@ -433,14 +435,14 @@ func HandleSourceGet(w http.ResponseWriter, r *http.Request) (data struct {
 		return
 	}
 
-	rows, err := Database.Query("select name, lang, type, content, compiled, active, method, url, cron from source where name like ? and type like ? limit ?, ?", "%"+name+"%", stype, from, size)
+	rows, err := Database.Query("select name, type, lang, content, compiled, active, method, url, cron from source where name like ? and type like ? order by rowid desc limit ?, ?", "%"+name+"%", stype, from, size)
 	if err != nil {
 		return
 	}
 	defer rows.Close()
 	for rows.Next() {
 		source := Source{}
-		rows.Scan(&source.Name, &source.Lang, &source.Type, &source.Content, &source.Compiled, &source.Active, &source.Method, &source.Url, &source.Cron)
+		rows.Scan(&source.Name, &source.Type, &source.Lang, &source.Content, &source.Compiled, &source.Active, &source.Method, &source.Url, &source.Cron)
 		if source.Type == "daemon" {
 			source.Status = fmt.Sprintf("%v", Cache.daemons[source.Name] != nil)
 		}
@@ -487,6 +489,9 @@ func HandleSourcePost(w http.ResponseWriter, r *http.Request) error {
 		}, ";"), source.Content, source.Compiled, source.Name, source.Type, source.Name, source.Type, source.Lang, source.Content, source.Compiled); err != nil {
 			return err
 		}
+
+		// 清空 module 缓存以重建
+		Cache.modules = make(map[string]*goja.Program)
 	} else { // 批量导入
 		// 将请求入参转换为 source 对象数组
 		var sources []Source
@@ -1203,68 +1208,34 @@ func (c *ConsoleClient) Error(a ...interface{}) {
 }
 
 // crypto module
-type CryptoClient struct{}
 
-func (d *CryptoClient) Md5(input []byte) [16]byte {
-	return md5.Sum(input)
+type CryptoHashClient struct {
+	hash crypto.Hash
 }
-func (d *CryptoClient) Sha256(input []byte) []byte {
-	h := sha256.New()
+
+func (c *CryptoHashClient) Sum(input []byte) []byte {
+	h := c.hash.New()
 	h.Write(input)
 	return h.Sum(nil)
 }
-func (d *CryptoClient) HmacWithSha256(input []byte, key []byte) []byte {
-	h := hmac.New(sha256.New, key)
+
+type CryptoHmacClient struct {
+	hash crypto.Hash
+}
+
+func (c *CryptoHmacClient) Sum(input []byte, key []byte) []byte {
+	h := hmac.New(c.hash.New, key)
 	h.Write(input)
 	return h.Sum(nil)
 }
-func (d *CryptoClient) RsaWithSha256(input []byte, key []byte) ([]byte, error) {
-	block, _ := pem.Decode(key)
-	privateKey, _ := x509.ParsePKCS1PrivateKey(block.Bytes)
-	h := sha256.New()
-	h.Write(input)
-	digest := h.Sum(nil)
-	return rsa.SignPKCS1v15(nil, privateKey, crypto.SHA256, digest)
-}
-func (d *CryptoClient) RsaWithSha256Verify(input []byte, sign []byte, key []byte) (bool, error) {
-	block, _ := pem.Decode(key)
-	if block == nil {
-		return false, errors.New("The public key is invalid.")
+
+type CryptoRsaClient struct{}
+
+func (c *CryptoRsaClient) GenerateKey(length int) (*map[string][]byte, error) {
+	if length == 0 {
+		length = 2048
 	}
-	publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
-	if err != nil {
-		return false, err
-	}
-	digest := sha256.Sum256(input)
-	if err = rsa.VerifyPKCS1v15(publicKey.(*rsa.PublicKey), crypto.SHA256, digest[:], sign); err != nil {
-		return false, nil
-	}
-	return true, nil
-}
-func (d *CryptoClient) RsaEncrypt(input []byte, key []byte) ([]byte, error) {
-	block, _ := pem.Decode(key)
-	if block == nil {
-		return nil, errors.New("The public key is invalid.")
-	}
-	publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
-	if err != nil {
-		return nil, err
-	}
-	return rsa.EncryptPKCS1v15(rand.Reader, publicKey.(*rsa.PublicKey), input)
-}
-func (d *CryptoClient) RsaDecrypt(input []byte, key []byte) ([]byte, error) {
-	block, _ := pem.Decode(key)
-	if block == nil {
-		return nil, errors.New("The private key is invalid.")
-	}
-	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-	if err != nil {
-		return nil, err
-	}
-	return rsa.DecryptPKCS1v15(rand.Reader, privateKey, input)
-}
-func (d *CryptoClient) GenerateRsaKey() (*map[string][]byte, error) {
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	privateKey, err := rsa.GenerateKey(rand.Reader, length)
 	if err != nil {
 		return nil, err
 	}
@@ -1287,6 +1258,132 @@ func (d *CryptoClient) GenerateRsaKey() (*map[string][]byte, error) {
 		"privateKey": prvkey,
 		"publicKey":  pubKey,
 	}, nil
+}
+func (c *CryptoRsaClient) Encrypt(input []byte, key []byte) ([]byte, error) {
+	block, _ := pem.Decode(key)
+	if block == nil {
+		return nil, errors.New("The public key is invalid.")
+	}
+	publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	return rsa.EncryptPKCS1v15(rand.Reader, publicKey.(*rsa.PublicKey), input)
+}
+func (c *CryptoRsaClient) Decrypt(input []byte, key []byte) ([]byte, error) {
+	block, _ := pem.Decode(key)
+	if block == nil {
+		return nil, errors.New("The private key is invalid.")
+	}
+	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	return rsa.DecryptPKCS1v15(rand.Reader, privateKey, input)
+}
+func (c *CryptoRsaClient) Sign(input []byte, key []byte, algorithm string) ([]byte, error) {
+	hash, err := GetHash(algorithm)
+	if err != nil {
+		return nil, err
+	}
+	h := hash.New()
+	h.Write(input)
+	digest := h.Sum(nil)
+	block, _ := pem.Decode(key)
+	privateKey, _ := x509.ParsePKCS1PrivateKey(block.Bytes)
+	return rsa.SignPKCS1v15(nil, privateKey, hash, digest)
+}
+func (c *CryptoRsaClient) SignPss(input []byte, key []byte, algorithm string) ([]byte, error) {
+	hash, err := GetHash(algorithm)
+	if err != nil {
+		return nil, err
+	}
+	h := hash.New()
+	h.Write(input)
+	digest := h.Sum(nil)
+	block, _ := pem.Decode(key)
+	privateKey, _ := x509.ParsePKCS1PrivateKey(block.Bytes)
+	return rsa.SignPSS(rand.Reader, privateKey, hash, digest, nil)
+}
+func (c *CryptoRsaClient) Verify(input []byte, sign []byte, key []byte, algorithm string) (bool, error) {
+	block, _ := pem.Decode(key)
+	if block == nil {
+		return false, errors.New("The public key is invalid.")
+	}
+	publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return false, err
+	}
+	hash, err := GetHash(algorithm)
+	if err != nil {
+		return false, err
+	}
+	h := hash.New()
+	h.Write(input)
+	digest := h.Sum(nil)
+	if err = rsa.VerifyPKCS1v15(publicKey.(*rsa.PublicKey), hash, digest[:], sign); err != nil {
+		return false, nil
+	}
+	return true, nil
+}
+func (c *CryptoRsaClient) VerifyPss(input []byte, sign []byte, key []byte, algorithm string) (bool, error) {
+	block, _ := pem.Decode(key)
+	if block == nil {
+		return false, errors.New("The public key is invalid.")
+	}
+	publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return false, err
+	}
+	hash, err := GetHash(algorithm)
+	if err != nil {
+		return false, err
+	}
+	h := hash.New()
+	h.Write(input)
+	digest := h.Sum(nil)
+	if err = rsa.VerifyPSS(publicKey.(*rsa.PublicKey), hash, digest[:], sign, nil); err != nil {
+		return false, nil
+	}
+	return true, nil
+}
+
+type CryptoClient struct{}
+
+func GetHash(algorithm string) (crypto.Hash, error) {
+	switch strings.ToLower(algorithm) {
+	case "md5":
+		return crypto.MD5, nil
+	case "sha1":
+		return crypto.SHA1, nil
+	case "sha256":
+		return crypto.SHA256, nil
+	case "sha512":
+		return crypto.SHA512, nil
+	default:
+		return crypto.SHA256, errors.New("Hash algorithm " + algorithm + " is not supported.")
+	}
+}
+func (c *CryptoClient) CreateHash(algorithm string) (*CryptoHashClient, error) {
+	if hash, err := GetHash(algorithm); err != nil {
+		return nil, err
+	} else {
+		return &CryptoHashClient{
+			hash: hash,
+		}, nil
+	}
+}
+func (c *CryptoClient) CreateHmac(algorithm string) (*CryptoHmacClient, error) {
+	if hash, err := GetHash(algorithm); err != nil {
+		return nil, err
+	} else {
+		return &CryptoHmacClient{
+			hash: hash,
+		}, nil
+	}
+}
+func (c *CryptoClient) CreateRsa() *CryptoRsaClient {
+	return &CryptoRsaClient{}
 }
 
 // db module

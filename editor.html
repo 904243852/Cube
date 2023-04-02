@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
     <!-- 网页的宽度自动适应手机屏幕的宽度 -->
     <title>Cube</title>
-    <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.1/min/vs/editor/editor.main.css">
+    <link rel="stylesheet" data-name="vs/editor/editor.main" href="//cdn.bootcdn.net/ajax/libs/monaco-editor/0.36.1/min/vs/editor/editor.main.css">
     <style>
         * {
             margin: 0;
@@ -26,14 +26,14 @@
     <div id="container" style="width: 100%; height: 100%;"></div>
     <div id="btn" style="position: fixed; z-index: 10; bottom: 40px; right: 40px; width: 40px; height: 40px; font-size: 18px; display: flex; line-height: 40px; justify-content: center; border-radius: 50%; box-shadow: rgb(0, 0, 0, 0.12) 0px 2px 8px 0px; cursor: pointer; background-color: white; font-family: codicon;" onclick="javascript:(() => { if (this.innerText == '\uEB74') { window.editor.updateOptions({ readOnly: false }); this.innerText = '\uEAB2'; return; }; document.onkeydown({ ctrlKey: true, keyCode: 83 }); })();">&#60082</div>
 
-    <script src="https://cdn.bootcdn.net/ajax/libs/typescript/4.8.4/typescript.min.js"></script>
+    <script src="//cdn.bootcdn.net/ajax/libs/typescript/5.0.2/typescript.min.js"></script>
 
-    <script src="https://cdn.bootcdn.net/ajax/libs/sweetalert/2.1.2/sweetalert.min.js"></script>
+    <script src="//cdn.bootcdn.net/ajax/libs/sweetalert/2.1.2/sweetalert.min.js"></script>
 
-    <script>var require = { paths: { "vs": "https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.1/min/vs" } };</script>
-    <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.1/min/vs/loader.js"></script>
-    <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.1/min/vs/editor/editor.main.nls.js"></script>
-    <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.34.1/min/vs/editor/editor.main.js"></script>
+    <script>var require = { paths: { "vs": "https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.36.1/min/vs" } };</script>
+    <script src="//cdn.bootcdn.net/ajax/libs/monaco-editor/0.36.1/min/vs/loader.js"></script>
+    <script src="//cdn.bootcdn.net/ajax/libs/monaco-editor/0.36.1/min/vs/editor/editor.main.nls.js"></script>
+    <script src="//cdn.bootcdn.net/ajax/libs/monaco-editor/0.36.1/min/vs/editor/editor.main.js"></script>
 
     <script>
         (async function () {
@@ -108,14 +108,21 @@
                 };
                 declare function $native(name: "bqueue"): (size: number) => BlockingQueue;
                 declare function $native(name: "crypto"): {
-                    md5(input: string | Uint8Array): Uint8Array;
-                    sha256(input: string | Uint8Array): Uint8Array;
-                    hmacWithSha256(input: string | Uint8Array, key: string | Uint8Array): Uint8Array;
-                    rsaWithSha256(input: string | Uint8Array, key: string | Uint8Array): Uint8Array;
-                    rsaWithSha256Verify(input: string | Uint8Array, sign: string | Uint8Array, key: string | Uint8Array): boolean;
-                    rsaEncrypt(input: string | Uint8Array, key: string | Uint8Array): Uint8Array;
-                    rsaDecrypt(input: string | Uint8Array, key: string | Uint8Array): Uint8Array;
-                    generateRsaKey(): { privateKey: Uint8Array; publicKey: Uint8Array; };
+                    createHash(algorithm: "md5" | "sha1" | "sha256" | "sha512"): {
+                        sum(input: string | Uint8Array): Uint8Array;
+                    };
+                    createHmac(algorithm: "md5" | "sha1" | "sha256" | "sha512"): {
+                        sum(input: string | Uint8Array, key: string | Uint8Array): Uint8Array;
+                    };
+                    createRsa(): {
+                        generateKey(): { privateKey: Uint8Array; publicKey: Uint8Array; };
+                        encrypt(input: string | Uint8Array, key: string | Uint8Array): Uint8Array;
+                        decrypt(input: string | Uint8Array, key: string | Uint8Array): Uint8Array;
+                        sign(input: string | Uint8Array, key: string | Uint8Array, algorithm: "md5" | "sha1" | "sha256" | "sha512"): Uint8Array;
+                        signPss(input: string | Uint8Array, key: string | Uint8Array, algorithm: "md5" | "sha1" | "sha256" | "sha512"): Uint8Array;
+                        verify(input: string | Uint8Array, sign: string | Uint8Array, key: string | Uint8Array, algorithm: "md5" | "sha1" | "sha256" | "sha512"): boolean;
+                        verifyPss(input: string | Uint8Array, sign: string | Uint8Array, key: string | Uint8Array, algorithm: "md5" | "sha1" | "sha256" | "sha512"): boolean;
+                    };
                 };
                 declare function $native(name: "db"): {
                     query(stmt: string, ...params: any[]): any[];

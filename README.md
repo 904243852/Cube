@@ -300,8 +300,25 @@ Here are some built-in methods and modules.
 
     // crypto
     const crypto = $native("crypto")
-    crypto.md5("hello, world").map(c => c.toString(16).padStart(2, "0")).join("") // e4d7f1b4ed2e42d15898f4b27b019da4
-    crypto.sha256("hello, world").map(c => c.toString(16).padStart(2, "0")).join("") // 09ca7e4eaa6e8ae9c7d261167129184883644d07dfba7cbfbc4c8a2e08360d5b
+    // hash
+    crypto.createHash("md5").sum("hello, world").map(c => c.toString(16).padStart(2, "0")).join("") // "e4d7f1b4ed2e42d15898f4b27b019da4"
+    // hmac
+    crypto.createHmac("sha1").sum("hello, world", "123456").map(c => c.toString(16).padStart(2, "0")).join("") // "9a231f1dd39a4ff6ea778a5640d1498794f8a9f8"
+    // rsa
+    const rsa = crypto.createRsa(),
+        { privateKey, publicKey } = rsa.generateKey();
+    String.fromCharCode(...
+        rsa.decrypt(
+            rsa.encrypt("hello, world", publicKey),
+            privateKey
+        )
+    ) // "hello, world"
+    rsa.verifyPss(
+        "hello, world",
+        rsa.signPss("hello, world", privateKey, "sha256"),
+        publicKey,
+        "sha256"
+    ) // true
 
     // file
     const file = $native("file")
