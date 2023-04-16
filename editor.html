@@ -39,7 +39,7 @@
         (async function () {
             // 代码示例模板
             const examples = {
-                controller: `import { user } from "./user";\n\nexport default function (ctx: ServiceContext): ServiceResponse | Uint8Array | any {\n    return \`hello, \${user?.name ?? "world"}\`;\n};`,
+                controller: `export default function (ctx: ServiceContext): ServiceResponse | Uint8Array | any {\n    return "hello, world";\n};`,
                 typescript: `export default function () {\n    \n};`,
                 html: `<!DOCTYPE html>\n<html>\n\n<head>\n    <meta charset="utf-8" />\n    <title></title>\n</head>\n\n<body>\n    hello, {{ .name }}\n</body>\n\n</html>`,
                 vue: `<template>\n    <p>hello, {{ name }}</p>\n</template>\n\n\x3Cscript>\n    module.exports = {\n        data: function() {\n            return {\n                name: "world"\n            }\n        }\n    }\n\x3C/script>\n\n<style scoped>\n\n</style>`
@@ -156,6 +156,10 @@
                     parse(input: Uint8Array): Image;
                     toBytes(input: Image): Uint8Array;
                 };
+                declare function $native(name: "lock"): (name: string) => {
+                    lock(timeout: number): void;
+                    unlock(): void;
+                };
                 declare function $native(name: "pipe"): (name: string) => BlockingQueue;
                 type SocketConnection = {
                     readLine(): Uint8Array;
@@ -169,6 +173,7 @@
                     dial(protocol: "tcp" | "udp", host: string, port: number): SocketConnection;
                 };
                 declare function $native(name: "template"): (name: string, input: { [name: string]: any; }) => string;
+                declare function $native(name: "ulid"): () => string;
             `, "global.d.ts");
             // 预加载所有 module source，用于 import
             if (input.lang === "typescript") {
