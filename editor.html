@@ -107,6 +107,10 @@
                     drain(size: number, timeout: number): any[];
                 };
                 declare function $native(name: "bqueue"): (size: number) => BlockingQueue;
+                declare function $native(name: "cache"): {
+                    set(key: any, value: any, timeout: number): void;
+                    get(key: any): any;
+                };
                 declare function $native(name: "crypto"): {
                     createHash(algorithm: "md5" | "sha1" | "sha256" | "sha512"): {
                         sum(input: string | Uint8Array): Uint8Array;
@@ -125,6 +129,12 @@
                     };
                 };
                 declare function $native(name: "db"): {
+                    beginTx(): {
+                        query(stmt: string, ...params: any[]): any[];
+                        exec(stmt: string, ...params: any[]): number;
+                        commit(): void;
+                        rollback(): void;
+                    };
                     query(stmt: string, ...params: any[]): any[];
                     exec(stmt: string, ...params: any[]): number;
                 };

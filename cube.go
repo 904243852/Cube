@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"crypto"
 	"crypto/hmac"
 	"crypto/rand"
@@ -71,7 +72,7 @@ var WorkerPool struct {
 
 var Crontab *cron.Cron // 定时任务
 
-var Cache *CacheClient
+var SourceCache *SourceCacheClient
 
 func init() {
 	// 初始化数据库
@@ -103,7 +104,7 @@ func init() {
 	}
 
 	// 初始化缓存
-	Cache = &CacheClient{
+	SourceCache = &SourceCacheClient{
 		controllers: make(map[string]*Source),
 		crontabs:    make(map[string]cron.EntryID),
 		daemons:     make(map[string]*Worker),
@@ -146,7 +147,7 @@ func main() {
 		name := strings.TrimPrefix(r.URL.Path, "/service/")
 
 		// 查询 controller
-		source := Cache.GetController(name)
+		source := SourceCache.GetController(name)
 		if source == nil {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
@@ -168,7 +169,7 @@ func main() {
 		})
 		defer timer.Stop()
 
-		context := ServiceContext{
+		ctx := ServiceContext{
 			request:        r,
 			responseWriter: w,
 			timer:          timer,
@@ -177,14 +178,15 @@ func main() {
 		// 执行
 		value, err := worker.Run(
 			worker.Runtime.ToValue("./controller/"+source.Name),
-			worker.Runtime.ToValue(&context),
+			worker.Runtime.ToValue(&ctx),
 		)
+		worker.ClearHandle()
 		if err != nil {
 			Error(w, err)
 			return
 		}
 
-		if context.returnless == true { // 如果是 WebSocket 或 chunk 响应，不需要封装响应
+		if ctx.returnless == true { // 如果是 WebSocket 或 chunk 响应，不需要封装响应
 			return
 		}
 
@@ -344,7 +346,7 @@ func RunDaemons(name string) {
 		var n string
 		rows.Scan(&n)
 
-		if Cache.daemons[n] != nil { // 防止重复执行
+		if SourceCache.daemons[n] != nil { // 防止重复执行
 			continue
 		}
 
@@ -354,13 +356,13 @@ func RunDaemons(name string) {
 				WorkerPool.Channels <- worker
 			}()
 
-			Cache.daemons[n] = worker
+			SourceCache.daemons[n] = worker
 
 			worker.Run(worker.Runtime.ToValue("./daemon/" + n))
 
 			worker.Runtime.ClearInterrupt()
 
-			delete(Cache.daemons, n)
+			delete(SourceCache.daemons, n)
 		}()
 	}
 }
@@ -388,7 +390,7 @@ func RunCrontabs(name string) {
 		var n, c string
 		rows.Scan(&n, &c)
 
-		if _, ok := Cache.crontabs[n]; ok { // 防止重复添加任务
+		if _, ok := SourceCache.crontabs[n]; ok { // 防止重复添加任务
 			continue
 		}
 
@@ -403,7 +405,7 @@ func RunCrontabs(name string) {
 		if err != nil {
 			panic(err)
 		} else {
-			Cache.crontabs[n] = id
+			SourceCache.crontabs[n] = id
 		}
 	}
 }
@@ -444,7 +446,7 @@ func HandleSourceGet(w http.ResponseWriter, r *http.Request) (data struct {
 		source := Source{}
 		rows.Scan(&source.Name, &source.Type, &source.Lang, &source.Content, &source.Compiled, &source.Active, &source.Method, &source.Url, &source.Cron)
 		if source.Type == "daemon" {
-			source.Status = fmt.Sprintf("%v", Cache.daemons[source.Name] != nil)
+			source.Status = fmt.Sprintf("%v", SourceCache.daemons[source.Name] != nil)
 		}
 		data.Sources = append(data.Sources, source)
 	}
@@ -491,7 +493,7 @@ func HandleSourcePost(w http.ResponseWriter, r *http.Request) error {
 		}
 
 		// 清空 module 缓存以重建
-		Cache.modules = make(map[string]*goja.Program)
+		SourceCache.modules = make(map[string]*goja.Program)
 	} else { // 批量导入
 		// 将请求入参转换为 source 对象数组
 		var sources []Source
@@ -516,7 +518,7 @@ func HandleSourcePost(w http.ResponseWriter, r *http.Request) error {
 		}
 
 		// 批量导入后，需要清空 module 缓存以重建
-		Cache.modules = make(map[string]*goja.Program)
+		SourceCache.modules = make(map[string]*goja.Program)
 		// 启动守护任务
 		RunDaemons("")
 		// 启动定时任务
@@ -582,27 +584,27 @@ func HandleSourcePatch(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	// 清空 module 缓存以重建
-	Cache.modules = make(map[string]*goja.Program)
+	SourceCache.modules = make(map[string]*goja.Program)
 	// 如果是 daemon，需要启动或停止
 	if source.Type == "daemon" {
 		if source.Active {
-			if Cache.daemons[source.Name] == nil && source.Status == "true" {
+			if SourceCache.daemons[source.Name] == nil && source.Status == "true" {
 				RunDaemons(source.Name)
 			}
-			if Cache.daemons[source.Name] != nil && source.Status == "false" {
-				Cache.daemons[source.Name].Interrupt("Daemon stopped.")
+			if SourceCache.daemons[source.Name] != nil && source.Status == "false" {
+				SourceCache.daemons[source.Name].Interrupt("Daemon stopped.")
 			}
 		}
 	}
 	// 如果是 crontab，需要启动或停止
 	if source.Type == "crontab" {
-		id, ok := Cache.crontabs[source.Name]
+		id, ok := SourceCache.crontabs[source.Name]
 		if !ok && source.Active {
 			RunCrontabs(source.Name)
 		}
 		if ok && !source.Active {
 			Crontab.Remove(id)
-			delete(Cache.crontabs, source.Name)
+			delete(SourceCache.crontabs, source.Name)
 		}
 	}
 
@@ -628,7 +630,7 @@ func CreateWorker(program *goja.Program) *Worker {
 	worker := Worker{Runtime: runtime, function: function, handles: make([]interface{}, 0)}
 
 	runtime.Set("require", func(id string) (goja.Value, error) {
-		program := Cache.modules[id]
+		program := SourceCache.modules[id]
 		if program == nil { // 如果已被缓存，直接从缓存中获取
 			// 获取名称、类型
 			var name, stype string
@@ -667,7 +669,7 @@ func CreateWorker(program *goja.Program) *Worker {
 
 			// 缓存当前 module 的 program
 			// 这里不应该直接缓存 module，因为 module 依赖当前 vm 实例，在开启多个 vm 实例池的情况下，调用会错乱从而导致异常 "TypeError: Illegal runtime transition of an Object at ..."
-			Cache.modules[id] = program
+			SourceCache.modules[id] = program
 		}
 
 		exports := runtime.NewObject()
@@ -741,17 +743,19 @@ func CreateWorker(program *goja.Program) *Worker {
 	runtime.Set("$native", func(name string) (module interface{}, err error) {
 		switch name {
 		case "base64":
-			module = &Base64Struct{}
+			module = &Base64Client{}
 		case "bqueue":
 			module = func(size int) *BlockingQueueClient {
 				return &BlockingQueueClient{
 					queue: make(chan interface{}, size),
 				}
 			}
+		case "cache":
+			module = &CacheClient{}
 		case "crypto":
 			module = &CryptoClient{}
 		case "db":
-			module = &DatabaseClient{}
+			module = &DatabaseClient{worker: &worker}
 		case "decimal":
 			module = func(value string) (decimal.Decimal, error) {
 				return decimal.NewFromString(value)
@@ -932,12 +936,18 @@ func (this *Worker) AddHandle(handle interface{}) {
 }
 func (this *Worker) Interrupt(reason string) {
 	this.Runtime.Interrupt(reason)
+	this.ClearHandle()
+}
+func (this *Worker) ClearHandle() {
 	for _, v := range this.handles {
 		if l, ok := v.(*net.Listener); ok { // 如果已存在监听端口服务，这里需要先关闭，否则将导致 goja.Runtime.Interrupt 无法关闭
 			(*l).Close()
 		}
 		if l, ok := v.(*LockClient); ok {
 			(*l).Unlock()
+		}
+		if t, ok := v.(*sql.Tx); ok {
+			(*t).Rollback()
 		}
 	}
 	if len(this.handles) > 0 {
@@ -947,16 +957,16 @@ func (this *Worker) Interrupt(reason string) {
 
 //#endregion
 
-//#region cache client
+//#region source cache
 
-type CacheClient struct {
+type SourceCacheClient struct {
 	controllers map[string]*Source
 	crontabs    map[string]cron.EntryID
 	daemons     map[string]*Worker
 	modules     map[string]*goja.Program
 }
 
-func (this *CacheClient) GetController(id string) *Source {
+func (this *SourceCacheClient) GetController(id string) *Source {
 	source := this.controllers[id]
 	if source == nil {
 		source = &Source{}
@@ -1157,12 +1167,12 @@ func (this *ServiceWebSocket) Close() {
 //#region 内置模块
 
 // base64 module
-type Base64Struct struct{}
+type Base64Client struct{}
 
-func (this *Base64Struct) Encode(input []byte) string { // 在 js 中调用该方法时，入参可接受 string 或 Uint8Array 类型
+func (this *Base64Client) Encode(input []byte) string { // 在 js 中调用该方法时，入参可接受 string 或 Uint8Array 类型
 	return base64.StdEncoding.EncodeToString(input)
 }
-func (this *Base64Struct) Decode(input string) ([]byte, error) { // 返回的 []byte 类型将隐式地转换为 js/ts 中的 Uint8Array 类型
+func (this *Base64Client) Decode(input string) ([]byte, error) { // 返回的 []byte 类型将隐式地转换为 js/ts 中的 Uint8Array 类型
 	return base64.StdEncoding.DecodeString(input)
 }
 
@@ -1211,6 +1221,24 @@ func (this *BlockingQueueClient) Drain(size int, timeout int) (output []interfac
 	return
 }
 
+// cache module
+var Cache sync.Map // 存放并发安全的 map
+
+type CacheClient struct{}
+
+func (this *CacheClient) Set(key interface{}, value interface{}, timeout int) {
+	Cache.Store(key, value)
+	time.AfterFunc(time.Duration(timeout)*time.Millisecond, func() {
+		Cache.Delete(key)
+	})
+}
+func (this *CacheClient) Get(key interface{}) interface{} {
+	if value, ok := Cache.Load(key); ok {
+		return value
+	}
+	return nil
+}
+
 // console module
 type ConsoleClient struct {
 	runtime *goja.Runtime
@@ -1233,7 +1261,6 @@ func (this *ConsoleClient) Error(a ...interface{}) {
 }
 
 // crypto module
-
 type CryptoHashClient struct {
 	hash crypto.Hash
 }
@@ -1420,13 +1447,11 @@ func (this *CryptoClient) CreateRsa() *CryptoRsaClient {
 }
 
 // db module
-type DatabaseClient struct{}
+type DatabaseTransaction struct {
+	Transaction *sql.Tx
+}
 
-func (this *DatabaseClient) Query(stmt string, params ...interface{}) ([]interface{}, error) {
-	rows, err := Database.Query(stmt, params...)
-	if err != nil {
-		return nil, err
-	}
+func ExportDatabaseRows(rows *sql.Rows) ([]interface{}, error) {
 	defer rows.Close()
 
 	columns, _ := rows.Columns()
@@ -1449,6 +1474,48 @@ func (this *DatabaseClient) Query(stmt string, params ...interface{}) ([]interfa
 	}
 
 	return records, rows.Err()
+}
+func (this *DatabaseTransaction) Query(stmt string, params ...interface{}) ([]interface{}, error) {
+	rows, err := this.Transaction.Query(stmt, params...)
+	if err != nil {
+		return nil, err
+	}
+	return ExportDatabaseRows(rows)
+}
+func (this *DatabaseTransaction) Exec(stmt string, params ...interface{}) (int64, error) {
+	res, err := this.Transaction.Exec(stmt, params...)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+func (this *DatabaseTransaction) Commit() error {
+	return this.Transaction.Commit()
+}
+func (this *DatabaseTransaction) Rollback() error {
+	return this.Transaction.Rollback()
+}
+
+type DatabaseClient struct {
+	worker *Worker
+}
+
+func (this *DatabaseClient) BeginTx() (*DatabaseTransaction, error) {
+	if tx, err := Database.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil { // 开启一个新事务，隔离级别为读已提交
+		return nil, err
+	} else {
+		this.worker.AddHandle(tx)
+		return &DatabaseTransaction{
+			Transaction: tx,
+		}, nil
+	}
+}
+func (this *DatabaseClient) Query(stmt string, params ...interface{}) ([]interface{}, error) {
+	rows, err := Database.Query(stmt, params...)
+	if err != nil {
+		return nil, err
+	}
+	return ExportDatabaseRows(rows)
 }
 func (this *DatabaseClient) Exec(stmt string, params ...interface{}) (int64, error) {
 	res, err := Database.Exec(stmt, params...)
