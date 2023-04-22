@@ -1,6 +1,7 @@
 cube
 files
 .idea
+*.exe
 *.db
 *.log
 *.key

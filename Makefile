@@ -7,6 +7,10 @@ watch: # 监听当前目录下的相关文件变动，实时编译、运行
 build: clean # 构建
 	@go build .
 
+buildx: clean # 构建（删除符号、调试信息）、压缩（upx）
+	@go build -ldflags "-s -w" -o cube.slim.exe .
+	@upx -9 -o cube.min.exe cube.slim.exe
+
 clean:
 	@rm -rf cube *.log
 
