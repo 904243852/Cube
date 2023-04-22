@@ -486,9 +486,9 @@ func HandleSourcePost(w http.ResponseWriter, r *http.Request) error {
 
 		// 单个新增或修改，新增的均为去激活状态，无需刷新缓存
 		if _, err := Database.Exec(strings.Join([]string{
-			"update source set content = ?, compiled = ? where name = ? and type = ?",                  // 先尝试更新，再尝试新增
-			"insert or ignore into source (name, type, lang, content, compiled) values(?, ?, ?, ?, ?)", // 这里不用 insert or replace，replace 是替换整条记录
-		}, ";"), source.Content, source.Compiled, source.Name, source.Type, source.Name, source.Type, source.Lang, source.Content, source.Compiled); err != nil {
+			"update source set content = ?, compiled = ? where name = ? and type = ?",                          // 先尝试更新，再尝试新增
+			"insert or ignore into source (name, type, lang, content, compiled, url) values(?, ?, ?, ?, ?, ?)", // 这里不用 insert or replace，replace 是替换整条记录
+		}, ";"), source.Content, source.Compiled, source.Name, source.Type, source.Name, source.Type, source.Lang, source.Content, source.Compiled, source.Name); err != nil {
 			return err
 		}
 
