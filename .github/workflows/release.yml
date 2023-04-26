@@ -16,7 +16,7 @@ jobs:
             goos: windows
     steps:
       - uses: actions/checkout@v3
-      - uses: wangyoucao577/go-release-action@v1.36
+      - uses: wangyoucao577/go-release-action@v1.30
         with:
           github_token: ${{ secrets.REPO_TOKEN }} # 用于往 Release 中添加文件
           goos: ${{ matrix.goos }}
