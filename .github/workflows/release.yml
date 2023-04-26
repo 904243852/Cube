@@ -2,34 +2,27 @@ name: Release
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
-
   build:
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        goos: [linux, windows] # 需要打包的系统
+        goarch: [amd64, arm64] # 需要打包的架构
+        exclude: # 排除某些平台和架构
+          - goarch: arm64
+            goos: windows
     steps:
-    - uses: actions/checkout@v3
-
-    - name: Set up Go
-      uses: actions/setup-go@v3
-      with:
-        go-version: 1.19
-
-    - name: Build
-      run: go build -v ./...
-
-    - name: Package
-      run: |
-        tar cvf cube-linux-amd64-latest.tar.gz cube
-
-    - name: Upload to release
-      uses: svenstaro/upload-release-action@v2
-      with:
-        repo_token: ${{ secrets.REPO_TOKEN }}
-        file: cube-linux-amd64-latest.tar.gz
-        tag: ${{ github.ref }}
-        release_name: ${{ github.ref }}
-        overwrite: true
-        file_glob: true
-        body: ""
+      - uses: actions/checkout@v3
+      - uses: wangyoucao577/go-release-action@v1.30
+        with:
+          github_token: ${{ secrets.REPO_TOKEN }} # 用于往 Release 中添加文件
+          goos: ${{ matrix.goos }}
+          goarch: ${{ matrix.goarch }}
+          goversion: 1.19 # 指定编译使用的 Golang 版本
+          binary_name: "cube" # 可以指定二进制文件的名称
+          ldflags: "-s -w"
+          executable_compression: upx
+          extra_files: README.md # 需要包含的额外文件
