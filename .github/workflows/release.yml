@@ -16,8 +16,7 @@ jobs:
           go-version: 1.19
       - name: Set up Upx
         run: |
-          apt-get update
-          apt-get install -y upx
+          apt-get update && apt-get install -y upx
       - name: Build
         run: |
           go build -ldflags "-s -w" -o .cube .
