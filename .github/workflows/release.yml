@@ -18,7 +18,7 @@ jobs:
         run: go build -ldflags "-s -w" -o .cube .
       - name: Compress
         run: |
-          apt-get install -y upx
+          apt-get update && apt-get install -y upx
           upx -9 -q -o cube .cube
       - name: Package
         run: tar -zcvf cube-main-linux-amd64.tar.gz cube
