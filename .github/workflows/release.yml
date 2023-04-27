@@ -14,19 +14,27 @@ jobs:
         uses: actions/setup-go@v3
         with:
           go-version: 1.19
+      - name: Set up Upx
+        run: |
+          apt-get update
+          apt-get install -y upx
       - name: Build
-        run: go build -ldflags "-s -w" -o .cube .
+        run: |
+          go build -ldflags "-s -w" -o .cube .
       - name: Compress
         run: |
-          apt-get update && apt-get install -y upx
           upx -9 -q -o cube .cube
       - name: Package
-        run: tar -zcvf cube-main-linux-amd64.tar.gz cube
+        run: |
+          tar -zcvf cube-main-linux-amd64.tar.gz cube
+      - name: Checksum
+        run: |
+          md5sum cube-main-linux-amd64.tar.gz | cut -d ' ' -f 1 > cube-main-linux-amd64.tar.gz.md5
       - name: Upload
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: cube-main-linux-amd64.tar.gz
+          file: cube-main-linux-amd64.tar.gz*
           tag: ${{ github.ref }}
           release_name: ${{ github.ref }}
           overwrite: true
