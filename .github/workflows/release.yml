@@ -5,7 +5,7 @@ on:
     branches: ["main"]
 
 jobs:
-  build:
+  build-linux:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -35,6 +35,49 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: cube-main-linux-amd64.tar.gz*
+          tag: ${{ github.ref }}
+          release_name: ${{ github.ref }}
+          overwrite: true
+          file_glob: true
+          body: ""
+  build-windows:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.19
+      - name: Set up Upx
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y upx
+      - name: Set up mingw
+        run: |
+          sudo apt-get install --no-install-recommends -y gcc-mingw-w64-x86-64
+          export CGO_ENABLED=1 \
+              CC=x86_64-w64-mingw32-gcc \
+              CXX=x86_64-w64-mingw32-g++
+      - name: Build
+        run: |
+          export GOOS=windows \
+              GOARCH=amd64
+          go build -ldflags "-s -w" -o .cube.exe .
+      - name: Compress
+        run: |
+          upx -9 -q -o cube.exe .cube.exe
+      - name: Package
+        run: |
+          zip cube-main-windows-amd64.zip cube.exe
+      - name: Checksum
+        run: |
+          md5sum cube-main-windows-amd64.zip | cut -d ' ' -f 1 > cube-main-windows-amd64.zip.md5
+      - name: Upload
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: cube-main-windows-amd64.zip*
           tag: ${{ github.ref }}
           release_name: ${{ github.ref }}
           overwrite: true
