@@ -53,7 +53,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y upx
-      - name: Set up mingw
+      - name: Set up MinGW
         run: |
           sudo apt-get install --no-install-recommends -y gcc-mingw-w64-x86-64
           export CGO_ENABLED=1 \
