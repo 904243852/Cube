@@ -8,11 +8,15 @@ build: clean # 构建
 	@go build .
 
 buildx: clean # 构建（删除符号、调试信息）、压缩（upx）
-	@go build -ldflags "-s -w" -o cube.slim.exe .
-	@upx -9 -o cube.min.exe cube.slim.exe
+	@go build -ldflags "-s -w" .
+ifeq ($(shell uname), Linux)
+	@upx -9 -q -o cubemin cube
+else
+	@upx -9 -q -o cubemin.exe cube.exe
+endif
 
 clean:
-	@rm -rf cube *.log
+	@rm -rf cube cubemin *.log *.exe
 
 tidy: # 安装依赖、删除 go.mod、go.sum 中的无用依赖
 	@go mod tidy

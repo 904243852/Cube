@@ -479,13 +479,16 @@ Here are some built-in methods and modules.
         ```typescript
         // http://127.0.0.1:8090/editor.html?name=foo
         export default function (ctx: ServiceContext) {
-            const buf = $native("file").read("a.mp4")
+            const name = "a.mp4"
+
+            const client = $native("file"),
+                size = client.stat(name).size()
 
             const range = ctx.getHeader().Range
             if (!range) {
                 return new ServiceResponse(200, {
                     "Accept-Ranges": "bytes",
-                    "Content-Length": buf.length + "",
+                    "Content-Length": size + "",
                     "Content-Type": "video/mp4"
                 })
             }
@@ -493,12 +496,15 @@ Here are some built-in methods and modules.
             const ranges = range.substring(6).split("-"),
                 slice = 1024 * 1024 * 2, // The slice size is 2 MB
                 start = Number(ranges[0]),
-                end = Math.min(Number(ranges[1]) || (start + slice - 1), buf.length - 1)
+                end = Math.min(Number(ranges[1]) || (start + slice - 1), size - 1)
+            
+            const buf = client.readRange(name, start, end - start + 1) // slice the mp4 file from [start, end + 1)
+
             return new ServiceResponse(206, {
-                "Content-Range": `bytes ${start}-${end}/${buf.length}`,
+                "Content-Range": `bytes ${start}-${end}/${size}`,
                 "Content-Length": end - start + 1 + "",
                 "Content-Type": "video/mp4"
-            }, new Uint8Array(buf.slice(start, end + 1))) // slice the mp4 file from [start, end + 1) as a Uint8Array
+            }, buf)
         }
         ```
     2. You can preview at `http://127.0.0.1:8090/service/foo` in browser.

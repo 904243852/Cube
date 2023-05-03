@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
     <!-- 网页的宽度自动适应手机屏幕的宽度 -->
     <title>Cube</title>
-    <link rel="stylesheet" data-name="vs/editor/editor.main" href="//cdn.bootcdn.net/ajax/libs/monaco-editor/0.36.1/min/vs/editor/editor.main.css">
+    <link rel="stylesheet" data-name="vs/editor/editor.main" href="//cdn.bootcdn.net/ajax/libs/monaco-editor/0.37.1/min/vs/editor/editor.main.css">
     <style>
         * {
             margin: 0;
@@ -30,10 +30,10 @@
 
     <script src="//cdn.bootcdn.net/ajax/libs/sweetalert/2.1.2/sweetalert.min.js"></script>
 
-    <script>var require = { paths: { "vs": "https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.36.1/min/vs" } };</script>
-    <script src="//cdn.bootcdn.net/ajax/libs/monaco-editor/0.36.1/min/vs/loader.js"></script>
-    <script src="//cdn.bootcdn.net/ajax/libs/monaco-editor/0.36.1/min/vs/editor/editor.main.nls.js"></script>
-    <script src="//cdn.bootcdn.net/ajax/libs/monaco-editor/0.36.1/min/vs/editor/editor.main.js"></script>
+    <script>var require = { paths: { "vs": "https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.37.1/min/vs" } };</script>
+    <script src="//cdn.bootcdn.net/ajax/libs/monaco-editor/0.37.1/min/vs/loader.js"></script>
+    <script src="//cdn.bootcdn.net/ajax/libs/monaco-editor/0.37.1/min/vs/editor/editor.main.nls.js"></script>
+    <script src="//cdn.bootcdn.net/ajax/libs/monaco-editor/0.37.1/min/vs/editor/editor.main.js"></script>
 
     <script>
         (async function () {
@@ -68,7 +68,8 @@
                 allowNonTsExtensions: true,
                 experimentalDecorators: true, // 启用实验性的装饰器特性
                 typeRoots: ["."],
-                downlevelIteration: true // 允许迭代器进行迭代
+                downlevelIteration: true, // 允许迭代器进行迭代
+                target: monaco.languages.typescript.ScriptTarget.ESNext // 启用 ESNext 版本
             });
             monaco.languages.typescript.typescriptDefaults.addExtraLib(`
                 declare class ServiceContext {
@@ -79,7 +80,7 @@
                     getMethod(): "GET" | "POST" | "PUT" | "DELETE";
                     getForm(): { [name: string]: string[]; };
                     getFile(name: string): { name: string; size: number; data: Uint8Array; };
-                    getCerts(): { raw: number[]; }[];
+                    getCerts(): { raw: Uint8Array; }[];
                     upgradeToWebSocket(): ServiceWebSocket;
                     getReader(): { readByte(): number; read(count: number): Uint8Array; };
                     getPusher(): { push(target: string, options: any): void; };
@@ -150,7 +151,16 @@
                 };
                 declare function $native(name: "file"): {
                     read(name: string): Uint8Array;
+                    readRange(name: string, offset: number, length: number): Uint8Array;
                     write(name: string, content: string | Uint8Array): void;
+                    writeRange(name: string, offset: number, content: string | Uint8Array): void;
+                    stat(name: string): {
+                        name(): string;
+                        size(): number;
+                        isDir(): boolean;
+                        mode(): string;
+                        modTime(): string;
+                    };
                 };
                 declare function $native(name: "http"): (options?: { caCert?: string; cert?: string; key?: string; insecureSkipVerify?: boolean; proxy?: string; }) => {
                     request(method: string, url: string, header?: { [name: string]: string; }, body?: string | Uint8Array): { status: number; header: { [name: string]: string; }; data: { toBytes(): Uint8Array; toString(): string; toJson(): any; }; };

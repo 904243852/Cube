@@ -32,6 +32,7 @@ import (
 	"image/jpeg" // 需要导入 "image/jpeg"、"image/gif"、"image/png" 去解码 jpg、gif、png 图片，否则当使用 image.Decode 处理图片文件时，会报 image: unknown format 错误
 	_ "image/png"
 	"io"
+	"io/fs"
 	"io/ioutil"
 	"log"
 	"net"
@@ -1119,7 +1120,7 @@ func (this *ServiceContext) Flush() error {
 		this.returnless = true
 		this.responseWriter.Header().Set("X-Content-Type-Options", "nosniff") // https://stackoverflow.com/questions/18337630/what-is-x-content-type-options-nosniff
 	}
-	flusher.Flush() // 改操作将自动设置响应头 Transfer-Encoding: chunked，并发送一个 chunk
+	flusher.Flush() // 此操作将自动设置响应头 Transfer-Encoding: chunked，并发送一个 chunk
 	return nil
 }
 
@@ -1615,21 +1616,74 @@ func (this *EmailClient) Send(receivers []string, subject string, content string
 // file module
 type FileClient struct{}
 
-func (this *FileClient) Read(name string) ([]byte, error) {
+func (this *FileClient) getPath(name string) (string, error) {
 	fp := path.Clean("files/" + name)
 	if !strings.HasPrefix(fp, "files/") {
-		return nil, errors.New("Permission denial.")
+		return "", errors.New("Permission denial.")
 	}
+	return fp, nil
+}
+func (this *FileClient) Read(name string) ([]byte, error) {
+	fp, err := this.getPath(name)
+	if err != nil {
+		return nil, err
+	}
+
 	return ioutil.ReadFile(fp)
 }
-func (this *FileClient) Write(name string, bytes []byte) error {
-	fp := path.Clean("files/" + name)
-	if !strings.HasPrefix(fp, "files/") {
-		return errors.New("Permission denial.")
+func (this *FileClient) ReadRange(name string, offset int64, length int64) ([]byte, error) {
+	fp, err := this.getPath(name)
+	if err != nil {
+		return nil, err
 	}
+
+	file, err := os.Open(fp)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	file.Seek(offset, os.SEEK_SET) // 设置光标的位置：距离文件开头，offset 个字节处
+
+	bytes := make([]byte, length)
+	file.Read(bytes)
+
+	return bytes, nil
+}
+func (this *FileClient) Write(name string, bytes []byte) error {
+	fp, err := this.getPath(name)
+	if err != nil {
+		return err
+	}
+
 	paths, _ := filepath.Split(fp)
 	os.MkdirAll(paths, os.ModePerm)
 	return ioutil.WriteFile(fp, bytes, 0664)
+}
+func (this *FileClient) WriteRange(name string, offset int64, bytes []byte) error {
+	fp, err := this.getPath(name)
+	if err != nil {
+		return err
+	}
+
+	file, err := os.Open(fp)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	file.Seek(offset, os.SEEK_SET)
+
+	file.Write(bytes)
+	return nil
+}
+func (this *FileClient) Stat(name string) (fs.FileInfo, error) {
+	fp, err := this.getPath(name)
+	if err != nil {
+		return nil, err
+	}
+
+	return os.Stat(fp)
 }
 
 // http module
