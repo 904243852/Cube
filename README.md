@@ -37,7 +37,7 @@ A simple web server that can be developed online using typescript.
 2. Start the server:
     ```bash
     ./cube \
-        -n 8 \ # create a pool with 8 virtual machines
+        -n 8 \ # using 8 virtual machines
         -p 8443 \ # server with port 8443
         -s \ # enable SSL/TLS
         -v # enable client cert verification

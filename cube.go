@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"bufio"
 	"bytes"
 	"context"
@@ -33,7 +34,6 @@ import (
 	_ "image/png"
 	"io"
 	"io/fs"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -77,32 +77,35 @@ var SourceCache *SourceCacheClient
 
 func init() {
 	// 初始化数据库
-	if db, err := sql.Open("sqlite3", "./cube.db"); err != nil {
+	db, err := sql.Open("sqlite3", "./cube.db")
+	if err != nil {
 		panic(err)
-	} else {
-		db.Exec(`
-			create table if not exists source (
-				name varchar(64) not null,
-				type varchar(16) not null,
-				lang varchar(16) not null,
-				content text not null,
-				compiled text not null default '',
-				active boolean not null default false,
-				method varchar(8) not null default '',
-				url varchar(64) not null default '',
-				cron varchar(16) not null default '',
-				primary key(name, type)
-			);
-		`)
-		Database = db
 	}
+	_, err = db.Exec(`
+		create table if not exists source (
+			name varchar(64) not null,
+			type varchar(16) not null,
+			lang varchar(16) not null,
+			content text not null,
+			compiled text not null default '',
+			active boolean not null default false,
+			method varchar(8) not null default '',
+			url varchar(64) not null default '',
+			cron varchar(16) not null default '',
+			primary key(name, type)
+		);
+	`)
+	if err != nil {
+		panic(err)
+	}
+	Database = db
 
 	// 初始化日志文件
-	if fd, err := os.OpenFile("./cube.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644); err != nil {
+	fd, err := os.OpenFile("./cube.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
 		panic(err)
-	} else {
-		log.SetOutput(fd)
 	}
+	log.SetOutput(fd)
 
 	// 初始化缓存
 	SourceCache = &SourceCacheClient{
@@ -127,13 +130,13 @@ func main() {
 		)
 		switch r.Method {
 		case http.MethodPost:
-			err = HandleSourcePost(w, r)
+			err = HandleSourcePost(r)
 		case http.MethodDelete:
-			err = HandleSourceDelete(w, r)
+			err = HandleSourceDelete(r)
 		case http.MethodPatch:
-			err = HandleSourcePatch(w, r)
+			err = HandleSourcePatch(r)
 		case http.MethodGet:
-			data, err = HandleSourceGet(w, r)
+			data, err = HandleSourceGet(r)
 		default:
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -237,7 +240,7 @@ func main() {
 		}
 		if arguments.ClientCertVerify { // 设置对服务端证书校验
 			config.ClientAuth = tls.RequireAndVerifyClientCert
-			b, _ := ioutil.ReadFile("./ca.crt")
+			b, _ := os.ReadFile("./ca.crt")
 			config.ClientCAs = x509.NewCertPool()
 			config.ClientCAs.AppendCertsFromPEM(b)
 		}
@@ -415,7 +418,7 @@ func RunCrontabs(name string) {
 
 //#region Source 接口请求
 
-func HandleSourceGet(w http.ResponseWriter, r *http.Request) (data struct {
+func HandleSourceGet(r *http.Request) (data struct {
 	Sources []Source `json:"sources"`
 	Total   int      `json:"total"`
 }, err error) {
@@ -455,9 +458,9 @@ func HandleSourceGet(w http.ResponseWriter, r *http.Request) (data struct {
 	return
 }
 
-func HandleSourcePost(w http.ResponseWriter, r *http.Request) error {
+func HandleSourcePost(r *http.Request) error {
 	// 读取请求消息体
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	defer r.Body.Close()
 	if err != nil {
 		return err
@@ -472,12 +475,12 @@ func HandleSourcePost(w http.ResponseWriter, r *http.Request) error {
 
 		// 校验类型
 		if ok, _ := regexp.MatchString("^(module|controller|daemon|crontab|template|resource)$", source.Type); !ok {
-			return errors.New("The type of the source is required. It must be module, controller, daemon, crontab, template or resource.")
+			return errors.New("the type of the source is required. It must be module, controller, daemon, crontab, template or resource")
 		}
 		// 校验名称
 		if source.Type == "module" {
 			if ok, _ := regexp.MatchString("^(node_modules/)?\\w{2,32}$", source.Name); !ok {
-				return errors.New("The name of the module is required. It must be a letter, number or underscore with a length of 2 to 32. It can also start with 'node_modules/'.")
+				return errors.New("the name of the module is required. It must be a letter, number or underscore with a length of 2 to 32. It can also start with 'node_modules/'")
 			}
 		} else {
 			if ok, _ := regexp.MatchString("^\\w{2,32}$", source.Name); !ok {
@@ -503,7 +506,7 @@ func HandleSourcePost(w http.ResponseWriter, r *http.Request) error {
 		}
 
 		if len(sources) == 0 {
-			return errors.New("Nothing added or modified.")
+			return errors.New("nothing added or modified")
 		}
 
 		// 批量新增或修改
@@ -529,15 +532,15 @@ func HandleSourcePost(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
-func HandleSourceDelete(w http.ResponseWriter, r *http.Request) error {
+func HandleSourceDelete(r *http.Request) error {
 	r.ParseForm()
 	name := r.Form.Get("name")
 	if name == "" {
-		return errors.New("The parameter name is required.")
+		return errors.New("the parameter name is required")
 	}
 	stype := r.Form.Get("type")
 	if stype == "" {
-		return errors.New("The parameter type is required.")
+		return errors.New("the parameter type is required")
 	}
 
 	res, err := Database.Exec("delete from source where name = ? and type = ?", name, stype)
@@ -545,15 +548,15 @@ func HandleSourceDelete(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	if count, _ := res.RowsAffected(); count == 0 {
-		return errors.New("The source is not found.")
+		return errors.New("the source is not found")
 	}
 
 	return nil
 }
 
-func HandleSourcePatch(w http.ResponseWriter, r *http.Request) error {
+func HandleSourcePatch(r *http.Request) error {
 	// 读取请求消息体
-	body, err := ioutil.ReadAll(r.Body)
+	body, err := io.ReadAll(r.Body)
 	defer r.Body.Close()
 	if err != nil {
 		return err
@@ -571,7 +574,7 @@ func HandleSourcePatch(w http.ResponseWriter, r *http.Request) error {
 			return err
 		}
 		if count > 0 {
-			return errors.New("The url is already existed.")
+			return errors.New("the url is already existed")
 		}
 	}
 
@@ -581,7 +584,7 @@ func HandleSourcePatch(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 	if count, _ := res.RowsAffected(); count == 0 {
-		return errors.New("The source is not found.")
+		return errors.New("the source is not found")
 	}
 
 	// 清空 module 缓存以重建
@@ -625,7 +628,7 @@ func CreateWorker(program *goja.Program) *Worker {
 	}
 	function, ok := goja.AssertFunction(entry)
 	if !ok {
-		panic(errors.New("The program is not a function."))
+		panic(errors.New("the program is not a function"))
 	}
 
 	worker := Worker{Runtime: runtime, function: function, handles: make([]interface{}, 0)}
@@ -693,7 +696,7 @@ func CreateWorker(program *goja.Program) *Worker {
 				return nil, err
 			}
 		} else {
-			return nil, errors.New("The entry is not a function.")
+			return nil, errors.New("the entry is not a function")
 		}
 
 		return module.Get("exports"), nil
@@ -704,11 +707,11 @@ func CreateWorker(program *goja.Program) *Worker {
 	runtime.Set("ServiceResponse", func(call goja.ConstructorCall) *goja.Object { // 内置构造器不能同时返回 error 类型，否则将会失效
 		a0, ok := call.Argument(0).Export().(int64)
 		if !ok {
-			panic(errors.New("Invalid argument status, not a int."))
+			panic(errors.New("invalid argument status, not a int"))
 		}
 		a1, ok := call.Argument(1).Export().(map[string]interface{})
 		if !ok {
-			panic(errors.New("Invalid argument header, not a map."))
+			panic(errors.New("invalid argument header, not a map"))
 		}
 		header := make(map[string]string, len(a1))
 		for k, v := range a1 {
@@ -722,7 +725,7 @@ func CreateWorker(program *goja.Program) *Worker {
 		if a2 := ExportGojaValue(call.Argument(2)); a2 != nil {
 			if s, ok := a2.(string); !ok {
 				if data, ok = a2.([]byte); !ok {
-					panic(errors.New("The data should be a string or a byte array."))
+					panic(errors.New("the data should be a string or a byte array"))
 				}
 			} else {
 				data = []byte(s)
@@ -787,24 +790,24 @@ func CreateWorker(program *goja.Program) *Worker {
 						var c tls.Certificate                      // 参考实现 https://github.com/sideshow/apns2/blob/HEAD/certificate/certificate.go
 						b1, _ := pem.Decode([]byte(cert.(string))) // 读取公钥
 						if b1 == nil {
-							return nil, errors.New("No public key found.")
+							return nil, errors.New("no public key found")
 						}
 						c.Certificate = append(c.Certificate, b1.Bytes) // tls.Certificate 存储了一个证书链（类型为 [][]byte），包含一个或多个 x509.Certificate（类型为 []byte）
 						if key, ok := ExportMapValue(options, "key", "string"); ok {
 							b2, _ := pem.Decode([]byte(key.(string))) // 读取私钥
 							if b2 == nil {
-								return nil, errors.New("No private key found.")
+								return nil, errors.New("no private key found")
 							}
 							c.PrivateKey, err = x509.ParsePKCS1PrivateKey(b2.Bytes) // 使用 PKCS#1 格式
 							if err != nil {
 								c.PrivateKey, err = x509.ParsePKCS8PrivateKey(b2.Bytes) // 使用 PKCS#8 格式
 								if err != nil {
-									return nil, errors.New("Failed to parse private key.")
+									return nil, errors.New("failed to parse private key")
 								}
 							}
 						}
 						if len(c.Certificate) == 0 || c.PrivateKey == nil {
-							return nil, errors.New("No private key or public key found.")
+							return nil, errors.New("no private key or public key found")
 						}
 						if a, err := x509.ParseCertificate(c.Certificate[0]); err == nil {
 							c.Leaf = a
@@ -883,8 +886,10 @@ func CreateWorker(program *goja.Program) *Worker {
 			}
 		case "ulid":
 			module = CreateULID
+		case "zip":
+			module = &ZipClient{}
 		default:
-			err = errors.New("The module is not found.")
+			err = errors.New("the module is not found")
 		}
 		return
 	})
@@ -929,18 +934,18 @@ type Worker struct {
 	handles  []interface{}
 }
 
-func (this *Worker) Run(params ...goja.Value) (goja.Value, error) {
-	return this.function(nil, params...)
+func (w *Worker) Run(params ...goja.Value) (goja.Value, error) {
+	return w.function(nil, params...)
 }
-func (this *Worker) AddHandle(handle interface{}) {
-	this.handles = append(this.handles, handle)
+func (w *Worker) AddHandle(handle interface{}) {
+	w.handles = append(w.handles, handle)
 }
-func (this *Worker) Interrupt(reason string) {
-	this.Runtime.Interrupt(reason)
-	this.ClearHandle()
+func (w *Worker) Interrupt(reason string) {
+	w.Runtime.Interrupt(reason)
+	w.ClearHandle()
 }
-func (this *Worker) ClearHandle() {
-	for _, v := range this.handles {
+func (w *Worker) ClearHandle() {
+	for _, v := range w.handles {
 		if l, ok := v.(*net.Listener); ok { // 如果已存在监听端口服务，这里需要先关闭，否则将导致 goja.Runtime.Interrupt 无法关闭
 			(*l).Close()
 		}
@@ -951,8 +956,8 @@ func (this *Worker) ClearHandle() {
 			(*t).Rollback()
 		}
 	}
-	if len(this.handles) > 0 {
-		this.handles = make([]interface{}, 0) // 清空所有句柄
+	if len(w.handles) > 0 {
+		w.handles = make([]interface{}, 0) // 清空所有句柄
 	}
 }
 
@@ -967,14 +972,14 @@ type SourceCacheClient struct {
 	modules     map[string]*goja.Program
 }
 
-func (this *SourceCacheClient) GetController(id string) *Source {
-	source := this.controllers[id]
+func (s *SourceCacheClient) GetController(id string) *Source {
+	source := s.controllers[id]
 	if source == nil {
 		source = &Source{}
 		if err := Database.QueryRow("select name, method from source where url = ? and type = 'controller' and active = true", id).Scan(&source.Name, &source.Method); err != nil {
 			return nil
 		}
-		this.controllers[id] = source
+		s.controllers[id] = source
 	}
 	return source
 }
@@ -989,16 +994,16 @@ type ServiceContextReader struct {
 	reader *bufio.Reader
 }
 
-func (this *ServiceContextReader) Read(count int) ([]byte, error) {
+func (s *ServiceContextReader) Read(count int) ([]byte, error) {
 	buf := make([]byte, count)
-	_, err := this.reader.Read(buf)
+	_, err := s.reader.Read(buf)
 	if err == io.EOF {
 		return nil, nil
 	}
 	return buf, err
 }
-func (this *ServiceContextReader) ReadByte() (interface{}, error) {
-	b, err := this.reader.ReadByte() // 如果是 chunk 传输，该方法不会返回 chunk size 和 "\r\n"，而是按 chunk data 到达顺序依次读取每个 chunk data 中的每个字节，如果已到达的 chunk 已读完且下一个 chunk 未到达，该方法将阻塞
+func (s *ServiceContextReader) ReadByte() (interface{}, error) {
+	b, err := s.reader.ReadByte() // 如果是 chunk 传输，该方法不会返回 chunk size 和 "\r\n"，而是按 chunk data 到达顺序依次读取每个 chunk data 中的每个字节，如果已到达的 chunk 已读完且下一个 chunk 未到达，该方法将阻塞
 	if err == io.EOF {
 		return -1, nil
 	}
@@ -1014,17 +1019,17 @@ type ServiceContext struct {
 	body           interface{} // 用于缓存请求消息体，防止重复读取和关闭 body 流
 }
 
-func (this *ServiceContext) GetHeader() map[string]string {
+func (s *ServiceContext) GetHeader() map[string]string {
 	var headers = make(map[string]string)
-	for name, values := range this.request.Header {
+	for name, values := range s.request.Header {
 		for _, value := range values {
 			headers[name] = value
 		}
 	}
 	return headers
 }
-func (this *ServiceContext) GetURL() interface{} {
-	u := this.request.URL
+func (s *ServiceContext) GetURL() interface{} {
+	u := s.request.URL
 
 	var params = make(map[string][]string)
 	for name, values := range u.Query() {
@@ -1036,41 +1041,41 @@ func (this *ServiceContext) GetURL() interface{} {
 		"params": params,
 	}
 }
-func (this *ServiceContext) GetBody() ([]byte, error) {
-	if this.body != nil {
-		return this.body.([]byte), nil
+func (s *ServiceContext) GetBody() ([]byte, error) {
+	if s.body != nil {
+		return s.body.([]byte), nil
 	}
-	defer this.request.Body.Close()
-	return ioutil.ReadAll(this.request.Body)
+	defer s.request.Body.Close()
+	return io.ReadAll(s.request.Body)
 }
-func (this *ServiceContext) GetJsonBody() (interface{}, error) {
-	bytes, err := this.GetBody()
+func (s *ServiceContext) GetJsonBody() (interface{}, error) {
+	data, err := s.GetBody()
 	if err != nil {
 		return nil, err
 	}
-	return this.body, json.Unmarshal(bytes, &this.body)
+	return s.body, json.Unmarshal(data, &s.body)
 }
-func (this *ServiceContext) GetMethod() string {
-	return this.request.Method
+func (s *ServiceContext) GetMethod() string {
+	return s.request.Method
 }
-func (this *ServiceContext) GetForm() interface{} {
-	this.request.ParseForm() // 需要转换后才能获取表单
+func (s *ServiceContext) GetForm() interface{} {
+	s.request.ParseForm() // 需要转换后才能获取表单
 
 	var params = make(map[string][]string)
-	for name, values := range this.request.Form {
+	for name, values := range s.request.Form {
 		params[name] = values
 	}
 
 	return params
 }
-func (this *ServiceContext) GetFile(name string) (interface{}, error) {
-	file, header, err := this.request.FormFile(name)
+func (s *ServiceContext) GetFile(name string) (interface{}, error) {
+	file, header, err := s.request.FormFile(name)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
 
-	data, err := ioutil.ReadAll(file)
+	data, err := io.ReadAll(file)
 	if err != nil {
 		return nil, err
 	}
@@ -1081,14 +1086,14 @@ func (this *ServiceContext) GetFile(name string) (interface{}, error) {
 		"data": data,
 	}, nil
 }
-func (this *ServiceContext) GetCerts() interface{} { // 获取客户端证书
-	return this.request.TLS.PeerCertificates
+func (s *ServiceContext) GetCerts() interface{} { // 获取客户端证书
+	return s.request.TLS.PeerCertificates
 }
-func (this *ServiceContext) UpgradeToWebSocket() (*ServiceWebSocket, error) {
-	this.returnless = true // upgrader.Upgrade 内部已经调用过 WriteHeader 方法了，后续不应再次调用，否则将会出现 http: superfluous response.WriteHeader call from ... 的异常
-	this.timer.Stop()      // 关闭定时器，WebSocket 不需要设置超时时间
+func (s *ServiceContext) UpgradeToWebSocket() (*ServiceWebSocket, error) {
+	s.returnless = true // upgrader.Upgrade 内部已经调用过 WriteHeader 方法了，后续不应再次调用，否则将会出现 http: superfluous response.WriteHeader call from ... 的异常
+	s.timer.Stop()      // 关闭定时器，WebSocket 不需要设置超时时间
 	upgrader := websocket.Upgrader{}
-	if conn, err := upgrader.Upgrade(this.responseWriter, this.request, nil); err != nil {
+	if conn, err := upgrader.Upgrade(s.responseWriter, s.request, nil); err != nil {
 		return nil, err
 	} else {
 		return &ServiceWebSocket{
@@ -1096,29 +1101,29 @@ func (this *ServiceContext) UpgradeToWebSocket() (*ServiceWebSocket, error) {
 		}, nil
 	}
 }
-func (this *ServiceContext) GetReader() *ServiceContextReader {
+func (s *ServiceContext) GetReader() *ServiceContextReader {
 	return &ServiceContextReader{
-		reader: bufio.NewReader(this.request.Body),
+		reader: bufio.NewReader(s.request.Body),
 	}
 }
-func (this *ServiceContext) GetPusher() (http.Pusher, error) {
-	pusher, ok := this.responseWriter.(http.Pusher)
+func (s *ServiceContext) GetPusher() (http.Pusher, error) {
+	pusher, ok := s.responseWriter.(http.Pusher)
 	if !ok {
-		return nil, errors.New("The server side push is not supported.")
+		return nil, errors.New("the server side push is not supported")
 	}
 	return pusher, nil
 }
-func (this *ServiceContext) Write(data []byte) (int, error) {
-	return this.responseWriter.Write(data)
+func (s *ServiceContext) Write(data []byte) (int, error) {
+	return s.responseWriter.Write(data)
 }
-func (this *ServiceContext) Flush() error {
-	flusher, ok := this.responseWriter.(http.Flusher)
+func (s *ServiceContext) Flush() error {
+	flusher, ok := s.responseWriter.(http.Flusher)
 	if !ok {
-		return errors.New("Failed to get a http flusher.")
+		return errors.New("failed to get a http flusher")
 	}
-	if !this.returnless {
-		this.returnless = true
-		this.responseWriter.Header().Set("X-Content-Type-Options", "nosniff") // https://stackoverflow.com/questions/18337630/what-is-x-content-type-options-nosniff
+	if !s.returnless {
+		s.returnless = true
+		s.responseWriter.Header().Set("X-Content-Type-Options", "nosniff") // https://stackoverflow.com/questions/18337630/what-is-x-content-type-options-nosniff
 	}
 	flusher.Flush() // 此操作将自动设置响应头 Transfer-Encoding: chunked，并发送一个 chunk
 	return nil
@@ -1131,14 +1136,14 @@ type ServiceResponse struct {
 	data   []byte
 }
 
-func (this *ServiceResponse) SetStatus(status int) { // 设置响应状态码
-	this.status = status
+func (s *ServiceResponse) SetStatus(status int) { // 设置响应状态码
+	s.status = status
 }
-func (this *ServiceResponse) SetHeader(header map[string]string) { // 设置响应消息头
-	this.header = header
+func (s *ServiceResponse) SetHeader(header map[string]string) { // 设置响应消息头
+	s.header = header
 }
-func (this *ServiceResponse) SetData(data []byte) { // 设置响应消息体
-	this.data = data
+func (s *ServiceResponse) SetData(data []byte) { // 设置响应消息体
+	s.data = data
 }
 
 // service websocket
@@ -1146,8 +1151,8 @@ type ServiceWebSocket struct {
 	connection *websocket.Conn
 }
 
-func (this *ServiceWebSocket) Read() (interface{}, error) {
-	messageType, data, err := this.connection.ReadMessage()
+func (s *ServiceWebSocket) Read() (interface{}, error) {
+	messageType, data, err := s.connection.ReadMessage()
 	if err != nil {
 		return nil, err
 	}
@@ -1156,11 +1161,11 @@ func (this *ServiceWebSocket) Read() (interface{}, error) {
 		"data":        data,
 	}, nil
 }
-func (this *ServiceWebSocket) Send(data []byte) error {
-	return this.connection.WriteMessage(1, data) // message type：0 表示消息是文本格式，1 表示消息是二进制格式。这里 data 是 []byte，因此固定使用二进制格式类型
+func (s *ServiceWebSocket) Send(data []byte) error {
+	return s.connection.WriteMessage(1, data) // message type：0 表示消息是文本格式，1 表示消息是二进制格式。这里 data 是 []byte，因此固定使用二进制格式类型
 }
-func (this *ServiceWebSocket) Close() {
-	this.connection.Close()
+func (s *ServiceWebSocket) Close() {
+	s.connection.Close()
 }
 
 //#endregion
@@ -1170,10 +1175,10 @@ func (this *ServiceWebSocket) Close() {
 // base64 module
 type Base64Client struct{}
 
-func (this *Base64Client) Encode(input []byte) string { // 在 js 中调用该方法时，入参可接受 string 或 Uint8Array 类型
+func (b *Base64Client) Encode(input []byte) string { // 在 js 中调用该方法时，入参可接受 string 或 Uint8Array 类型
 	return base64.StdEncoding.EncodeToString(input)
 }
-func (this *Base64Client) Decode(input string) ([]byte, error) { // 返回的 []byte 类型将隐式地转换为 js/ts 中的 Uint8Array 类型
+func (b *Base64Client) Decode(input string) ([]byte, error) { // 返回的 []byte 类型将隐式地转换为 js/ts 中的 Uint8Array 类型
 	return base64.StdEncoding.DecodeString(input)
 }
 
@@ -1183,34 +1188,34 @@ type BlockingQueueClient struct {
 	sync.Mutex
 }
 
-func (this *BlockingQueueClient) Put(input interface{}, timeout int) error {
-	this.Lock()
-	defer this.Unlock()
+func (b *BlockingQueueClient) Put(input interface{}, timeout int) error {
+	b.Lock()
+	defer b.Unlock()
 	select {
-	case this.queue <- input:
+	case b.queue <- input:
 		return nil
 	case <-time.After(time.Duration(timeout) * time.Millisecond): // 队列入列最大超时时间为 timeout 毫秒
-		return errors.New("The blocking queue is full, waiting for put timeout.")
+		return errors.New("the blocking queue is full, waiting for put timeout")
 	}
 }
-func (this *BlockingQueueClient) Poll(timeout int) (interface{}, error) {
-	this.Lock()
-	defer this.Unlock()
+func (b *BlockingQueueClient) Poll(timeout int) (interface{}, error) {
+	b.Lock()
+	defer b.Unlock()
 	select {
-	case output := <-this.queue:
+	case output := <-b.queue:
 		return output, nil
 	case <-time.After(time.Duration(timeout) * time.Millisecond): // 队列出列最大超时时间为 timeout 毫秒
-		return nil, errors.New("The blocking queue is empty, waiting for poll timeout.")
+		return nil, errors.New("the blocking queue is empty, waiting for poll timeout")
 	}
 }
-func (this *BlockingQueueClient) Drain(size int, timeout int) (output []interface{}) {
-	this.Lock()
-	defer this.Unlock()
+func (b *BlockingQueueClient) Drain(size int, timeout int) (output []interface{}) {
+	b.Lock()
+	defer b.Unlock()
 	output = make([]interface{}, 0, size) // 创建切片，初始大小为 0，最大为 size
 	c := make(chan int, 1)
 	go func(ch chan int) {
 		for i := 0; i < size; i++ {
-			output = append(output, <-this.queue)
+			output = append(output, <-b.queue)
 		}
 		ch <- 0
 	}(c)
@@ -1227,13 +1232,13 @@ var Cache sync.Map // 存放并发安全的 map
 
 type CacheClient struct{}
 
-func (this *CacheClient) Set(key interface{}, value interface{}, timeout int) {
+func (c *CacheClient) Set(key interface{}, value interface{}, timeout int) {
 	Cache.Store(key, value)
 	time.AfterFunc(time.Duration(timeout)*time.Millisecond, func() {
 		Cache.Delete(key)
 	})
 }
-func (this *CacheClient) Get(key interface{}) interface{} {
+func (c *CacheClient) Get(key interface{}) interface{} {
 	if value, ok := Cache.Load(key); ok {
 		return value
 	}
@@ -1245,20 +1250,20 @@ type ConsoleClient struct {
 	runtime *goja.Runtime
 }
 
-func (this *ConsoleClient) Log(a ...interface{}) {
-	log.Println(append([]interface{}{"\r" + time.Now().Format("2006-01-02 15:04:05.000"), &this.runtime, "Log"}, a...)...)
+func (c *ConsoleClient) Log(a ...interface{}) {
+	log.Println(append([]interface{}{"\r" + time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Log"}, a...)...)
 }
-func (this *ConsoleClient) Debug(a ...interface{}) {
-	log.Println(append(append([]interface{}{"\r" + "\033[1;30m" + time.Now().Format("2006-01-02 15:04:05.000"), &this.runtime, "Debug"}, a...), "\033[m")...)
+func (c *ConsoleClient) Debug(a ...interface{}) {
+	log.Println(append(append([]interface{}{"\r" + "\033[1;30m" + time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Debug"}, a...), "\033[m")...)
 }
-func (this *ConsoleClient) Info(a ...interface{}) {
-	log.Println(append(append([]interface{}{"\r" + "\033[0;34m" + time.Now().Format("2006-01-02 15:04:05.000"), &this.runtime, "Info"}, a...), "\033[m")...)
+func (c *ConsoleClient) Info(a ...interface{}) {
+	log.Println(append(append([]interface{}{"\r" + "\033[0;34m" + time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Info"}, a...), "\033[m")...)
 }
-func (this *ConsoleClient) Warn(a ...interface{}) {
-	log.Println(append(append([]interface{}{"\r" + "\033[0;33m" + time.Now().Format("2006-01-02 15:04:05.000"), &this.runtime, "Warn"}, a...), "\033[m")...)
+func (c *ConsoleClient) Warn(a ...interface{}) {
+	log.Println(append(append([]interface{}{"\r" + "\033[0;33m" + time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Warn"}, a...), "\033[m")...)
 }
-func (this *ConsoleClient) Error(a ...interface{}) {
-	log.Println(append(append([]interface{}{"\r" + "\033[0;31m" + time.Now().Format("2006-01-02 15:04:05.000"), &this.runtime, "Error"}, a...), "\033[m")...)
+func (c *ConsoleClient) Error(a ...interface{}) {
+	log.Println(append(append([]interface{}{"\r" + "\033[0;31m" + time.Now().Format("2006-01-02 15:04:05.000"), &c.runtime, "Error"}, a...), "\033[m")...)
 }
 
 // crypto module
@@ -1266,8 +1271,8 @@ type CryptoHashClient struct {
 	hash crypto.Hash
 }
 
-func (this *CryptoHashClient) Sum(input []byte) []byte {
-	h := this.hash.New()
+func (c *CryptoHashClient) Sum(input []byte) []byte {
+	h := c.hash.New()
 	h.Write(input)
 	return h.Sum(nil)
 }
@@ -1276,15 +1281,15 @@ type CryptoHmacClient struct {
 	hash crypto.Hash
 }
 
-func (this *CryptoHmacClient) Sum(input []byte, key []byte) []byte {
-	h := hmac.New(this.hash.New, key)
+func (c *CryptoHmacClient) Sum(input []byte, key []byte) []byte {
+	h := hmac.New(c.hash.New, key)
 	h.Write(input)
 	return h.Sum(nil)
 }
 
 type CryptoRsaClient struct{}
 
-func (this *CryptoRsaClient) GenerateKey(length int) (*map[string][]byte, error) {
+func (c *CryptoRsaClient) GenerateKey(length int) (*map[string][]byte, error) {
 	if length == 0 {
 		length = 2048
 	}
@@ -1312,10 +1317,10 @@ func (this *CryptoRsaClient) GenerateKey(length int) (*map[string][]byte, error)
 		"publicKey":  pubKey,
 	}, nil
 }
-func (this *CryptoRsaClient) Encrypt(input []byte, key []byte) ([]byte, error) {
+func (c *CryptoRsaClient) Encrypt(input []byte, key []byte) ([]byte, error) {
 	block, _ := pem.Decode(key)
 	if block == nil {
-		return nil, errors.New("The public key is invalid.")
+		return nil, errors.New("the public key is invalid")
 	}
 	publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
 	if err != nil {
@@ -1323,10 +1328,10 @@ func (this *CryptoRsaClient) Encrypt(input []byte, key []byte) ([]byte, error) {
 	}
 	return rsa.EncryptPKCS1v15(rand.Reader, publicKey.(*rsa.PublicKey), input)
 }
-func (this *CryptoRsaClient) Decrypt(input []byte, key []byte) ([]byte, error) {
+func (c *CryptoRsaClient) Decrypt(input []byte, key []byte) ([]byte, error) {
 	block, _ := pem.Decode(key)
 	if block == nil {
-		return nil, errors.New("The private key is invalid.")
+		return nil, errors.New("the private key is invalid")
 	}
 	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 	if err != nil {
@@ -1334,7 +1339,7 @@ func (this *CryptoRsaClient) Decrypt(input []byte, key []byte) ([]byte, error) {
 	}
 	return rsa.DecryptPKCS1v15(rand.Reader, privateKey, input)
 }
-func (this *CryptoRsaClient) Sign(input []byte, key []byte, algorithm string) ([]byte, error) {
+func (c *CryptoRsaClient) Sign(input []byte, key []byte, algorithm string) ([]byte, error) {
 	hash, err := GetHash(algorithm)
 	if err != nil {
 		return nil, err
@@ -1349,7 +1354,7 @@ func (this *CryptoRsaClient) Sign(input []byte, key []byte, algorithm string) ([
 	}
 	return rsa.SignPKCS1v15(nil, privateKey, hash, digest)
 }
-func (this *CryptoRsaClient) SignPss(input []byte, key []byte, algorithm string) ([]byte, error) {
+func (c *CryptoRsaClient) SignPss(input []byte, key []byte, algorithm string) ([]byte, error) {
 	hash, err := GetHash(algorithm)
 	if err != nil {
 		return nil, err
@@ -1366,10 +1371,10 @@ func (this *CryptoRsaClient) SignPss(input []byte, key []byte, algorithm string)
 		SaltLength: rsa.PSSSaltLengthEqualsHash,
 	})
 }
-func (this *CryptoRsaClient) Verify(input []byte, sign []byte, key []byte, algorithm string) (bool, error) {
+func (c *CryptoRsaClient) Verify(input []byte, sign []byte, key []byte, algorithm string) (bool, error) {
 	block, _ := pem.Decode(key)
 	if block == nil {
-		return false, errors.New("The public key is invalid.")
+		return false, errors.New("the public key is invalid")
 	}
 	publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
 	if err != nil {
@@ -1387,10 +1392,10 @@ func (this *CryptoRsaClient) Verify(input []byte, sign []byte, key []byte, algor
 	}
 	return true, nil
 }
-func (this *CryptoRsaClient) VerifyPss(input []byte, sign []byte, key []byte, algorithm string) (bool, error) {
+func (c *CryptoRsaClient) VerifyPss(input []byte, sign []byte, key []byte, algorithm string) (bool, error) {
 	block, _ := pem.Decode(key)
 	if block == nil {
-		return false, errors.New("The public key is invalid.")
+		return false, errors.New("the public key is invalid")
 	}
 	publicKey, err := x509.ParsePKIXPublicKey(block.Bytes)
 	if err != nil {
@@ -1425,7 +1430,7 @@ func GetHash(algorithm string) (crypto.Hash, error) {
 		return crypto.SHA256, errors.New("Hash algorithm " + algorithm + " is not supported.")
 	}
 }
-func (this *CryptoClient) CreateHash(algorithm string) (*CryptoHashClient, error) {
+func (c *CryptoClient) CreateHash(algorithm string) (*CryptoHashClient, error) {
 	if hash, err := GetHash(algorithm); err != nil {
 		return nil, err
 	} else {
@@ -1434,7 +1439,7 @@ func (this *CryptoClient) CreateHash(algorithm string) (*CryptoHashClient, error
 		}, nil
 	}
 }
-func (this *CryptoClient) CreateHmac(algorithm string) (*CryptoHmacClient, error) {
+func (c *CryptoClient) CreateHmac(algorithm string) (*CryptoHmacClient, error) {
 	if hash, err := GetHash(algorithm); err != nil {
 		return nil, err
 	} else {
@@ -1443,7 +1448,7 @@ func (this *CryptoClient) CreateHmac(algorithm string) (*CryptoHmacClient, error
 		}, nil
 	}
 }
-func (this *CryptoClient) CreateRsa() *CryptoRsaClient {
+func (c *CryptoClient) CreateRsa() *CryptoRsaClient {
 	return &CryptoRsaClient{}
 }
 
@@ -1476,49 +1481,49 @@ func ExportDatabaseRows(rows *sql.Rows) ([]interface{}, error) {
 
 	return records, rows.Err()
 }
-func (this *DatabaseTransaction) Query(stmt string, params ...interface{}) ([]interface{}, error) {
-	rows, err := this.Transaction.Query(stmt, params...)
+func (d *DatabaseTransaction) Query(stmt string, params ...interface{}) ([]interface{}, error) {
+	rows, err := d.Transaction.Query(stmt, params...)
 	if err != nil {
 		return nil, err
 	}
 	return ExportDatabaseRows(rows)
 }
-func (this *DatabaseTransaction) Exec(stmt string, params ...interface{}) (int64, error) {
-	res, err := this.Transaction.Exec(stmt, params...)
+func (d *DatabaseTransaction) Exec(stmt string, params ...interface{}) (int64, error) {
+	res, err := d.Transaction.Exec(stmt, params...)
 	if err != nil {
 		return 0, err
 	}
 	return res.RowsAffected()
 }
-func (this *DatabaseTransaction) Commit() error {
-	return this.Transaction.Commit()
+func (d *DatabaseTransaction) Commit() error {
+	return d.Transaction.Commit()
 }
-func (this *DatabaseTransaction) Rollback() error {
-	return this.Transaction.Rollback()
+func (d *DatabaseTransaction) Rollback() error {
+	return d.Transaction.Rollback()
 }
 
 type DatabaseClient struct {
 	worker *Worker
 }
 
-func (this *DatabaseClient) BeginTx() (*DatabaseTransaction, error) {
+func (d *DatabaseClient) BeginTx() (*DatabaseTransaction, error) {
 	if tx, err := Database.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil { // 开启一个新事务，隔离级别为读已提交
 		return nil, err
 	} else {
-		this.worker.AddHandle(tx)
+		d.worker.AddHandle(tx)
 		return &DatabaseTransaction{
 			Transaction: tx,
 		}, nil
 	}
 }
-func (this *DatabaseClient) Query(stmt string, params ...interface{}) ([]interface{}, error) {
+func (d *DatabaseClient) Query(stmt string, params ...interface{}) ([]interface{}, error) {
 	rows, err := Database.Query(stmt, params...)
 	if err != nil {
 		return nil, err
 	}
 	return ExportDatabaseRows(rows)
 }
-func (this *DatabaseClient) Exec(stmt string, params ...interface{}) (int64, error) {
+func (d *DatabaseClient) Exec(stmt string, params ...interface{}) (int64, error) {
 	res, err := Database.Exec(stmt, params...)
 	if err != nil {
 		return 0, err
@@ -1534,16 +1539,16 @@ type EmailClient struct {
 	password string
 }
 
-func (this *EmailClient) Send(receivers []string, subject string, content string, attachments []struct {
+func (e *EmailClient) Send(receivers []string, subject string, content string, attachments []struct {
 	Name        string
 	ContentType string
 	Base64      string
 }) error {
-	address := fmt.Sprintf("%s:%d", this.host, this.port)
-	auth := smtp.PlainAuth("", this.username, this.password, this.host)
+	address := fmt.Sprintf("%s:%d", e.host, e.port)
+	auth := smtp.PlainAuth("", e.username, e.password, e.host)
 	msg := []byte(strings.Join([]string{
 		"To: " + strings.Join(receivers, ";"),
-		"From: " + this.username + "<" + this.username + ">",
+		"From: " + e.username + "<" + e.username + ">",
 		"Subject: " + subject,
 		"Content-Type: multipart/mixed; boundary=WebKitBoundary",
 		"",
@@ -1567,19 +1572,19 @@ func (this *EmailClient) Send(receivers []string, subject string, content string
 		)
 	}
 
-	if this.port == 25 { // 25 端口直接发送
-		return smtp.SendMail(address, auth, this.username, receivers, msg)
+	if e.port == 25 { // 25 端口直接发送
+		return smtp.SendMail(address, auth, e.username, receivers, msg)
 	}
 
 	config := &tls.Config{ // 其他端口如 465 需要 TLS 加密
 		InsecureSkipVerify: true, // 不校验服务端证书
-		ServerName:         this.host,
+		ServerName:         e.host,
 	}
 	conn, err := tls.Dial("tcp", address, config)
 	if err != nil {
 		return err
 	}
-	client, err := smtp.NewClient(conn, this.host)
+	client, err := smtp.NewClient(conn, e.host)
 	if err != nil {
 		return err
 	}
@@ -1589,7 +1594,7 @@ func (this *EmailClient) Send(receivers []string, subject string, content string
 			return err
 		}
 	}
-	if err = client.Mail(this.username); err != nil {
+	if err = client.Mail(e.username); err != nil {
 		return err
 	}
 
@@ -1616,23 +1621,23 @@ func (this *EmailClient) Send(receivers []string, subject string, content string
 // file module
 type FileClient struct{}
 
-func (this *FileClient) getPath(name string) (string, error) {
+func (f *FileClient) getPath(name string) (string, error) {
 	fp := path.Clean("files/" + name)
 	if !strings.HasPrefix(fp, "files/") {
-		return "", errors.New("Permission denial.")
+		return "", errors.New("permission denial")
 	}
 	return fp, nil
 }
-func (this *FileClient) Read(name string) ([]byte, error) {
-	fp, err := this.getPath(name)
+func (f *FileClient) Read(name string) ([]byte, error) {
+	fp, err := f.getPath(name)
 	if err != nil {
 		return nil, err
 	}
 
-	return ioutil.ReadFile(fp)
+	return os.ReadFile(fp)
 }
-func (this *FileClient) ReadRange(name string, offset int64, length int64) ([]byte, error) {
-	fp, err := this.getPath(name)
+func (f *FileClient) ReadRange(name string, offset int64, length int64) ([]byte, error) {
+	fp, err := f.getPath(name)
 	if err != nil {
 		return nil, err
 	}
@@ -1643,25 +1648,25 @@ func (this *FileClient) ReadRange(name string, offset int64, length int64) ([]by
 	}
 	defer file.Close()
 
-	file.Seek(offset, os.SEEK_SET) // 设置光标的位置：距离文件开头，offset 个字节处
+	file.Seek(offset, io.SeekStart) // 设置光标的位置：距离文件开头，offset 个字节处
 
-	bytes := make([]byte, length)
-	file.Read(bytes)
+	data := make([]byte, length)
+	file.Read(data)
 
-	return bytes, nil
+	return data, nil
 }
-func (this *FileClient) Write(name string, bytes []byte) error {
-	fp, err := this.getPath(name)
+func (f *FileClient) Write(name string, bytes []byte) error {
+	fp, err := f.getPath(name)
 	if err != nil {
 		return err
 	}
 
 	paths, _ := filepath.Split(fp)
 	os.MkdirAll(paths, os.ModePerm)
-	return ioutil.WriteFile(fp, bytes, 0664)
+	return os.WriteFile(fp, bytes, 0664)
 }
-func (this *FileClient) WriteRange(name string, offset int64, bytes []byte) error {
-	fp, err := this.getPath(name)
+func (f *FileClient) WriteRange(name string, offset int64, bytes []byte) error {
+	fp, err := f.getPath(name)
 	if err != nil {
 		return err
 	}
@@ -1672,13 +1677,13 @@ func (this *FileClient) WriteRange(name string, offset int64, bytes []byte) erro
 	}
 	defer file.Close()
 
-	file.Seek(offset, os.SEEK_SET)
+	file.Seek(offset, io.SeekStart)
 
 	file.Write(bytes)
 	return nil
 }
-func (this *FileClient) Stat(name string) (fs.FileInfo, error) {
-	fp, err := this.getPath(name)
+func (f *FileClient) Stat(name string) (fs.FileInfo, error) {
+	fp, err := f.getPath(name)
 	if err != nil {
 		return nil, err
 	}
@@ -1691,7 +1696,7 @@ type HttpClient struct {
 	client *http.Client
 }
 
-func (this *HttpClient) Request(method string, url string, header map[string]string, body string) (response interface{}, err error) {
+func (h *HttpClient) Request(method string, url string, header map[string]string, body string) (response interface{}, err error) {
 	req, err := http.NewRequest(strings.ToUpper(method), url, strings.NewReader(body))
 	if err != nil {
 		return
@@ -1700,13 +1705,13 @@ func (this *HttpClient) Request(method string, url string, header map[string]str
 		req.Header.Set(key, value)
 	}
 
-	resp, err := this.client.Do(req)
+	resp, err := h.client.Do(req)
 	if err != nil {
 		return
 	}
 	defer resp.Body.Close()
 
-	data, err := ioutil.ReadAll(resp.Body)
+	data, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return
 	}
@@ -1723,21 +1728,21 @@ type DataBuffer struct {
 	data []byte
 }
 
-func (this *DataBuffer) ToBytes() []byte {
-	return this.data
+func (d *DataBuffer) ToBytes() []byte {
+	return d.data
 }
-func (this *DataBuffer) ToString() string {
-	return string(this.data)
+func (d *DataBuffer) ToString() string {
+	return string(d.data)
 }
-func (this *DataBuffer) ToJson() (obj interface{}, err error) {
-	err = json.Unmarshal(this.data, &obj)
+func (d *DataBuffer) ToJson() (obj interface{}, err error) {
+	err = json.Unmarshal(d.data, &obj)
 	return
 }
 
 // image module
 type ImageClient struct{}
 
-func (this *ImageClient) New(width int, height int) *ImageBuffer {
+func (i *ImageClient) New(width int, height int) *ImageBuffer {
 	return &ImageBuffer{
 		image:   image.NewRGBA(image.Rect(0, 0, width, height)),
 		Width:   width,
@@ -1746,7 +1751,7 @@ func (this *ImageClient) New(width int, height int) *ImageBuffer {
 		offsetY: 0,
 	}
 }
-func (this *ImageClient) Parse(input []byte) (imgBuf *ImageBuffer, err error) {
+func (i *ImageClient) Parse(input []byte) (imgBuf *ImageBuffer, err error) {
 	m, _, err := image.Decode(bytes.NewBuffer(input)) // 图片文件解码
 	if err != nil {
 		return
@@ -1762,7 +1767,7 @@ func (this *ImageClient) Parse(input []byte) (imgBuf *ImageBuffer, err error) {
 	}
 	return
 }
-func (this *ImageClient) ToBytes(b ImageBuffer) ([]byte, error) {
+func (i *ImageClient) ToBytes(b ImageBuffer) ([]byte, error) {
 	buf := new(bytes.Buffer)
 	if err := jpeg.Encode(buf, b.image, nil); err != nil {
 		return nil, err
@@ -1778,12 +1783,12 @@ type ImageBuffer struct {
 	offsetY int
 }
 
-func (this *ImageBuffer) Get(x int, y int) uint32 {
-	r, g, b, a := this.image.At(x+this.offsetX, y+this.offsetY).RGBA()
+func (i *ImageBuffer) Get(x int, y int) uint32 {
+	r, g, b, a := i.image.At(x+i.offsetX, y+i.offsetY).RGBA()
 	return r << 24 & g << 16 & b << 8 & a
 }
-func (this *ImageBuffer) Set(x int, y int, p uint32) {
-	this.image.(*image.RGBA).Set(x+this.offsetX, y+this.offsetY, color.RGBA{uint8(p >> 24), uint8(p >> 16), uint8(p >> 8), uint8(p)})
+func (i *ImageBuffer) Set(x int, y int, p uint32) {
+	i.image.(*image.RGBA).Set(x+i.offsetX, y+i.offsetY, color.RGBA{R: uint8(p >> 24), G: uint8(p >> 16), B: uint8(p >> 8), A: uint8(p)})
 }
 
 // lock module
@@ -1798,29 +1803,29 @@ type LockClient struct {
 	locked *bool
 }
 
-func (this *LockClient) lock() bool {
-	this.mutex.Lock()
-	defer this.mutex.Unlock()
-	if *this.locked == true {
+func (l *LockClient) lock() bool {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	if *l.locked == true {
 		return false
 	}
-	*this.locked = true
+	*l.locked = true
 	return true
 }
-func (this *LockClient) Lock(timeout int) error {
+func (l *LockClient) Lock(timeout int) error {
 	for i := 0; i < timeout; i++ {
-		if this.lock() {
+		if l.lock() {
 			return nil
 		}
 		time.Sleep(time.Millisecond)
 	}
-	this.Unlock()
-	return errors.New("Acquire lock " + *this.name + " timeout.")
+	l.Unlock()
+	return errors.New("Acquire lock " + *l.name + " timeout.")
 }
-func (this *LockClient) Unlock() {
-	this.mutex.Lock()
-	defer this.mutex.Unlock()
-	*this.locked = false
+func (l *LockClient) Unlock() {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	*l.locked = false
 }
 
 // pipe module
@@ -1834,17 +1839,17 @@ type SocketListener struct {
 	listener *net.Listener
 }
 
-func (this *Socket) Listen(protocol string, port int) (*SocketListener, error) {
+func (s *Socket) Listen(protocol string, port int) (*SocketListener, error) {
 	listener, err := net.Listen(protocol, fmt.Sprintf(":%d", port))
 	if err != nil {
 		return nil, err
 	}
-	this.worker.AddHandle(&listener)
+	s.worker.AddHandle(&listener)
 	return &SocketListener{
 		listener: &listener,
 	}, err
 }
-func (this *Socket) Dial(protocol string, host string, port int) (*SocketConn, error) {
+func (s *Socket) Dial(protocol string, host string, port int) (*SocketConn, error) {
 	conn, err := net.Dial(protocol, fmt.Sprintf("%s:%d", host, port))
 	return &SocketConn{
 		conn:   &conn,
@@ -1859,28 +1864,28 @@ type SocketConn struct {
 	writer *bufio.Writer
 }
 
-func (this *SocketListener) Accept() (*SocketConn, error) {
-	conn, err := (*this.listener).Accept()
+func (s *SocketListener) Accept() (*SocketConn, error) {
+	conn, err := (*s.listener).Accept()
 	return &SocketConn{
 		conn:   &conn,
 		reader: bufio.NewReader(conn),
 		writer: bufio.NewWriter(conn),
 	}, err
 }
-func (this *SocketConn) ReadLine() ([]byte, error) {
-	line, err := this.reader.ReadBytes('\n')
+func (s *SocketConn) ReadLine() ([]byte, error) {
+	line, err := s.reader.ReadBytes('\n')
 	if err == io.EOF {
 		return nil, nil
 	}
 	return line, err
 }
-func (this *SocketConn) Write(data []byte) (int, error) {
-	count, err := this.writer.Write(data)
-	this.writer.Flush()
+func (s *SocketConn) Write(data []byte) (int, error) {
+	count, err := s.writer.Write(data)
+	s.writer.Flush()
 	return count, err
 }
-func (this *SocketConn) Close() {
-	(*this.conn).Close()
+func (s *SocketConn) Close() {
+	(*s.conn).Close()
 }
 
 // ulid module
@@ -1928,6 +1933,70 @@ func CreateULID() string {
 	}
 
 	return string(buf[:])
+}
+
+// zip module
+type ZipClient struct{}
+
+func (z *ZipClient) Write(data map[string]interface{}) ([]byte, error) {
+	buf := new(bytes.Buffer)
+
+	w := zip.NewWriter(buf)
+
+	for k, v := range data {
+		f, err := w.Create(k)
+		if err != nil {
+			return nil, err
+		}
+		switch v := v.(type) {
+		case string:
+			_, err = f.Write([]byte(v))
+		case []byte:
+			_, err = f.Write(v)
+		default:
+			err = errors.New("Type of value " + k + " is not supported.")
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	w.Close() // 必须在 buf.Bytes() 前关闭，否则 buf.Bytes() 返回空
+
+	return buf.Bytes(), nil
+}
+func (z *ZipClient) Read(data []byte) (*ZipReader, error) {
+	r, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return nil, err
+	}
+	return &ZipReader{reader: r}, nil
+}
+
+type ZipFile struct {
+	file *zip.File
+}
+
+func (z *ZipFile) GetName() string {
+	return z.file.Name
+}
+func (z *ZipFile) GetData() ([]byte, error) {
+	fd, err := z.file.Open()
+	if err != nil {
+		return nil, err
+	}
+	return io.ReadAll(fd)
+}
+
+type ZipReader struct {
+	reader *zip.Reader
+}
+
+func (z *ZipReader) GetFiles() (files []*ZipFile) {
+	for _, f := range z.reader.File {
+		files = append(files, &ZipFile{f})
+	}
+	return
 }
 
 //#endregion

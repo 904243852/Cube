@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
     <!-- 网页的宽度自动适应手机屏幕的宽度 -->
     <title>Cube</title>
-    <link rel="stylesheet" data-name="vs/editor/editor.main" href="//cdn.bootcdn.net/ajax/libs/monaco-editor/0.37.1/min/vs/editor/editor.main.css">
+    <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.38.0/min/vs/editor/editor.main.min.css">
     <style>
         * {
             margin: 0;
@@ -26,14 +26,14 @@
     <div id="container" style="width: 100%; height: 100%;"></div>
     <div id="btn" style="position: fixed; z-index: 10; bottom: 40px; right: 40px; width: 40px; height: 40px; font-size: 18px; display: flex; line-height: 40px; justify-content: center; border-radius: 50%; box-shadow: rgb(0, 0, 0, 0.12) 0px 2px 8px 0px; cursor: pointer; background-color: white; font-family: codicon;" onclick="javascript:(() => { if (this.innerText == '\uEB74') { window.editor.updateOptions({ readOnly: false }); this.innerText = '\uEAB2'; return; }; document.onkeydown({ ctrlKey: true, keyCode: 83 }); })();">&#60082</div>
 
-    <script src="//cdn.bootcdn.net/ajax/libs/typescript/5.0.2/typescript.min.js"></script>
+    <script async src="https://cdn.bootcdn.net/ajax/libs/typescript/5.0.4/typescript.min.js"></script>
 
-    <script src="//cdn.bootcdn.net/ajax/libs/sweetalert/2.1.2/sweetalert.min.js"></script>
+    <script async src="https://cdn.bootcdn.net/ajax/libs/sweetalert/2.1.2/sweetalert.min.js"></script>
 
-    <script>var require = { paths: { "vs": "https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.37.1/min/vs" } };</script>
-    <script src="//cdn.bootcdn.net/ajax/libs/monaco-editor/0.37.1/min/vs/loader.js"></script>
-    <script src="//cdn.bootcdn.net/ajax/libs/monaco-editor/0.37.1/min/vs/editor/editor.main.nls.js"></script>
-    <script src="//cdn.bootcdn.net/ajax/libs/monaco-editor/0.37.1/min/vs/editor/editor.main.js"></script>
+    <script>var require = { paths: { "vs": "https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.38.0/min/vs" } };</script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.38.0/min/vs/loader.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.38.0/min/vs/editor/editor.main.nls.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.38.0/min/vs/editor/editor.main.min.js"></script>
 
     <script>
         (async function () {
@@ -194,6 +194,15 @@
                 };
                 declare function $native(name: "template"): (name: string, input: { [name: string]: any; }) => string;
                 declare function $native(name: "ulid"): () => string;
+                declare function $native(name: "zip"): {
+                    write(data: { [name: string]: string | Uint8Array; }): Uint8Array;
+                    read(data: Uint8Array): {
+                        getFiles(): {
+                            getName(): string;
+                            getData(): Uint8Array;
+                        }[];
+                    };
+                };
             `, "global.d.ts");
             // 预加载所有 module source，用于 import
             if (input.lang === "typescript") {
