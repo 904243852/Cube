@@ -26,15 +26,15 @@ jobs:
           upx -9 -q -o cube .cube
       - name: Package
         run: |
-          tar -zcvf cube-main-linux-amd64.tar.gz cube README.md LICENSE
+          tar -zcvf cube-latest-linux-amd64.tar.gz cube README.md LICENSE
       - name: Checksum
         run: |
-          md5sum cube-main-linux-amd64.tar.gz | cut -d ' ' -f 1 > cube-main-linux-amd64.tar.gz.md5
+          md5sum cube-latest-linux-amd64.tar.gz | cut -d ' ' -f 1 > cube-latest-linux-amd64.tar.gz.md5
       - name: Upload
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: cube-main-linux-amd64.tar.gz*
+          file: cube-latest-linux-amd64.tar.gz*
           tag: latest
           release_name: latest
           overwrite: true
@@ -69,15 +69,15 @@ jobs:
           upx -9 -q -o cube.exe .cube.exe
       - name: Package
         run: |
-          zip cube-main-windows-amd64.zip cube.exe README.md LICENSE
+          zip cube-latest-windows-amd64.zip cube.exe README.md LICENSE
       - name: Checksum
         run: |
-          md5sum cube-main-windows-amd64.zip | cut -d ' ' -f 1 > cube-main-windows-amd64.zip.md5
+          md5sum cube-latest-windows-amd64.zip | cut -d ' ' -f 1 > cube-latest-windows-amd64.zip.md5
       - name: Upload
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: cube-main-windows-amd64.zip*
+          file: cube-latest-windows-amd64.zip*
           tag: latest
           release_name: latest
           overwrite: true
