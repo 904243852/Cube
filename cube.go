@@ -23,6 +23,7 @@ import (
 	"github.com/dop251/goja/parser"
 	"github.com/gorilla/websocket"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/quic-go/quic-go/http3"
 	"github.com/robfig/cron/v3"
 	"github.com/shirou/gopsutil/process"
 	"github.com/shopspring/decimal"
@@ -230,7 +231,7 @@ func main() {
 	RunCrontabs("")
 
 	// 启动服务
-	if !arguments.Secure {
+	if !arguments.Secure { // 启用 HTTP
 		fmt.Println("Server has started on http://127.0.0.1:" + arguments.Port + " 🚀")
 		http.ListenAndServe(":"+arguments.Port, nil)
 	} else {
@@ -244,11 +245,19 @@ func main() {
 			config.ClientCAs = x509.NewCertPool()
 			config.ClientCAs.AppendCertsFromPEM(b)
 		}
-		server := &http.Server{
-			Addr:      ":" + arguments.Port,
-			TLSConfig: config,
+		if arguments.Http3 { // 启用 HTTP/3
+			server := &http3.Server{
+				Addr:      ":" + arguments.Port,
+				TLSConfig: config,
+			}
+			server.ListenAndServeTLS(arguments.ServerCert, arguments.ServerKey)
+		} else { // 启用 HTTPS
+			server := &http.Server{
+				Addr:      ":" + arguments.Port,
+				TLSConfig: config,
+			}
+			server.ListenAndServeTLS(arguments.ServerCert, arguments.ServerKey)
 		}
-		server.ListenAndServeTLS(arguments.ServerCert, arguments.ServerKey)
 	}
 }
 
@@ -256,6 +265,7 @@ func ParseStartupArguments() (a struct {
 	Count            int
 	Port             string
 	Secure           bool
+	Http3            bool
 	ServerKey        string
 	ServerCert       string
 	ClientCertVerify bool
@@ -263,6 +273,7 @@ func ParseStartupArguments() (a struct {
 	flag.IntVar(&a.Count, "n", 1, "Total count of virtual machines.") // 定义命令行参数 c，表示虚拟机的总个数，返回 Int 类型指针，默认值为 1，其值在 Parse 后会被修改为命令参数指定的值
 	flag.StringVar(&a.Port, "p", "8090", "Port to use.")
 	flag.BoolVar(&a.Secure, "s", false, "Enable https.")
+	flag.BoolVar(&a.Http3, "3", false, "Enable http3.")
 	flag.StringVar(&a.ServerKey, "k", "server.key", "SSL key file.")
 	flag.StringVar(&a.ServerCert, "c", "server.crt", "SSL cert file.")
 	flag.BoolVar(&a.ClientCertVerify, "v", false, "Enable client cert verification.")
@@ -818,19 +829,30 @@ func CreateWorker(program *goja.Program) *Worker {
 					if insecureSkipVerify, ok := ExportMapValue(options, "insecureSkipVerify", "bool"); ok { // 忽略服务端证书校验
 						config.InsecureSkipVerify = insecureSkipVerify.(bool)
 					}
-					// 创建 transport
-					transport := &http.Transport{
-						TLSClientConfig: config,
+					// 设置是否启用 HTTP/3
+					if v, ok := ExportMapValue(options, "isHttp3", "bool"); ok && v.(bool) {
+						// 暂不支持同时启用 HTTP/3 和配置代理
+						if _, ok := ExportMapValue(options, "proxy", "string"); ok {
+							return nil, errors.New("can not enable http3 and set proxy at the same time")
+						}
+						client.Transport = &http3.RoundTripper{
+							TLSClientConfig: config,
+						}
+					} else {
+						// 创建 transport
+						transport := &http.Transport{
+							TLSClientConfig: config,
+						}
+						// 设置代理服务器
+						if proxy, ok := ExportMapValue(options, "proxy", "string"); ok {
+							u, _ := url.Parse(proxy.(string))
+							transport.Proxy = http.ProxyURL(u)
+						}
+						client.Transport = transport
 					}
-					// 设置代理服务器
-					if proxy, ok := ExportMapValue(options, "proxy", "string"); ok {
-						u, _ := url.Parse(proxy.(string))
-						transport.Proxy = http.ProxyURL(u)
-					}
-					client.Transport = transport
 				}
 				return &HttpClient{
-					client: client,
+					client,
 				}, nil
 			}
 		case "image":

@@ -29,7 +29,7 @@ A simple web server that can be developed online using typescript.
 
 ## Run with SSL/TLS
 
-1. Make sure `ca.key`, `ca.crt`, `server.key` and `server.crt` is created:
+1. Ensure that `ca.key`, `ca.crt`, `server.key` and `server.crt` have been created:
     ```bash
     make crt
     ```
@@ -54,6 +54,39 @@ A simple web server that can be developed online using typescript.
 
     # Run the service with client.crt and ca.crt
     curl --cacert ./ca.crt --cert ./client.crt --key ./client.key https://127.0.0.1:8443/service/foo
+    ```
+
+## Run with HTTP/3
+
+1. Ensure that `ca.key`, `ca.crt`, `server.key` and `server.crt` have been created:
+    ```bash
+    make crt
+    ```
+
+2. Start the server:
+    ```bash
+    ./cube \
+        -n 8 \ # using 8 virtual machines
+        -p 8443 \ # server with port 8443
+        -s \ # enable SSL/TLS
+        -3 # enable HTTP/3
+    ```
+
+3. You can test your service using curl:
+    ```bash
+    curl --http3 -I https://127.0.0.1:8443/service/foo
+    ```
+    Or you can access it in chrome with quic enabled:
+    ```cmd
+    rem Ensure that ca.crt is installed into the Trusted Root Certification Authorities certificate store
+    rem Please use "certmgr.exe" instead of "certmgr.msc"
+    certmgr.exe /c /add ca.crt /s root
+
+    rem Ensure that all running chrome processes are terminated
+    taskkill /f /t /im chrome.exe
+
+    rem Restart chrome with quic enabled and open https://127.0.0.1:8443/
+    chrome --enable-quic --origin-to-force-quic-on=127.0.0.1:8443 https://127.0.0.1:8443/
     ```
 
 ## Shortcut key of [Editor Online](http://127.0.0.1:8090/editor.html)
