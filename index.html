@@ -120,9 +120,9 @@
                             <template slot-scope="scope">
                                 <el-switch v-model="scope.row.active" @change="onRowActiveSwitch(scope.row)" style="margin-right: 12px;" :disabled='scope.row.status == "true"'>
                                 </el-switch>
-                                <el-button type="text" @click="onRowSetting(scope.row)" icon="el-icon-setting" v-if="!scope.row.active">
+                                <el-button type="text" @click="onRowEdit(scope.row)" icon="el-icon-edit">
                                 </el-button>
-                                <el-button type="text" @click="onRowEdit(scope.row)" icon="el-icon-edit" v-if="!scope.row.active">
+                                <el-button type="text" @click="onRowSetting(scope.row)" icon="el-icon-setting" v-if="!scope.row.active">
                                 </el-button>
                                 <el-button type="text" @click="onRowDelete(scope.row)" icon="el-icon-delete" v-if="!scope.row.active" class="danger">
                                 </el-button>

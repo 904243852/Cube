@@ -1,6 +1,6 @@
 # Cube
 
-A simple web server that can be developed online using typescript.
+A simple web server that can be developed online using typescript/javascript.
 
 ## Getting started
 
@@ -54,6 +54,17 @@ A simple web server that can be developed online using typescript.
 
     # Run the service with client.crt and ca.crt
     curl --cacert ./ca.crt --cert ./client.crt --key ./client.key https://127.0.0.1:8443/service/foo
+    ```
+    Or you can access it in chrome:
+    ```cmd
+    rem Parse client.crt and client.key into client.p12
+    openssl pkcs12 -export -in client.crt -inkey client.key -out client.p12 -passout pass:123456
+
+    rem Install client.p12 into My certificate store
+    certutil -importPFX -f -p 123456 My client.p12
+
+    rem Open https://127.0.0.1:8443/ and select your client certificate
+    chrome https://127.0.0.1:8443/
     ```
 
 ## Run with HTTP/3
@@ -557,7 +568,7 @@ Here are some built-in methods and modules.
         export default function (ctx: ServiceContext) {
             const buf = $native("file").read("a.flv")
 
-            // send a chunk: flv header, total 9 + 4 bytes
+            // send a chunk: flv header(9 bytes) + previousTagSize0(4 bytes)
             ctx.write(new Uint8Array(buf.slice(0, 9 + 4)))
             ctx.flush()
 
@@ -570,7 +581,7 @@ Here are some built-in methods and modules.
                     throw new Error("Invalid previous tag size: " + tagSize + ", expected: " + previousTagSize);
                 }
 
-                // send a chunk: flv tag, total 11 + dataSize + 4 bytes
+                // send a chunk: flv tag(11 + dataSize bytes) + previousTagSize(4 bytes)
                 ctx.write(new Uint8Array(buf.slice(i, i + tagSize + 4)))
                 ctx.flush()
 
