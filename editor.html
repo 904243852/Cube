@@ -149,6 +149,10 @@
                 declare function $native(name: "email"): (host: string, port: number, username: string, password: string) => {
                     send(receivers: string[], subject: string, content: string, attachments: { Name: string; ContentType: string; Base64: string; }[]): void;
                 };
+                declare function $native(name: "event"): {
+                    emit(topic: string, data: any): void;
+                    on(topic: string, func: (data: any) => void): void;
+                };
                 declare function $native(name: "file"): {
                     read(name: string): Uint8Array;
                     readRange(name: string, offset: number, length: number): Uint8Array;

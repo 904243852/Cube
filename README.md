@@ -581,7 +581,7 @@ Here are some built-in methods and modules.
                     throw new Error("Invalid previous tag size: " + tagSize + ", expected: " + previousTagSize);
                 }
 
-                // send a chunk: flv tag(11 + dataSize bytes) + previousTagSize(4 bytes)
+                // send a chunk: flv tag(each video tag is a frame of the video, total 11 + dataSize bytes) + previousTagSize(4 bytes)
                 ctx.write(new Uint8Array(buf.slice(i, i + tagSize + 4)))
                 ctx.flush()
 

@@ -308,7 +308,7 @@ func ExportMapValue(obj map[string]interface{}, name string, t string) (value in
 		case "int":
 			value, success = o.(int)
 		default:
-			panic(errors.New("Type " + t + " is not supported."))
+			panic("type " + t + " is not supported")
 		}
 	}
 	return
@@ -653,7 +653,7 @@ func CreateWorker(program *goja.Program) *Worker {
 	}
 	function, ok := goja.AssertFunction(entry)
 	if !ok {
-		panic(errors.New("the program is not a function"))
+		panic("the program is not a function")
 	}
 
 	worker := Worker{Runtime: runtime, function: function, handles: make([]interface{}, 0)}
@@ -732,16 +732,16 @@ func CreateWorker(program *goja.Program) *Worker {
 	runtime.Set("ServiceResponse", func(call goja.ConstructorCall) *goja.Object { // 内置构造器不能同时返回 error 类型，否则将会失效
 		a0, ok := call.Argument(0).Export().(int64)
 		if !ok {
-			panic(errors.New("invalid argument status, not a int"))
+			panic("invalid argument status, not a int")
 		}
 		a1, ok := call.Argument(1).Export().(map[string]interface{})
 		if !ok {
-			panic(errors.New("invalid argument header, not a map"))
+			panic("invalid argument header, not a map")
 		}
 		header := make(map[string]string, len(a1))
 		for k, v := range a1 {
 			if s, ok := v.(string); !ok {
-				panic(errors.New("Invalid argument " + k + ", not a string."))
+				panic("invalid argument " + k + ", not a string")
 			} else {
 				header[k] = s
 			}
@@ -750,7 +750,7 @@ func CreateWorker(program *goja.Program) *Worker {
 		if a2 := ExportGojaValue(call.Argument(2)); a2 != nil {
 			if s, ok := a2.(string); !ok {
 				if data, ok = a2.([]byte); !ok {
-					panic(errors.New("the data should be a string or a byte array"))
+					panic("the data should be a string or a byte array")
 				}
 			} else {
 				data = []byte(s)
@@ -798,6 +798,8 @@ func CreateWorker(program *goja.Program) *Worker {
 					password: password,
 				}
 			}
+		case "event":
+			module = &EventClient{worker: &worker}
 		case "file":
 			module = &FileClient{}
 		case "http":
@@ -984,13 +986,22 @@ func (w *Worker) ClearHandle() {
 	for _, v := range w.handles {
 		if l, ok := v.(*net.Listener); ok { // 如果已存在监听端口服务，这里需要先关闭，否则将导致 goja.Runtime.Interrupt 无法关闭
 			(*l).Close()
+			continue
 		}
 		if l, ok := v.(*LockClient); ok {
 			(*l).Unlock()
+			continue
 		}
 		if t, ok := v.(*sql.Tx); ok {
 			(*t).Rollback()
+			continue
 		}
+		if c, ok := v.(*EventChannel); ok {
+			close((*c).C)
+			(*c).closed = true
+			continue
+		}
+		panic(fmt.Errorf("unknown handle: %T", v))
 	}
 	if len(w.handles) > 0 {
 		w.handles = make([]interface{}, 0) // 清空所有句柄
@@ -1654,6 +1665,77 @@ func (e *EmailClient) Send(receivers []string, subject string, content string, a
 	return nil
 }
 
+// event module
+type EventChannel struct {
+	C      chan interface{}
+	closed bool
+}
+
+var EventBus struct {
+	sync.RWMutex
+	Subscribers map[string][]*EventChannel
+}
+
+type EventClient struct {
+	worker *Worker
+}
+
+func (e *EventClient) Emit(topic string, data interface{}) {
+	EventBus.RLock()
+
+	if chans, found := EventBus.Subscribers[topic]; found {
+		go func() { // 避免阻塞发布者
+			i := 0
+			for _, ch := range chans {
+				if !ch.closed { // 通过位移法删除已关闭的通道
+					chans[i] = ch
+					i += 1
+					ch.C <- data
+				}
+			}
+		}()
+	}
+
+	EventBus.RUnlock()
+}
+func (e *EventClient) On(call goja.FunctionCall) goja.Value { // 见 goja.Runtime.ToValue 函数，这里需要传递 func(FunctionCall) Value 类型的方法
+	topic, ok := call.Argument(0).Export().(string)
+	if !ok {
+		panic("invalid argument topic, not a string")
+	}
+	function, ok := goja.AssertFunction(call.Argument(1))
+	if !ok {
+		panic("invalid argument func, not a function")
+	}
+
+	ch := &EventChannel{
+		C: make(chan interface{}, 1),
+	}
+
+	e.worker.AddHandle(ch)
+
+	EventBus.Lock()
+
+	if EventBus.Subscribers == nil {
+		EventBus.Subscribers = make(map[string][]*EventChannel)
+	}
+	if prev, found := EventBus.Subscribers[topic]; found {
+		EventBus.Subscribers[topic] = append(prev, ch)
+	} else {
+		EventBus.Subscribers[topic] = append([]*EventChannel{}, ch)
+	}
+
+	EventBus.Unlock()
+
+	go func(c chan interface{}, r *goja.Runtime) {
+		for data := range c {
+			function(nil, r.ToValue(data))
+		}
+	}(ch.C, e.worker.Runtime)
+
+	return nil
+}
+
 // file module
 type FileClient struct{}
 
@@ -1839,7 +1921,7 @@ type LockClient struct {
 	locked *bool
 }
 
-func (l *LockClient) lock() bool {
+func (l *LockClient) tryLock() bool {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	if *l.locked == true {
@@ -1850,7 +1932,7 @@ func (l *LockClient) lock() bool {
 }
 func (l *LockClient) Lock(timeout int) error {
 	for i := 0; i < timeout; i++ {
-		if l.lock() {
+		if l.tryLock() {
 			return nil
 		}
 		time.Sleep(time.Millisecond)
