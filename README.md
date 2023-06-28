@@ -351,8 +351,8 @@ Here are some built-in methods and modules.
     // rsa
     const rsa = crypto.createRsa(),
         { privateKey, publicKey } = rsa.generateKey();
-    String.fromCharCode(...
-        rsa.decrypt(
+    String.fromCharCode(
+        ...rsa.decrypt(
             rsa.encrypt("hello, world", publicKey),
             privateKey
         )
@@ -615,11 +615,11 @@ Here are some built-in methods and modules.
             const listener = $native("socket").listen("tcp", 25)
             while(true) {
                 const conn = listener.accept()
-                console.debug(onParseEmail(onReadData(conn)))
+                console.debug(toEmail(readData(conn)))
             }
         }
 
-        function onReadData(conn) {
+        function readData(conn) {
             conn.write("220 My Mail Sever\n")
 
             let data = "",
@@ -655,7 +655,7 @@ Here are some built-in methods and modules.
             return null
         }
 
-        function onParseEmail(data) {
+        function toEmail(data) {
             data = (data || "").replace(/\r\n/g, "\n")
             return {
                 subject: data.match(/^Subject: (.*)$/m)?.[1],

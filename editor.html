@@ -69,7 +69,8 @@
                 experimentalDecorators: true, // 启用实验性的装饰器特性
                 typeRoots: ["."],
                 downlevelIteration: true, // 允许迭代器进行迭代
-                target: monaco.languages.typescript.ScriptTarget.ESNext // 启用 ESNext 版本
+                target: monaco.languages.typescript.ScriptTarget.ESNext, // 启用 ESNext 版本
+                moduleResolution: ts.ModuleResolutionKind.NodeJs, // 指定使用 nodejs 模块解析策略，否则在 import node_modules/* 时无法解析模块
             });
             monaco.languages.typescript.typescriptDefaults.addExtraLib(`
                 declare class ServiceContext {
