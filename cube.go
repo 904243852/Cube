@@ -115,6 +115,7 @@ func init() {
 		daemons:     make(map[string]*Worker),
 		modules:     make(map[string]*goja.Program),
 	}
+	SourceCache.InitRoutes()
 }
 
 func main() {
@@ -149,14 +150,16 @@ func main() {
 		Success(w, data)
 	})
 	http.HandleFunc("/service/", func(w http.ResponseWriter, r *http.Request) {
-		name := strings.TrimPrefix(r.URL.Path, "/service/")
+		path := strings.TrimPrefix(r.URL.Path, "/service/")
 
 		// 查询 controller
-		source := SourceCache.GetController(name)
-		if source == nil {
+		name, vars := SourceCache.GetRoute(path)
+		if name == "" {
 			http.Error(w, "Not found", http.StatusNotFound)
 			return
 		}
+
+		source := SourceCache.GetController(name)
 		if source.Method != "" && source.Method != r.Method { // 校验请求方法
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
@@ -188,6 +191,7 @@ func main() {
 			request:        r,
 			responseWriter: w,
 			timer:          timer,
+			vars:           &vars,
 		}
 
 		// 执行
@@ -521,6 +525,11 @@ func HandleSourcePost(r *http.Request) error {
 			return err
 		}
 
+		// 新增或更新路由
+		if source.Type == "controller" && source.Url != "" {
+			SourceCache.SetRoute(source.Name, source.Url)
+		}
+
 		// 清空 module 缓存以重建
 		SourceCache.modules = make(map[string]*goja.Program)
 	} else { // 批量导入
@@ -546,6 +555,7 @@ func HandleSourcePost(r *http.Request) error {
 			}
 		}
 
+		SourceCache.InitRoutes()
 		// 批量导入后，需要清空 module 缓存以重建
 		SourceCache.modules = make(map[string]*goja.Program)
 		// 启动守护任务
@@ -574,6 +584,11 @@ func HandleSourceDelete(r *http.Request) error {
 	}
 	if count, _ := res.RowsAffected(); count == 0 {
 		return errors.New("the source is not found")
+	}
+
+	// 删除路由
+	if stype == "controller" {
+		delete(SourceCache.routes, name)
 	}
 
 	return nil
@@ -610,6 +625,11 @@ func HandleSourcePatch(r *http.Request) error {
 	}
 	if count, _ := res.RowsAffected(); count == 0 {
 		return errors.New("the source is not found")
+	}
+
+	// 更新路由
+	if source.Type == "controller" {
+		SourceCache.SetRoute(source.Name, source.Url)
 	}
 
 	// 清空 module 缓存以重建
@@ -1013,22 +1033,61 @@ func (w *Worker) ClearHandle() {
 //#region source cache
 
 type SourceCacheClient struct {
+	routes      map[string]*regexp.Regexp
 	controllers map[string]*Source
 	crontabs    map[string]cron.EntryID
 	daemons     map[string]*Worker
 	modules     map[string]*goja.Program
 }
 
-func (s *SourceCacheClient) GetController(id string) *Source {
-	source := s.controllers[id]
+func (s *SourceCacheClient) GetController(name string) *Source {
+	source := s.controllers[name]
 	if source == nil {
 		source = &Source{}
-		if err := Database.QueryRow("select name, method from source where url = ? and type = 'controller' and active = true", id).Scan(&source.Name, &source.Method); err != nil {
+		if err := Database.QueryRow("select name, method from source where name = ? and type = 'controller' and active = true", name).Scan(&source.Name, &source.Method); err != nil {
 			return nil
 		}
-		s.controllers[id] = source
+		s.controllers[name] = source
 	}
 	return source
+}
+func (s *SourceCacheClient) InitRoutes() {
+	s.routes = make(map[string]*regexp.Regexp)
+	rows, err := Database.Query("select name, url from source where type = 'controller' order by rowid desc")
+	if err != nil {
+		panic(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name, path string
+		rows.Scan(&name, &path)
+		s.SetRoute(name, path)
+	}
+}
+func (s *SourceCacheClient) SetRoute(name string, path string) {
+	s.routes[name] = regexp.MustCompile("^" + regexp.MustCompile("\\{(\\w+)\\}").ReplaceAllString(path, "(?P<$1>\\w+)") + "$")
+}
+func (s *SourceCacheClient) GetRoute(path string) (string, map[string]string) {
+	for k, v := range s.routes {
+		values := v.FindAllStringSubmatch(path, -1)
+		if len(values) == 0 {
+			continue
+		}
+
+		groups := v.SubexpNames()
+
+		m := make(map[string]string)
+		for i, name := range groups {
+			if i == 0 {
+				continue
+			}
+			m[name] = values[0][i]
+		}
+
+		return k, m
+	}
+
+	return "", nil
 }
 
 //#endregion
@@ -1064,6 +1123,7 @@ type ServiceContext struct {
 	timer          *time.Timer
 	returnless     bool
 	body           interface{} // 用于缓存请求消息体，防止重复读取和关闭 body 流
+	vars           *map[string]string
 }
 
 func (s *ServiceContext) GetHeader() map[string]string {
@@ -1114,6 +1174,9 @@ func (s *ServiceContext) GetForm() interface{} {
 	}
 
 	return params
+}
+func (s *ServiceContext) GetPathVariables() interface{} {
+	return s.vars
 }
 func (s *ServiceContext) GetFile(name string) (interface{}, error) {
 	file, header, err := s.request.FormFile(name)

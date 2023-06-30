@@ -80,6 +80,7 @@
                     getJsonBody(): any;
                     getMethod(): "GET" | "POST" | "PUT" | "DELETE";
                     getForm(): { [name: string]: string[]; };
+                    getPathVariables(): { [name: string]: string; };
                     getFile(name: string): { name: string; size: number; data: Uint8Array; };
                     getCerts(): { raw: Uint8Array; }[];
                     upgradeToWebSocket(): ServiceWebSocket;
