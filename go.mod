@@ -7,7 +7,7 @@ require (
 	github.com/gorilla/websocket v1.5.0
 	github.com/mattn/go-sqlite3 v1.14.17
 	github.com/quic-go/quic-go v0.36.0
-	github.com/robfig/cron/v3 v3.0.0
+	github.com/robfig/cron/v3 v3.0.1
 	github.com/shirou/gopsutil v3.21.11+incompatible
 	github.com/shopspring/decimal v1.3.1
 )
@@ -22,7 +22,7 @@ require (
 	github.com/onsi/ginkgo/v2 v2.11.0 // indirect
 	github.com/quic-go/qpack v0.4.0 // indirect
 	github.com/quic-go/qtls-go1-19 v0.3.2 // indirect
-	github.com/quic-go/qtls-go1-20 v0.2.2 // indirect; ÕâÀïĞèÒªÊ¹ÓÃ 0.2.2 °æ±¾£¬·ñÔòÓë quic-go 0.36.0 °æ±¾Ò»Í¬Ê¹ÓÃ»á³öÏÖ¼æÈİÎÊÌâ
+	github.com/quic-go/qtls-go1-20 v0.2.2 // indirect; è¿™é‡Œéœ€è¦é™ä½è‡³ 0.2.2 ç‰ˆæœ¬ï¼Œå¦åˆ™ä¸ quic-go 0.36.0 ç‰ˆæœ¬åœ¨ go 1.20 ä¸‹ä¼šå‡ºç°å…¼å®¹é—®é¢˜ï¼Œå¦‚ "undefined: qtls.Alert"
 	github.com/stretchr/testify v1.8.1 // indirect
 	github.com/tklauser/go-sysconf v0.3.11 // indirect
 	github.com/tklauser/numcpus v0.6.1 // indirect
