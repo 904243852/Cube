@@ -116,23 +116,31 @@ You can create a controller as a http/https service.
     ```typescript
     // http://127.0.0.1:8090/editor.html?name=foo
     export default function (ctx: ServiceContext): ServiceResponse | Uint8Array | any {
-        console.info("The body of request is:", String.fromCharCode(...ctx.getBody())) // print http request body
         return `hello, world`
     }
     ```
 
 - Get request parameters.  
-    Create a controller with name `greeting`, type `controller` and url `/service/greeting/{name}`.
-    ```bash
-    curl -XPOST -H "Content-Type: application/x-www-form-urlencoded" "http://127.0.0.1:8090/service/greeting/zhangsan?a=1&b=2&c&a=3" -d "d=4&e=5&f&d=6"
-    ```
-    ```typescript
-    export default function (ctx: ServiceContext) {
-        ctx.getPathVariables() // {"name":"zhangsan"}
-        ctx.getForm() // {"a":["1","3"],"b":["2"],"c":[""],"d":["4","6"],"e":["5"],"f":[""]}
-        ctx.getURL() // {"params":{"a":["1","3"],"b":["2"],"c":[""]},"path":"/service/foo"}
-    }
-    ```
+    1. Create a controller with name `greeting`, type `controller` and url `/service/{name}/greeting/{words}`.
+        ```typescript
+        export default function (ctx: ServiceContext) {
+            // get http request body
+            String.fromCharCode(...ctx.getBody())
+
+            // get variables in path
+            ctx.getPathVariables() // {"name":"zhangsan","words":"hello"}
+
+            // get request form
+            ctx.getForm() // {"a":["1","3"],"b":["2"],"c":[""],"d":["4","6"],"e":["5"],"f":[""]}
+
+            // get request url path and params
+            ctx.getURL() // {"params":{"a":["1","3"],"b":["2"],"c":[""]},"path":"/service/foo"}
+        }
+        ```
+    2. You can test it using curl:
+        ```bash
+        curl -XPOST -H "Content-Type: application/x-www-form-urlencoded" "http://127.0.0.1:8090/service/zhangsan/greeting/hello?a=1&b=2&c&a=3" -d "d=4&e=5&f&d=6"
+        ```
 
 - Return a custom response.
     ```typescript
