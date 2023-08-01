@@ -3,9 +3,10 @@ module cube
 go 1.19
 
 require (
-	github.com/dop251/goja v0.0.0-20230626124041-ba8a63e79201
+	github.com/dop251/goja v0.0.0-20230707174833-636fdf960de1
 	github.com/gorilla/websocket v1.5.0
 	github.com/mattn/go-sqlite3 v1.14.17
+	github.com/nfnt/resize v0.0.0-20180221191011-83c6a9932646
 	github.com/quic-go/quic-go v0.36.0
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/shirou/gopsutil v3.21.11+incompatible

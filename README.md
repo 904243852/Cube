@@ -359,6 +359,7 @@ Here are some built-in methods and modules.
     // hmac
     crypto.createHmac("sha1").sum("hello, world", "123456").map(c => c.toString(16).padStart(2, "0")).join("") // "9a231f1dd39a4ff6ea778a5640d1498794f8a9f8"
     // rsa
+    // privateKey and publicKey mentioned is PKCS#1 format
     const rsa = crypto.createRsa(),
         { privateKey, publicKey } = rsa.generateKey();
     String.fromCharCode(
@@ -394,7 +395,7 @@ Here are some built-in methods and modules.
     const image = $native("image")
     const img0 = image.new(100, 200), // create a picture with width 100 and height 200
         img1 = image.parse($native("http")().request("GET", "https://www.baidu.com/img/flexible/logo/plus_logo_web_2.png").data.toBytes()) // read a picture from network
-    image.toBytes(img0) // convert this picture to a byte array
+    img0.toBytes() // convert this picture to a byte array
 
     // template
     const content = $native("template")("greeting", { // read template greeting.tpl and render with input
