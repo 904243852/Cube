@@ -10,13 +10,16 @@ import (
 	"io"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
+	"time"
 )
 
 func HandleSource(w http.ResponseWriter, r *http.Request) {
 	var (
-		data interface{}
-		err  error
+		data       interface{}
+		returnless bool
+		err        error
 	)
 	switch r.Method {
 	case http.MethodPost:
@@ -26,7 +29,7 @@ func HandleSource(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPatch:
 		err = handleSourcePatch(r)
 	case http.MethodGet:
-		data, err = handleSourceGet(r)
+		data, returnless, err = handleSourceGet(w, r)
 	default:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -35,47 +38,63 @@ func HandleSource(w http.ResponseWriter, r *http.Request) {
 		toError(w, err)
 		return
 	}
-	toSuccess(w, data)
+	if !returnless {
+		toSuccess(w, data)
+	}
 }
 
-func handleSourceGet(r *http.Request) (data struct {
-	Sources []model.Source `json:"sources"`
-	Total   int            `json:"total"`
-}, err error) {
-	r.ParseForm()
-	name := r.Form.Get("name")
-	stype := r.Form.Get("type")
-	if stype == "" {
-		stype = "%"
-	}
-	from := r.Form.Get("from")
-	if from == "" {
-		from = "0"
-	}
-	size := r.Form.Get("size")
-	if size == "" {
-		size = "10"
+func handleSourceGet(w http.ResponseWriter, r *http.Request) (interface{}, bool, error) {
+	// 初始化返回对象
+	var data struct {
+		Sources []model.Source `json:"sources"`
+		Total   int            `json:"total"`
 	}
 
-	if err = Db.QueryRow("select count(1) from source where name like ? and type like ?", "%"+name+"%", stype).Scan(&data.Total); err != nil { // 调用 QueryRow 方法后，须调用 Scan 方法，否则连接将不会被释放
-		return
+	// 解析 URL 入参
+	p := &QueryParams{r.URL.Query()}
+	name, stype := p.Get("name"), p.GetOrDefault("type", "%")
+	from, size := p.GetIntOrDefault("from", 0), p.GetIntOrDefault("size", 10)
+	sort := p.Get("sort")
+
+	// 初始化排序字段
+	orders := "rowid desc"
+	if ok, _ := regexp.MatchString("^(rowid|name|last_modified_date) (asc|desc)$", sort); ok {
+		orders = sort
 	}
 
-	rows, err := Db.Query("select name, type, lang, content, compiled, active, method, url, cron from source where name like ? and type like ? order by rowid desc limit ?, ?", "%"+name+"%", stype, from, size)
+	// 查询总数
+	if err := Db.QueryRow("select count(1) from source where name like ? and type like ?", "%"+name+"%", stype).Scan(&data.Total); err != nil { // 调用 QueryRow 方法后，须调用 Scan 方法，否则连接将不会被释放
+		return data, false, err
+	}
+
+	// 分页查询
+	columns := "rowid, name, type, lang, content, compiled, active, method, url, cron, last_modified_date"
+	if p.Has("basic") { // 不返回 content、compiled 字段，用于列表查询
+		columns = "rowid, name, type, lang, '' content, '' compiled, active, method, url, cron, last_modified_date"
+	}
+	rows, err := Db.Query("select "+columns+" from source where name like ? and type like ? order by "+orders+" limit ?, ?", "%"+name+"%", stype, from, size)
 	if err != nil {
-		return
+		return data, false, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		source := model.Source{}
-		rows.Scan(&source.Name, &source.Type, &source.Lang, &source.Content, &source.Compiled, &source.Active, &source.Method, &source.Url, &source.Cron)
-		if source.Type == "daemon" {
+		rows.Scan(&source.Id, &source.Name, &source.Type, &source.Lang, &source.Content, &source.Compiled, &source.Active, &source.Method, &source.Url, &source.Cron, &source.LastModifiedDate)
+		if source.Type == "daemon" { // 如果是 daemon，写入状态
 			source.Status = fmt.Sprintf("%v", Cache.Daemons[source.Name] != nil)
 		}
 		data.Sources = append(data.Sources, source)
 	}
-	err = rows.Err()
-	return
+
+	if p.Has("bulk") { // 导出为文件
+		w.Header().Set("Content-Disposition", "attachment;filename=\"sources-"+strconv.FormatInt(time.Now().UnixMilli(), 10)+".json\"")
+		enc := json.NewEncoder(w)
+		enc.SetEscapeHTML(false)
+		enc.Encode(data.Sources)
+		return nil, true, nil
+	}
+
+	return data, false, err
 }
 
 func handleSourcePost(r *http.Request) error {
@@ -110,8 +129,8 @@ func handleSourcePost(r *http.Request) error {
 
 		// 单个新增或修改，新增的均为去激活状态，无需刷新缓存
 		if _, err := Db.Exec(strings.Join([]string{
-			"update source set content = ?, compiled = ? where name = ? and type = ?",                          // 先尝试更新，再尝试新增
-			"insert or ignore into source (name, type, lang, content, compiled, url) values(?, ?, ?, ?, ?, ?)", // 这里不用 insert or replace，replace 是替换整条记录
+			"update source set content = ?, compiled = ?, last_modified_date = datetime('now', 'localtime') where name = ? and type = ?",                         // 先尝试更新，再尝试新增
+			"insert or ignore into source (name, type, lang, content, compiled, url, last_modified_date) values(?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))", // 这里不用 insert or replace，replace 是替换整条记录
 		}, ";"), source.Content, source.Compiled, source.Name, source.Type, source.Name, source.Type, source.Lang, source.Content, source.Compiled, source.Name); err != nil {
 			return err
 		}
@@ -135,13 +154,13 @@ func handleSourcePost(r *http.Request) error {
 		}
 
 		// 批量新增或修改
-		stmt, err := Db.Prepare("insert or replace into source (name, type, lang, content, compiled, active, method, url, cron) values(?, ?, ?, ?, ?, ?, ?, ?, ?)")
+		stmt, err := Db.Prepare("insert or replace into source (rowid, name, type, lang, content, compiled, active, method, url, cron, last_modified_date) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 		if err != nil {
 			return err
 		}
 		defer stmt.Close()
 		for _, source := range sources {
-			if _, err = stmt.Exec(source.Name, source.Type, source.Lang, source.Content, source.Compiled, source.Active, source.Method, source.Url, source.Cron); err != nil {
+			if _, err = stmt.Exec(source.Id, source.Name, source.Type, source.Lang, source.Content, source.Compiled, source.Active, source.Method, source.Url, source.Cron, source.LastModifiedDate.String()); err != nil {
 				return err
 			}
 		}
@@ -210,7 +229,7 @@ func handleSourcePatch(r *http.Request) error {
 	}
 
 	// 修改
-	res, err := Db.Exec("update source set active = ?, method = ?, url = ?, cron = ? where name = ? and type = ?", source.Active, source.Method, source.Url, source.Cron, source.Name, source.Type)
+	res, err := Db.Exec("update source set active = ?, method = ?, url = ?, cron = ?, last_modified_date = datetime('now', 'localtime') where name = ? and type = ?", source.Active, source.Method, source.Url, source.Cron, source.Name, source.Type)
 	if err != nil {
 		return err
 	}
