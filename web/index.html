@@ -40,7 +40,7 @@
             </h3>
             <el-card>
                 <el-row style="border-bottom: 1px solid #DCDFE6; padding-bottom: 10px;">
-                    <el-dropdown @command="onCreate" placement="bottom-start">
+                    <el-dropdown @command="onCreate" placement="bottom-start" trigger="click" :hide-on-click="false">
                         <el-button icon="el-icon-plus">New</el-button>
                         <el-dropdown-menu slot="dropdown">
                             <el-dropdown-item command="controller">Controller</el-dropdown-item>
@@ -48,7 +48,17 @@
                             <el-dropdown-item command="crontab">Crontab</el-dropdown-item>
                             <el-dropdown-item command="module">Module</el-dropdown-item>
                             <el-dropdown-item command="template,html" divided>Template(Html)</el-dropdown-item>
-                            <el-dropdown-item command="resource,vue" divided>Resource(Vue)</el-dropdown-item>
+                            <el-dropdown-item divided>
+                                <el-dropdown @command="onCreate" placement="right-start" trigger="click">
+                                    <span class="el-dropdown-link">
+                                        Resource<i class="el-icon-arrow-right el-icon--right"></i>
+                                    </span>
+                                    <el-dropdown-menu slot="dropdown">
+                                        <el-dropdown-item command="resource,vue">Html</el-dropdown-item>
+                                        <el-dropdown-item command="resource,vue">Vue</el-dropdown-item>
+                                    </el-dropdown-menu>
+                                </el-dropdown>
+                            </el-dropdown-item>
                         </el-dropdown-menu>
                     </el-dropdown>
                     <el-upload ref="uploader" :auto-upload="false" action="" :on-change="onImport" :show-file-list="false" accept="application/json" style="display: none;">
@@ -215,7 +225,7 @@
                 }
                 that.visible.loading4fetch = true;
                 fetch(`source?name=${that.search.keyword}&type=${that.search.type}&from=${(that.pagination.index - 1) * that.pagination.size}&size=${that.pagination.size}&sort=${this.sort.prop} ${this.sort.order}&basic`, {
-                    method: "GET"
+                    method: "GET",
                 }).then(r => r.json()).then(r => {
                     that.pagination.count = r.data.total;
                     that.pagination.index = Math.min(that.pagination.index, Math.ceil(r.data.total / that.pagination.size));
@@ -223,7 +233,7 @@
                 }).catch(e => {
                     that.$message({
                         type: "error",
-                        message: e.message
+                        message: e.message,
                     });
                 }).finally(() => {
                     that.visible.loading4fetch = false;
@@ -247,18 +257,18 @@
                 reader.onload = function () {
                     fetch("source?bulk", {
                         method: "POST",
-                        body: this.result
+                        body: this.result,
                     }).then(r => r.json()).then(r => {
                         if (r.code === "0") {
                             that.$message({
                                 type: "success",
-                                message: "Import succeeded."
+                                message: "Import succeeded.",
                             });
                             that.onFetch();
                         } else {
                             that.$message({
                                 type: "error",
-                                message: r.message
+                                message: r.message,
                             });
                         }
                     });
@@ -287,7 +297,7 @@
                 this.visible.setting = true;
             },
             onRowEdit(record) {
-                window.open(`editor.html?name=${record.name}&type=${record.type}&lang=${record.lang}`)
+                window.open(`editor.html?name=${record.name}&type=${record.type}&lang=${record.lang}`);
             },
             onRowDelete(record) {
                 const that = this;
@@ -300,42 +310,42 @@
                             instance.confirmButtonLoading = true;
                             instance.confirmButtonText = "Delete...";
                             fetch(`source?name=${record.name}&type=${record.type}`, {
-                                method: "DELETE"
+                                method: "DELETE",
                             }).then(r => r.json()).then(r => {
                                 if (r.code === "0") {
                                     that.$message({
                                         type: "success",
-                                        message: "Delete succeeded."
+                                        message: "Delete succeeded.",
                                     });
                                     that.onFetch();
                                 } else {
                                     that.$message({
                                         type: "error",
-                                        message: r.message
+                                        message: r.message,
                                     });
                                 }
                                 instance.confirmButtonLoading = false;
                             });
                         }
                         done();
-                    }
+                    },
                 }).catch(() => { });
             },
             onRowActiveSwitch(record) {
                 const that = this;
                 fetch("source", {
                     method: "PATCH",
-                    body: JSON.stringify(record)
+                    body: JSON.stringify(record),
                 }).then(r => r.json()).then(r => {
                     if (r.code === "0") {
                         that.$message({
                             type: "success",
-                            message: (record.active ? "Active" : "Inactive") + " succeeded."
+                            message: (record.active ? "Active" : "Inactive") + " succeeded.",
                         });
                     } else {
                         that.$message({
                             type: "error",
-                            message: r.message
+                            message: r.message,
                         });
                         record.active = !record.active;
                     }
@@ -349,18 +359,18 @@
                     body: JSON.stringify({
                         ...record,
                         status,
-                    })
+                    }),
                 }).then(r => r.json()).then(r => {
                     if (r.code === "0") {
                         that.$message({
                             type: "success",
-                            message: (status == "true" ? "Run" : "Stop") + " succeeded."
+                            message: (status == "true" ? "Run" : "Stop") + " succeeded.",
                         });
                         record.status = status;
                     } else {
                         that.$message({
                             type: "error",
-                            message: r.message
+                            message: r.message,
                         });
                     }
                 });
@@ -380,20 +390,20 @@
                             active: that.record.active,
                             method: that.record.method,
                             url: that.record.url,
-                            cron: that.record.cron
-                        })
+                            cron: that.record.cron,
+                        }),
                     }).then(r => r.json()).then(r => {
                         if (r.code === "0") {
                             that.$message({
                                 type: "success",
-                                message: "Setting succeeded."
+                                message: "Setting succeeded.",
                             });
                             that.visible.setting = false;
                             that.onFetch();
                         } else {
                             that.$message({
                                 type: "error",
-                                message: r.message
+                                message: r.message,
                             });
                         }
                     });
@@ -402,7 +412,7 @@
         },
         mounted: function () {
             this.onFetch();
-        }
+        },
     });
 </script>
 

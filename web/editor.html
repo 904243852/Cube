@@ -3,8 +3,7 @@
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
-    <!-- 网页的宽度自动适应手机屏幕的宽度 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no"><!-- 网页的宽度自动适应手机屏幕的宽度 -->
     <title>Cube</title>
     <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.38.0/min/vs/editor/editor.main.min.css">
     <style>
@@ -19,12 +18,33 @@
         html {
             overflow: hidden;
         }
+        #container {
+            width: 100%;
+            height: 100%;
+        }
+        #btn {
+            position: fixed;
+            z-index: 10;
+            bottom: 40px;
+            right: 40px;
+            width: 40px;
+            height: 40px;
+            font-size: 18px;
+            display: flex;
+            line-height: 40px;
+            justify-content: center;
+            border-radius: 50%;
+            box-shadow: rgb(0, 0, 0, 0.12) 0px 2px 8px 0px;
+            cursor: pointer;
+            background-color: white;
+            font-family: codicon;
+        }
     </style>
 </head>
 
 <body>
-    <div id="container" style="width: 100%; height: 100%;"></div>
-    <div id="btn" style="position: fixed; z-index: 10; bottom: 40px; right: 40px; width: 40px; height: 40px; font-size: 18px; display: flex; line-height: 40px; justify-content: center; border-radius: 50%; box-shadow: rgb(0, 0, 0, 0.12) 0px 2px 8px 0px; cursor: pointer; background-color: white; font-family: codicon;" onclick="javascript:(() => { if (this.innerText == '\uEB74') { window.editor.updateOptions({ readOnly: false }); this.innerText = '\uEAB2'; return; }; document.onkeydown({ ctrlKey: true, keyCode: 83 }); })();">&#60082</div>
+    <div id="container"></div>
+    <div id="btn">&#60082</div>
 
     <script src="https://cdn.bootcdn.net/ajax/libs/typescript/5.0.4/typescript.min.js"></script>
 
@@ -36,155 +56,255 @@
     <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.38.0/min/vs/editor/editor.main.min.js"></script>
 
     <script>
-        (async function () {
-            // 代码示例模板
-            const examples = {
+        // 重写 alert 方法，使用 swal 实现
+        window.alert = function(message, level = "warning") {
+            swal(message, "", level);
+            if (level === "error") { // 如果是 error 则抛出异常并停止当前程序运行
+                throw message;
+            }
+        };
+
+        ({
+            // 示例模板代码
+            examples: {
                 controller: `export default function (ctx: ServiceContext): ServiceResponse | Uint8Array | any {\n    return "hello, world";\n};`,
                 typescript: `export default function () {\n    \n};`,
                 html: `<!DOCTYPE html>\n<html>\n\n<head>\n    <meta charset="utf-8" />\n    <title></title>\n</head>\n\n<body>\n    hello, {{ .name }}\n</body>\n\n</html>`,
-                vue: `<template>\n    <p>hello, {{ name }}</p>\n</template>\n\n\x3Cscript>\n    module.exports = {\n        data: function() {\n            return {\n                name: "world"\n            }\n        }\n    }\n\x3C/script>\n\n<style scoped>\n\n</style>`
-            };
+                vue: `<template>\n    <p>hello, {{ name }}</p>\n</template>\n\n\x3Cscript>\n    module.exports = {\n        data: function() {\n            return {\n                name: "world"\n            }\n        }\n    }\n\x3C/script>\n\n<style scoped>\n\n</style>`,
+            },
 
-            // 获取请求参数
-            const input = (function () {
+            // 请求入参
+            input: (function () {
+                // 获取 URL 查询参数
                 const params = new URL(window.location).searchParams,
                     name = params.get("name"),
                     type = params.get("type") || "controller",
                     lang = params.get("lang") || { template: "text", resource: "text" }[type] || "typescript";
-                return { name, type, lang };
-            })();
-            // 校验类型和名称
-            if (["module", "controller", "daemon", "crontab", "template", "resource"].indexOf(input.type) === -1) {
-                swal("The source type must be module, controller, daemon, crontab, template or resource.", "", "error");
-                return;
-            }
-            if (input.name && !(input.type === "module" && /^(node_modules\/)?\w{2,32}$/.test(input.name) || /^\w{2,32}$/.test(input.name))) {
-                swal("The name must be a letter, number, or underscore with a length of 2 to 32.", "", "error");
-                return;
-            }
 
-            // 初始化编辑器
-            monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
-                allowNonTsExtensions: true,
-                experimentalDecorators: true, // 启用实验性的装饰器特性
-                typeRoots: ["."],
-                downlevelIteration: true, // 允许迭代器进行迭代
-                target: monaco.languages.typescript.ScriptTarget.ESNext, // 启用 ESNext 版本
-                moduleResolution: ts.ModuleResolutionKind.NodeJs, // 指定使用 nodejs 模块解析策略，否则在 import node_modules/* 时无法解析模块
-            });
-            if (input.lang === "typescript") {
-                // 预加载 global.d.ts
-                await fetch("global.d.ts", {
-                    method: "GET"
-                }).then(r => r.text()).then(r => {
-                    monaco.languages.typescript.typescriptDefaults.addExtraLib(r, "global.d.ts");
-                });
-                // 预加载所有 module source，用于 import
-                (await fetch("source?lang=typescript&type=module&size=100", {
-                    method: "GET"
-                }).then(r => r.json()).then(r => r.data.sources) || []).forEach(s => {
-                    monaco.languages.typescript.typescriptDefaults.addExtraLib(s.content, s.name + ".ts");
-                });
-            }
-            // 渲染编辑器
-            const lang = { vue: "html" }[input.lang] || input.lang,
-                editor = monaco.editor.create(document.getElementById("container"), {
-                    language: lang,
-                    theme: "vs-dark",
-                    model: monaco.editor.createModel(examples[input.type] || examples[input.lang] || "", lang, new monaco.Uri("noname")),
-                    options: {
-                        selectOnLineNumbers: true,
-                        roundedSelection: false,
-                        readOnly: false,
-                        cursorStyle: "line",
-                        automaticLayout: true
-                    }
-                });
-            // 注册事件以及按键命令
-            editor.onDidFocusEditorText(() => {
-                if (document.getElementById("btn").innerText === "\uEB74") {
-                    document.activeElement.blur(); // 防止在只读模式下，移动端点击编辑框时弹出软键盘
+                // 校验类型和名称
+                if (["module", "controller", "daemon", "crontab", "template", "resource"].indexOf(type) === -1) {
+                    alert("The source type must be module, controller, daemon, crontab, template or resource.", "error");
                 }
-            });
-            window.onresize = () => editor.layout(); // 当浏览器窗口大小发生改变时，编辑器自动调整大小
-            document.onkeydown = function (e) {
-                const keyCode = e.keyCode || e.which || e.charCode,
-                    ctrlKey = e.ctrlKey || e.metaKey;
-                if (ctrlKey && keyCode == 83) { // Ctrl + S
-                    const src = editor.getValue(),
-                        jsSrc = editor.getModel().getLanguageId() !== "typescript" ? "" : ts.transpileModule(src, {
-                            compilerOptions: {
-                                module: ts.ModuleKind.CommonJS,
-                                inlineSourceMap: true, // 使源映射文件（即 *.js.map 文件）在生成的 js 文件中内联写入：源映射内容会以 `//#soureMappingURL=` 开头，按 base64 格式追加写入
-                                inlineSources: true, // 指定进一步将 ts 文件的内容也包含到输出文件中
-                                removeComments: true, // 移除注释
-                                downlevelIteration: true // 当 target 为 ES5 或 ES3 时，为 for-of、spread 和 destructuring 中的迭代器提供完全支持
-                            },
-                            fileName: (input.name || "noname") + ".ts"
-                        })?.outputText;
+                if (name && !(type === "module" && /^(node_modules\/)?\w{2,32}$/.test(name) || /^\w{2,32}$/.test(name))) {
+                    alert("The name must be a letter, number, or underscore with a length of 2 to 32.", "error");
+                }
 
-                    const onSourceSaving = function (name) {
-                        fetch("source", {
-                            method: "POST",
-                            body: JSON.stringify({ name, type: input.type, lang: input.lang, content: src, compiled: jsSrc })
-                        }).then(r => r.json()).then(r => {
-                            if (r.code === "0") {
-                                swal("Saved successfully.", "", "success");
-                                input.name = name;
-                            } else {
-                                swal(r.message, "", "error");
-                            }
-                        });
-                    }
-                    if (!input.name) {
-                        swal({ text: "Please input name:", content: "input", button: { text: "Create", closeModal: false } }).then(name => {
-                            if (!name) {
-                                swal("The name is required.", "", "error");
-                                return;
-                            }
-                            onSourceSaving(name);
-                        });
-                    } else {
-                        onSourceSaving(input.name);
-                    }
-                    return false;
-                }
-                if (ctrlKey && keyCode == 48) { // Ctrl + 0
-                    if (input.name) {
-                        swal({ title: "Are you sure?", text: "Once deleted, you will not be able to recover this source!", icon: "warning", buttons: true, dangerMode: true }).then(confirm => {
-                            if (confirm) {
-                                fetch(`source?name=${input.name}&lang=${input.lang}`, {
-                                    method: "DELETE"
-                                }).then(r => r.json()).then(r => {
-                                    if (r.code === "0") {
-                                        swal("Deleted successfully.", { icon: "success" });
-                                    } else {
-                                        swal(r.message, "", "error");
-                                    }
-                                });
-                            }
-                        });
-                    }
-                }
-            }
+                // 获取代码坐标锚点
+                const groups = window.location.hash.substring(1).match(/(?<startLineNumber>\d*),(?<startColumn>\d*)\-(?<endLineNumber>\d*),(?<endColumn>\d*)/)?.groups,
+                    selection = {
+                        ...(groups?.startLineNumber && {
+                            startLineNumber: Number(groups.startLineNumber),
+                            startColumn: Number(groups.startColumn) || 0,
+                        }),
+                        ...(groups?.endLineNumber && {
+                            endLineNumber: Number(groups.endLineNumber),
+                            endColumn: Number(groups.endColumn) || 0,
+                        }),
+                    };
 
-            if (!input.name) {
-                swal("No name specified. A new source will be created soon.", "", "warning");
-                return;
-            }
-            const source = (await fetch(`source?name=${input.name}&type=${input.type}&lang=${input.lang}`, {
-                method: "GET"
-            }).then(r => r.json()).then(r => r.data.sources) || []).pop();
-            if (source != null) {
+                return { name, type, lang, selection };
+            })(),
+
+            // 渲染 Monaco Editor
+            render() {
+                // 初始化 Editor 的 typescript 编译选项
+                monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+                    allowNonTsExtensions: true,
+                    experimentalDecorators: true, // 启用实验性的装饰器特性
+                    typeRoots: ["."],
+                    downlevelIteration: true, // 允许迭代器进行迭代
+                    target: monaco.languages.typescript.ScriptTarget.ESNext, // 启用 ESNext 版本
+                    moduleResolution: ts.ModuleResolutionKind.NodeJs, // 指定使用 nodejs 模块解析策略，否则在 import node_modules/* 时无法解析模块
+                });
+
+                // 如果当前语言是 typescript，需要提前加载定义文件和模块文件
+                if (this.input.lang === "typescript") {
+                    // 预加载 global.d.ts
+                    fetch("global.d.ts", {
+                        method: "GET",
+                    }).then(r => r.text()).then(r => {
+                        monaco.languages.typescript.typescriptDefaults.addExtraLib(r, "global.d.ts");
+                    });
+
+                    // 预加载所有 module source，用于 import
+                    fetch("source?lang=typescript&type=module&size=100", {
+                        method: "GET"
+                    }).then(r => r.json()).then(r => {
+                        (r.data.sources || []).forEach(s => {
+                            monaco.languages.typescript.typescriptDefaults.addExtraLib(s.content, s.name + ".ts");
+                        });
+                    });
+                }
+
+                // 创建 Editor
+                const lang = { vue: "html" }[this.input.lang] || this.input.lang,
+                    editor = monaco.editor.create(document.getElementById("container"), {
+                        language: lang,
+                        theme: "vs-dark",
+                        model: monaco.editor.createModel(this.examples[this.input.type] || this.examples[this.input.lang] || "", lang, new monaco.Uri("noname")),
+                        options: {
+                            selectOnLineNumbers: true,
+                            roundedSelection: false,
+                            readOnly: false,
+                            cursorStyle: "line",
+                            automaticLayout: true
+                        }
+                    });
+
+                // 重写 editorService 的 openEditor 方法，实现代码的跳转定义
+                const that = this;
+                editor._codeEditorService.doOpenEditor = function(editor, input) {
+                    const model = this.findModel(editor, input.resource),
+                        selection = input.options.selection;
+                    if (model) {
+                        editor.setModel(model);
+                        that.setEditorFocus(editor, selection);
+                        return;
+                    }
+                    const matches = input.resource.path.match(/^(?:\/(node_modules\/\w+)|\.\/(\w+))\.ts$/),
+                        name = matches?.[1] || matches?.[2];
+                    if (name) {
+                        window.open(`/editor.html?name=${name}&type=module&lang=typescript#${selection.startLineNumber},${selection.startColumn}-${selection.endLineNumber},${selection.endColumn}`);
+                    }
+                };
+
+                // 注册事件以及按键命令
+                editor.onDidFocusEditorText(() => {
+                    if (document.getElementById("btn").innerText === "\uEB74") {
+                        document.activeElement.blur(); // 防止在只读模式下，移动端点击编辑框时弹出软键盘
+                    }
+                });
+
+                // 注册全局 resize 事件，当浏览器窗口大小发生改变时，编辑器自动调整大小
+                window.onresize = () => editor.layout();
+
+                // 注册 Editor 快捷键
+                this.setEditorShortcutKeys(editor, this.input);
+
+                // 注册保存按钮的点击事件
+                this.setBtnClick(editor);
+
+                return editor;
+            },
+            
+            // 设置 Editor 的光标位置
+            setEditorFocus(editor, selection) {
+                if (!selection) {
+                    return;
+                }
+                if (typeof selection.endLineNumber === "number" && typeof selection.endColumn === "number") {
+                    editor.setSelection(selection);
+                    editor.revealRangeInCenter(selection, 1);
+                } else {
+                    const position = {
+                        lineNumber: selection.startLineNumber,
+                        column: selection.startColumn,
+                    };
+                    editor.setPosition(position);
+                    editor.revealPositionInCenter(position, 1);
+                }
+                editor.focus();
+            },
+            
+            // 注册 Editor 快捷键
+            setEditorShortcutKeys(editor, input) {
+                document.onkeydown = function (e) {
+                    const keyCode = e.keyCode || e.which || e.charCode,
+                        ctrlKey = e.ctrlKey || e.metaKey;
+                    if (ctrlKey && keyCode == 83) { // Ctrl + S
+                        const src = editor.getValue(),
+                            jsSrc = editor.getModel().getLanguageId() !== "typescript" ? "" : ts.transpileModule(src, {
+                                compilerOptions: {
+                                    module: ts.ModuleKind.CommonJS,
+                                    inlineSourceMap: true, // 使源映射文件（即 *.js.map 文件）在生成的 js 文件中内联写入：源映射内容会以 `//#soureMappingURL=` 开头，按 base64 格式追加写入
+                                    inlineSources: true, // 指定进一步将 ts 文件的内容也包含到输出文件中
+                                    removeComments: true, // 移除注释
+                                    downlevelIteration: true, // 当 target 为 ES5 或 ES3 时，为 for-of、spread 和 destructuring 中的迭代器提供完全支持
+                                },
+                                fileName: `${input.name || "noname"}.ts`,
+                            })?.outputText;
+    
+                        const onSourceSaving = function (name) {
+                            fetch("source", {
+                                method: "POST",
+                                body: JSON.stringify({ name, type: input.type, lang: input.lang, content: src, compiled: jsSrc }),
+                            }).then(r => r.json()).then(r => {
+                                if (r.code === "0") {
+                                    alert("Saved successfully.", "success");
+                                    input.name = name;
+                                } else {
+                                    alert(r.message, "error");
+                                }
+                            });
+                        }
+                        if (!input.name) {
+                            swal({ text: "Please input name:", content: "input", button: { text: "Create", closeModal: false } }).then(name => {
+                                if (!name) {
+                                    alert("The name is required.", "error");
+                                    return;
+                                }
+                                onSourceSaving(name);
+                            });
+                        } else {
+                            onSourceSaving(input.name);
+                        }
+                        return false;
+                    }
+                    if (ctrlKey && keyCode == 48) { // Ctrl + 0
+                        if (input.name) {
+                            swal({ title: "Are you sure?", text: "Once deleted, you will not be able to recover this source!", icon: "warning", buttons: true, dangerMode: true }).then(confirm => {
+                                if (confirm) {
+                                    fetch(`source?name=${input.name}&lang=${input.lang}`, {
+                                        method: "DELETE",
+                                    }).then(r => r.json()).then(r => {
+                                        if (r.code === "0") {
+                                            alert("Deleted successfully.", "success");
+                                        } else {
+                                            alert(r.message, "error");
+                                        }
+                                    });
+                                }
+                            });
+                        }
+                    }
+                }
+            },
+
+            // 注册保存按钮的点击事件
+            setBtnClick(editor) {
+                document.getElementById("btn").onclick = function() {
+                    if (this.innerText == "\uEB74") { // 锁定
+                        editor.updateOptions({ readOnly: false });
+                        this.innerText = "\uEAB2"; // 解锁
+                        return;
+                    }
+                    document.onkeydown({ ctrlKey: true, keyCode: 83 }); // 触发保存事件
+                };
+            },
+
+            // 初始化
+            async mount() {
+                const editor = this.render();
+
+                if (!this.input.name) {
+                    alert("No name specified. A new source will be created soon.");
+                    return;
+                }
+
+                const source = (await fetch(`source?name=${this.input.name}&type=${this.input.type}&lang=${this.input.lang}`, {
+                    method: "GET",
+                }).then(r => r.json()).then(r => r.data.sources) || []).pop();
+                if (!source) {
+                    alert(`Source "${this.input.name}" with ${this.input.lang} is not existed. It will be created soon.`);
+                    return;
+                }
+
                 editor.setValue(source.content);
+                this.setEditorFocus(editor, this.input.selection); // 光标跳转至指定代码位置
                 editor.updateOptions({ readOnly: true });
                 document.getElementById("btn").innerText = "\uEB74";
-            } else {
-                swal(`Source "${input.name}" with ${input.lang} is not existed. It will be created soon.`, "", "warning");
-            }
-
-            window.editor = editor;
-        })();
+            },
+        }).mount();
     </script>
 </body>
 
