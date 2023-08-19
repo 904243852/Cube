@@ -40,7 +40,7 @@
             </h3>
             <el-card>
                 <el-row style="border-bottom: 1px solid #DCDFE6; padding-bottom: 10px;">
-                    <el-dropdown @command="onCreate" placement="bottom-start" trigger="click" :hide-on-click="false">
+                    <el-dropdown @command="onCreate" placement="bottom-start" trigger="click" :hide-on-click="false" style="top: 1px;">
                         <el-button icon="el-icon-plus">New</el-button>
                         <el-dropdown-menu slot="dropdown">
                             <el-dropdown-item command="controller">Controller</el-dropdown-item>
@@ -48,7 +48,7 @@
                             <el-dropdown-item command="crontab">Crontab</el-dropdown-item>
                             <el-dropdown-item command="module">Module</el-dropdown-item>
                             <el-dropdown-item command="template,html" divided>Template(Html)</el-dropdown-item>
-                            <el-dropdown-item divided>
+                            <el-dropdown-item command="resource" divided>
                                 <el-dropdown @command="onCreate" placement="right-start" trigger="click">
                                     <span class="el-dropdown-link">
                                         Resource<i class="el-icon-arrow-right el-icon--right"></i>
@@ -102,7 +102,9 @@
                                         {{ scope.row.lang }}
                                     </el-descriptions-item>
                                     <el-descriptions-item label="Url" v-if='["controller", "resource"].indexOf(scope.row.type) != -1' :span="2">
-                                        <el-link type="primary" :href='({ controller: "/service/", resource: "/resource/" }[scope.row.type] || "") + scope.row.url'>{{ ({ controller: "/service/", resource: "/resource/" }[scope.row.type] || "") + scope.row.url }}</el-link>
+                                        <el-link type="primary" :href='({ controller: "/service/", resource: "/resource/" }[scope.row.type] || "") + scope.row.url'>
+                                            {{ ({ controller: "/service/", resource: "/resource/" }[scope.row.type] || "") + scope.row.url }}
+                                        </el-link>
                                     </el-descriptions-item>
                                     <el-descriptions-item label="Method" v-if='scope.row.type == "controller"'>
                                         {{ scope.row.method || "Any" }}
@@ -142,10 +144,7 @@
                             </template>
                         </el-table-column>
                     </el-table>
-                    <el-pagination @size-change="onPageSizeChange" @current-change="onPageCurrentChange"
-                        :current-page="pagination.index" :page-sizes="[5, 10, 20, 50]" :page-size="pagination.size"
-                        layout="total, sizes, prev, pager, next, jumper" :total="pagination.count"
-                        style="text-align: right; margin-top: 13px;">
+                    <el-pagination @size-change="onPageSizeChange" @current-change="onPageCurrentChange" :current-page="pagination.index" :page-sizes="[5, 10, 20, 50]" :page-size="pagination.size" layout="total, sizes, prev, pager, next, jumper" :total="pagination.count" style="text-align: right; margin-top: 13px;">
                     </el-pagination>
                 </el-row>
             </el-card>
@@ -171,12 +170,12 @@
                     </el-form-item>
                     <el-form-item label="Url" v-if='["controller", "resource"].indexOf(record.type) != -1'>
                         <el-input v-model="record.url">
-                            <template slot="prepend">{{ { controller: "/service/", resource: "/resource/" }[record.type] }}</template>
+                            <template slot="prepend">
+                                {{ { controller: "/service/", resource: "/resource/" }[record.type] }}
+                            </template>
                         </el-input>
                     </el-form-item>
-                    <el-form-item label="Cron" prop="cron"
-                        :rules='[{ required: true, message: "Cron is required.", trigger: "blur" }, { pattern: /^(\*|([0-9]|1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9])|\*\/([0-9]|1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9])) (\*|([0-9]|1[0-9]|2[0-3])|\*\/([0-9]|1[0-9]|2[0-3])) (\*|([1-9]|1[0-9]|2[0-9]|3[0-1])|\*\/([1-9]|1[0-9]|2[0-9]|3[0-1])) (\*|([1-9]|1[0-2])|\*\/([1-9]|1[0-2])) (\*|([0-6])|\*\/([0-6]))$/, message: "Invalid cron expression.", trigger: ["blur", "change"] }]'
-                        v-if='record.type == "crontab"'>
+                    <el-form-item label="Cron" prop="cron" :rules='[{ required: true, message: "Cron is required.", trigger: "blur" }, { pattern: /^(\*|([0-9]|1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9])|\*\/([0-9]|1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9])) (\*|([0-9]|1[0-9]|2[0-3])|\*\/([0-9]|1[0-9]|2[0-3])) (\*|([1-9]|1[0-9]|2[0-9]|3[0-1])|\*\/([1-9]|1[0-9]|2[0-9]|3[0-1])) (\*|([1-9]|1[0-2])|\*\/([1-9]|1[0-2])) (\*|([0-6])|\*\/([0-6]))$/, message: "Invalid cron expression.", trigger: ["blur", "change"] }]' v-if='record.type == "crontab"'>
                         <el-input v-model="record.cron" placeholder="For example: */5 * * * *"></el-input>
                     </el-form-item>
                     <el-form-item>
@@ -247,8 +246,18 @@
                 this.pagination.index = value;
                 this.onFetch();
             },
-            onCreate(c) {
-                const [type, lang] = c.split(",");
+            onCreate(command) {
+                if (!command) {
+                    return;
+                }
+                const [type, lang] = command.split(",");
+                if (type === "resource") {
+                    if (!lang) {
+                        arguments[1].$children[0].$children[0].showPopper = !arguments[1].$children[0].$children[0].showPopper; // 打开二级下拉框
+                        return;
+                    }
+                    arguments[1].$parent.showPopper = !arguments[1].$parent.showPopper; // 关闭二级下拉框
+                }
                 window.open(`editor.html?type=${type}&lang=${lang || "typescript"}`);
             },
             onImport(file) {
