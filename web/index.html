@@ -250,14 +250,11 @@
                 if (!command) {
                     return;
                 }
-                const [type, lang] = command.split(",");
-                if (type === "resource") {
-                    if (!lang) {
-                        arguments[1].$children[0].$children[0].showPopper = !arguments[1].$children[0].$children[0].showPopper; // 打开二级下拉框
-                        return;
-                    }
-                    arguments[1].$parent.showPopper = !arguments[1].$parent.showPopper; // 关闭二级下拉框
+                if (command === "resource") {
+                    arguments[1].$children[0].show(); // 打开二级下拉框
+                    return;
                 }
+                const [type, lang] = command.split(",");
                 window.open(`editor.html?type=${type}&lang=${lang || "typescript"}`);
             },
             onImport(file) {
