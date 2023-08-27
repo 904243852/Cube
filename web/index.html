@@ -40,7 +40,7 @@
             </h3>
             <el-card>
                 <el-row style="border-bottom: 1px solid #DCDFE6; padding-bottom: 10px;">
-                    <el-dropdown @command="onCreate" placement="bottom-start" trigger="click" :hide-on-click="false" style="top: 1px;">
+                    <el-dropdown @command="onCreate" placement="bottom-start" trigger="click" :hide-on-click="false" style="top: 0.2px;">
                         <el-button icon="el-icon-plus">New</el-button>
                         <el-dropdown-menu slot="dropdown">
                             <el-dropdown-item command="controller">Controller</el-dropdown-item>
@@ -48,7 +48,7 @@
                             <el-dropdown-item command="crontab">Crontab</el-dropdown-item>
                             <el-dropdown-item command="module">Module</el-dropdown-item>
                             <el-dropdown-item command="template,html" divided>Template(Html)</el-dropdown-item>
-                            <el-dropdown-item command="resource" divided>
+                            <el-dropdown-item divided>
                                 <el-dropdown @command="onCreate" placement="right-start" trigger="click">
                                     <span class="el-dropdown-link">
                                         Resource<i class="el-icon-arrow-right el-icon--right"></i>
@@ -247,11 +247,11 @@
                 this.onFetch();
             },
             onCreate(command) {
-                if (!command) {
+                if (arguments[1].$children[0]) {
+                    arguments[1].$children[0].show(); // 如果存在二级下拉框，则打开二级下拉框
                     return;
                 }
-                if (command === "resource") {
-                    arguments[1].$children[0].show(); // 打开二级下拉框
+                if (!command) {
                     return;
                 }
                 const [type, lang] = command.split(",");

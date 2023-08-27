@@ -189,7 +189,7 @@
             
             // 设置 Editor 的光标位置
             setEditorFocus(editor, selection) {
-                if (!selection) {
+                if (!selection || !Object.keys(selection).length) {
                     return;
                 }
                 if (typeof selection.endLineNumber === "number" && typeof selection.endColumn === "number") {

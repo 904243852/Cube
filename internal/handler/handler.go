@@ -13,7 +13,7 @@ import (
 	"strconv"
 )
 
-func RunHandlers(web *embed.FS) {
+func InitHandle(web *embed.FS) {
 	http.HandleFunc("/source", HandleSource)
 
 	http.HandleFunc("/service/", HandleService)

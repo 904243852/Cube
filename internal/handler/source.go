@@ -114,16 +114,16 @@ func handleSourcePost(r *http.Request) error {
 
 		// 校验类型
 		if ok, _ := regexp.MatchString("^(module|controller|daemon|crontab|template|resource)$", source.Type); !ok {
-			return errors.New("the type of the source is required. It must be module, controller, daemon, crontab, template or resource")
+			return errors.New("type of source is required, it must be module, controller, daemon, crontab, template or resource")
 		}
 		// 校验名称
 		if source.Type == "module" {
 			if ok, _ := regexp.MatchString("^(node_modules/)?\\w{2,32}$", source.Name); !ok {
-				return errors.New("the name of the module is required. It must be a letter, number or underscore with a length of 2 to 32. It can also start with 'node_modules/'")
+				return errors.New("name of module is required, it must be a letter, number or underscore with a length of 2 to 32, it can also start with 'node_modules/'")
 			}
 		} else {
 			if ok, _ := regexp.MatchString("^\\w{2,32}$", source.Name); !ok {
-				return errors.New("The name of the " + source.Type + " is required. It must be a letter, number, or underscore with a length of 2 to 32.")
+				return errors.New("name of " + source.Type + " is required, it must be a letter, number, or underscore with a length of 2 to 32")
 			}
 		}
 
@@ -181,11 +181,11 @@ func handleSourceDelete(r *http.Request) error {
 	r.ParseForm()
 	name := r.Form.Get("name")
 	if name == "" {
-		return errors.New("the parameter name is required")
+		return errors.New("parameter name is required")
 	}
 	stype := r.Form.Get("type")
 	if stype == "" {
-		return errors.New("the parameter type is required")
+		return errors.New("parameter type is required")
 	}
 
 	res, err := Db.Exec("delete from source where name = ? and type = ?", name, stype)
@@ -193,7 +193,7 @@ func handleSourceDelete(r *http.Request) error {
 		return err
 	}
 	if count, _ := res.RowsAffected(); count == 0 {
-		return errors.New("the source is not found")
+		return errors.New("source does not existed")
 	}
 
 	// 删除路由
@@ -224,7 +224,7 @@ func handleSourcePatch(r *http.Request) error {
 			return err
 		}
 		if count > 0 {
-			return errors.New("the url is already existed")
+			return errors.New("url already existed")
 		}
 	}
 
@@ -234,7 +234,7 @@ func handleSourcePatch(r *http.Request) error {
 		return err
 	}
 	if count, _ := res.RowsAffected(); count == 0 {
-		return errors.New("the source is not found")
+		return errors.New("source does not existed")
 	}
 
 	// 更新路由
@@ -251,7 +251,7 @@ func handleSourcePatch(r *http.Request) error {
 				RunDaemons(source.Name)
 			}
 			if Cache.Daemons[source.Name] != nil && source.Status == "false" {
-				Cache.Daemons[source.Name].Interrupt("Daemon stopped.")
+				Cache.Daemons[source.Name].Interrupt("Daemon stopped")
 			}
 		}
 	}
