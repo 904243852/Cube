@@ -2,23 +2,24 @@ package handler
 
 import (
 	"cube/internal"
+	"cube/internal/config"
 	. "cube/internal/util"
 	"embed"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/dop251/goja"
 	"io/fs"
 	"net/http"
-	"net/url"
-	"strconv"
 )
 
 func InitHandle(web *embed.FS) {
-	http.HandleFunc("/source", HandleSource)
-
+	// 运行态
 	http.HandleFunc("/service/", HandleService)
-
 	http.HandleFunc("/resource/", HandleResource)
+
+	// 开发态
+	http.HandleFunc("/source", authenticate(HandleSource))
 
 	fileList, _ := fs.Sub(web, "web")
 	http.Handle("/", http.FileServer(http.FS(fileList)))
@@ -64,23 +65,19 @@ func toError(w http.ResponseWriter, err error) {
 	})
 }
 
-type QueryParams struct {
-	url.Values
-}
+func authenticate(next func(w http.ResponseWriter, r *http.Request)) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if config.IdeAuthorization == "" {
+			next(w, r)
+			return
+		}
 
-func (p *QueryParams) GetOrDefault(key string, defaultValue string) string {
-	if value := p.Get(key); value != "" {
-		return value
-	}
-	return defaultValue
-}
+		if ("Basic " + base64.StdEncoding.EncodeToString([]byte(config.IdeAuthorization))) == r.Header.Get("Authorization") {
+			next(w, r)
+			return
+		}
 
-func (p *QueryParams) GetIntOrDefault(key string, defaultValue int) int {
-	if !p.Has(key) {
-		return defaultValue
+		w.Header().Set("WWW-Authenticate", "Basic")
+		w.WriteHeader(http.StatusUnauthorized)
 	}
-	if value, err := strconv.Atoi(p.Get(key)); err == nil {
-		return value
-	}
-	return defaultValue
 }

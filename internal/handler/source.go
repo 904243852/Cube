@@ -3,6 +3,7 @@ package handler
 import (
 	. "cube/internal"
 	"cube/internal/model"
+	"cube/internal/util"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -51,7 +52,7 @@ func handleSourceGet(w http.ResponseWriter, r *http.Request) (interface{}, bool,
 	}
 
 	// 解析 URL 入参
-	p := &QueryParams{r.URL.Query()}
+	p := &util.QueryParams{Values: r.URL.Query()}
 	name, stype := p.Get("name"), p.GetOrDefault("type", "%")
 	from, size := p.GetIntOrDefault("from", 0), p.GetIntOrDefault("size", 10)
 	sort := p.Get("sort")

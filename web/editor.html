@@ -46,7 +46,7 @@
     <div id="container"></div>
     <div id="btn">&#60082</div>
 
-    <script src="https://cdn.bootcdn.net/ajax/libs/typescript/5.0.4/typescript.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/typescript/5.2.2/typescript.min.js"></script>
 
     <script src="https://cdn.bootcdn.net/ajax/libs/sweetalert/2.1.2/sweetalert.min.js"></script>
 
@@ -186,7 +186,7 @@
 
                 return editor;
             },
-            
+
             // 设置 Editor 的光标位置
             setEditorFocus(editor, selection) {
                 if (!selection || !Object.keys(selection).length) {
@@ -205,7 +205,7 @@
                 }
                 editor.focus();
             },
-            
+
             // 注册 Editor 快捷键
             setEditorShortcutKeys(editor, input) {
                 document.onkeydown = function (e) {
@@ -223,7 +223,7 @@
                                 },
                                 fileName: `${input.name || "noname"}.ts`,
                             })?.outputText;
-    
+
                         const onSourceSaving = function (name) {
                             fetch("source", {
                                 method: "POST",

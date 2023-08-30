@@ -10,6 +10,7 @@ var (
 	ServerKey        string
 	ServerCert       string
 	ClientCertVerify bool
+	IdeAuthorization string
 )
 
 func init() {
@@ -21,6 +22,7 @@ func init() {
 	flag.StringVar(&ServerKey, "k", "server.key", "SSL key file.")
 	flag.StringVar(&ServerCert, "c", "server.crt", "SSL cert file.")
 	flag.BoolVar(&ClientCertVerify, "v", false, "Enable client cert verification.")
+	flag.StringVar(&IdeAuthorization, "a", "", "<username:password> for ide authorization verification.")
 
 	// 在定义命令行参数之后，调用 Parse 方法对所有命令行参数进行解析
 	flag.Parse()
