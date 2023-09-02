@@ -3,9 +3,8 @@ package handler
 import (
 	"cube/internal"
 	"cube/internal/config"
-	. "cube/internal/util"
+	"cube/internal/util"
 	"embed"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"github.com/dop251/goja"
@@ -49,10 +48,10 @@ func toError(w http.ResponseWriter, err error) {
 	code, message := "1", err.Error() // 错误信息默认包含了异常信息和调用栈
 	if e, ok := err.(*goja.Exception); ok {
 		if o, ok := e.Value().Export().(map[string]interface{}); ok {
-			if m, ok := ExportMapValue(o, "message", "string"); ok {
+			if m, ok := util.ExportMapValue(o, "message", "string"); ok {
 				message = m.(string) // 获取 throw 对象中的 message 和 code 属性，作为失败响应的错误信息和错误码
 			}
-			if c, ok := ExportMapValue(o, "code", "string"); ok {
+			if c, ok := util.ExportMapValue(o, "code", "string"); ok {
 				code = c.(string)
 			}
 		}
@@ -67,17 +66,21 @@ func toError(w http.ResponseWriter, err error) {
 
 func authenticate(next func(w http.ResponseWriter, r *http.Request)) func(w http.ResponseWriter, r *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// 如果未配置用户名密码，直接执行
 		if config.IdeAuthorization == "" {
 			next(w, r)
 			return
 		}
 
-		if ("Basic " + base64.StdEncoding.EncodeToString([]byte(config.IdeAuthorization))) == r.Header.Get("Authorization") {
+		// 校验用户名密码
+		a := &util.DigestAuth{}
+		if a.VerifyWithMd5(r.Header.Get("Authorization"), r.Method, config.IdeAuthorization) {
 			next(w, r)
 			return
 		}
 
-		w.Header().Set("WWW-Authenticate", "Basic")
+		// 用户名密码校验不通过
+		w.Header().Set("WWW-Authenticate", "Digest nonce=\""+a.Random(16)+"\", opaque=\""+a.Random(16)+"\", qop=\"auth\"")
 		w.WriteHeader(http.StatusUnauthorized)
 	}
 }

@@ -101,7 +101,7 @@
                                     <el-descriptions-item label="Language">
                                         {{ scope.row.lang }}
                                     </el-descriptions-item>
-                                    <el-descriptions-item label="Url" v-if='["controller", "resource"].indexOf(scope.row.type) != -1' :span="2">
+                                    <el-descriptions-item label="Url" v-if='!!~["controller", "resource"].indexOf(scope.row.type)' :span="2">
                                         <el-link type="primary" :href='({ controller: "/service/", resource: "/resource/" }[scope.row.type] || "") + scope.row.url'>
                                             {{ ({ controller: "/service/", resource: "/resource/" }[scope.row.type] || "") + scope.row.url }}
                                         </el-link>
@@ -168,7 +168,7 @@
                             <el-option label="Delete" value="DELETE"></el-option>
                         </el-select>
                     </el-form-item>
-                    <el-form-item label="Url" v-if='["controller", "resource"].indexOf(record.type) != -1'>
+                    <el-form-item label="Url" v-if='!!~["controller", "resource"].indexOf(record.type)'>
                         <el-input v-model="record.url">
                             <template slot="prepend">
                                 {{ { controller: "/service/", resource: "/resource/" }[record.type] }}

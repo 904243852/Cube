@@ -82,7 +82,7 @@
                     lang = params.get("lang") || { template: "text", resource: "text" }[type] || "typescript";
 
                 // 校验类型和名称
-                if (["module", "controller", "daemon", "crontab", "template", "resource"].indexOf(type) === -1) {
+                if (!~["module", "controller", "daemon", "crontab", "template", "resource"].indexOf(type)) {
                     alert("The source type must be module, controller, daemon, crontab, template or resource.", "error");
                 }
                 if (name && !(type === "module" && /^(node_modules\/)?\w{2,32}$/.test(name) || /^\w{2,32}$/.test(name))) {
