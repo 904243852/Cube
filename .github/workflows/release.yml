@@ -79,7 +79,7 @@ jobs:
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: cube-upx-latest-windows-amd64.zip* cube-latest-windows-amd64.tar.gz*
+          file: cube*-latest-windows-amd64*
           tag: latest
           release_name: latest
           overwrite: true
