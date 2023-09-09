@@ -11,5 +11,6 @@ func ExportGojaValue(value goja.Value) interface{} {
 			return o.Get("buffer").Export().(goja.ArrayBuffer).Bytes()
 		}
 	}
+
 	return value.Export()
 }

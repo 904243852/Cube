@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"cube/internal/builtin"
 	"cube/internal/module"
 	"database/sql"
 	"errors"
@@ -146,19 +147,22 @@ func CreateWorker(program *goja.Program) *Worker {
 
 	runtime.Set("exports", runtime.NewObject())
 
-	runtime.Set("ServiceResponse", CreateGojaServiceResponseConstructor(runtime))
-
 	runtime.SetFieldNameMapper(goja.UncapFieldNameMapper()) // 该转换器会将 go 对象中的属性、方法以小驼峰式命名规则映射到 js 对象中
 
-	runtime.Set("console", module.CreateConsoleClient(runtime))
-
 	runtime.Set("$native", func(name string) (interface{}, error) {
+		// 通过 Set 方法内置的 []byte 类型的变量或方法：
+		// 入参如果是 []byte 类型，可接受 js 中 string 或 Array<number> 类型的变量
+		// 出参如果是 []byte 类型，将会隐式地转换为 js 的 Array<number> 类型的变量（见 goja.objectGoArrayReflect._init() 方法实现，class 为 "Array", prototype 为 ArrayPrototype）
 		factory, ok := module.Factories[name]
 		if ok {
 			return factory(&worker, Db), nil
 		}
-		return nil, errors.New("the module is not found")
+		return nil, errors.New("module is not found: " + name)
 	})
+
+	for name, factory := range builtin.Builtins {
+		runtime.Set(name, factory(runtime))
+	}
 
 	runtime.SetMaxCallStackSize(2048)
 

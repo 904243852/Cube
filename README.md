@@ -316,14 +316,16 @@ Here are some built-in methods and modules.
     }
     ```
 
+- Using buffer.
+    ```typescript
+    const buf = Buffer.from("hello", "utf8")
+    buf // [104, 101, 108, 108, 111]
+    buf.toString("base64") // aGVsbG8=
+    String.fromCharCode(...buf) // hello
+    ```
+
 - Using native module.
     ```typescript
-    // base64
-    const base64 = $native("base64")
-    base64.encode("hello") // aGVsbG8=
-    base64.decode("aGVsbG8=") // [104, 101, 108, 108, 111]
-    String.fromCharCode(...base64.decode("aGVsbG8=")) // hello
-
     // bqueue or pipe
     const b = $native("pipe")("default")
     //const b = $native("bqueue")(99)
@@ -569,11 +571,13 @@ Here are some built-in methods and modules.
         ```bash
         ffmpeg \
             -i a.mp4 \
-            -vcodec libx264 -r 25 -b 800000 \ # We need encode with libx264. Otherwise, using flv.js to pull the stream may cause an error: "DemuxException: type = CodecUnsupported, info = Flv: Unsupported codec in video frame: 2"
+            -vcodec libx264 -r 25 -b:v 800000 \
             -acodec aac -ac 2 -ar 44100 -ab 128k \
             -af "loudnorm" \
-            a.flv
+            -vf "scale=-1:720" \
+            -y a.flv
         ```
+        > We need encode with libx264. Otherwise, using flv.js to pull the stream may cause an error: "DemuxException: type = CodecUnsupported, info = Flv: Unsupported codec in video frame: 2"
     2. Create a controller with url `/service/foo`. 
         ```typescript
         export default function (ctx: ServiceContext) {
@@ -672,7 +676,7 @@ Here are some built-in methods and modules.
                 subject: data.match(/^Subject: (.*)$/m)?.[1],
                 from: data.match(/^From: .*(<.*>)$/m)?.[1],
                 to: data.match(/^To: .*(<.*>)$/m)?.[1],
-                body: String.fromCharCode(...$native("base64").decode(data.match(/\n\n(.*)/m)?.[1] || ""))
+                body: Buffer.from(data.match(/\n\n(.*)/m)?.[1] || "", "base64").toString()
             }
         }
         ```
