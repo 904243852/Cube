@@ -20,21 +20,21 @@ jobs:
           sudo apt-get install -y upx
       - name: Build
         run: |
-          go build -ldflags "-s -w" -o cube .
+          go build -ldflags "-s -w" -o .out .
       - name: Compress
         run: |
-          upx -9 -q -o cube-upx cube
+          upx -9 -q -o cube .out
       - name: Package
         run: |
-          tar -zcvf cube-upx-latest-linux-amd64.tar.gz cube-upx README.md LICENSE
+          tar -zcvf cube-latest-linux-amd64.tar.gz cube README.md LICENSE
       - name: Checksum
         run: |
-          md5sum cube-upx-latest-linux-amd64.tar.gz | cut -d ' ' -f 1 > cube-upx-latest-linux-amd64.tar.gz.md5
+          md5sum cube-latest-linux-amd64.tar.gz | cut -d ' ' -f 1 > cube-latest-linux-amd64.tar.gz.md5
       - name: Upload
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: cube-upx-latest-linux-amd64.tar.gz*
+          file: cube-latest-linux-amd64.tar.gz*
           tag: latest
           release_name: latest
           overwrite: true
@@ -63,23 +63,21 @@ jobs:
               CXX=x86_64-w64-mingw32-g++
           export GOOS=windows \
               GOARCH=amd64
-          go build -ldflags "-s -w" -o cube.exe .
+          go build -ldflags "-s -w" -o .out .
       - name: Compress
         run: |
-          upx -9 -q -o cube-upx.exe cube.exe
+          upx -9 -q -o cube.exe .out
       - name: Package
         run: |
-          zip cube-upx-latest-windows-amd64.zip cube-upx.exe README.md LICENSE
-          tar -zcvf cube-latest-windows-amd64.tar.gz cube.exe README.md LICENSE
+          zip cube-latest-windows-amd64.zip cube.exe README.md LICENSE
       - name: Checksum
         run: |
-          md5sum cube-upx-latest-windows-amd64.zip | cut -d ' ' -f 1 > cube-upx-latest-windows-amd64.zip.md5
-          md5sum cube-latest-windows-amd64.tar.gz | cut -d ' ' -f 1 > cube-latest-windows-amd64.tar.gz.md5
+          md5sum cube-latest-windows-amd64.zip | cut -d ' ' -f 1 > cube-latest-windows-amd64.zip.md5
       - name: Upload
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: cube*-latest-windows-amd64*
+          file: cube-latest-windows-amd64.zip*
           tag: latest
           release_name: latest
           overwrite: true
