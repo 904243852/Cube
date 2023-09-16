@@ -16,8 +16,8 @@ type ServiceContextReader struct {
 	reader *bufio.Reader
 }
 
-func (s *ServiceContextReader) Read(count int) ([]byte, error) {
-	buf := make([]byte, count)
+func (s *ServiceContextReader) Read(size int) ([]byte, error) {
+	buf := make([]byte, size)
 	_, err := s.reader.Read(buf)
 	if err == io.EOF {
 		return nil, nil
@@ -25,12 +25,12 @@ func (s *ServiceContextReader) Read(count int) ([]byte, error) {
 	return buf, err
 }
 
-func (s *ServiceContextReader) ReadByte() (interface{}, error) {
+func (s *ServiceContextReader) ReadByte() (int, error) {
 	b, err := s.reader.ReadByte() // 如果是 chunk 传输，该方法不会返回 chunk size 和 "\r\n"，而是按 chunk data 到达顺序依次读取每个 chunk data 中的每个字节，如果已到达的 chunk 已读完且下一个 chunk 未到达，该方法将阻塞
 	if err == io.EOF {
 		return -1, nil
 	}
-	return b, err
+	return int(b), err
 }
 
 type ServiceContext struct {
@@ -146,7 +146,7 @@ func (s *ServiceContext) GetReader() *ServiceContextReader {
 func (s *ServiceContext) GetPusher() (http.Pusher, error) {
 	pusher, ok := s.responseWriter.(http.Pusher)
 	if !ok {
-		return nil, errors.New("the server side push is not supported")
+		return nil, errors.New("server side push is not supported")
 	}
 	return pusher, nil
 }
@@ -166,6 +166,19 @@ func (s *ServiceContext) Flush() error {
 	}
 	flusher.Flush() // 此操作将自动设置响应头 Transfer-Encoding: chunked，并发送一个 chunk
 	return nil
+}
+
+func (s *ServiceContext) ResetTimeout(timeout int) {
+	// For a Timer created with NewTimer, Reset should be invoked only on stopped or expired timers with drained channels.
+	if !s.timer.Stop() {
+		select {
+		case <-s.timer.C: // try to drain the channel
+		default:
+		}
+	}
+	if timeout > 0 {
+		_ = s.timer.Reset(time.Duration(timeout) * time.Millisecond) // Reset 的返回值：true 表示定时器未超时，false 表示定时器已经停止或超时
+	}
 }
 
 func CreateServiceContext(r *http.Request, w http.ResponseWriter, t *time.Timer, v *map[string]string) *ServiceContext {

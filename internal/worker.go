@@ -2,7 +2,7 @@ package internal
 
 import (
 	"cube/internal/builtin"
-	"cube/internal/module"
+	m "cube/internal/module"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -42,7 +42,7 @@ func (w *Worker) ClearHandle() {
 			(*l).Close()
 			continue
 		}
-		if l, ok := v.(*module.LockClient); ok {
+		if l, ok := v.(*m.LockClient); ok {
 			(*l).Unlock()
 			continue
 		}
@@ -50,7 +50,7 @@ func (w *Worker) ClearHandle() {
 			(*t).Rollback()
 			continue
 		}
-		if c, ok := v.(*module.EventChannel); ok {
+		if c, ok := v.(*m.EventChannel); ok {
 			close((*c).C)
 			(*c).Closed = true
 			continue
@@ -153,7 +153,7 @@ func CreateWorker(program *goja.Program) *Worker {
 		// 通过 Set 方法内置的 []byte 类型的变量或方法：
 		// 入参如果是 []byte 类型，可接受 js 中 string 或 Array<number> 类型的变量
 		// 出参如果是 []byte 类型，将会隐式地转换为 js 的 Array<number> 类型的变量（见 goja.objectGoArrayReflect._init() 方法实现，class 为 "Array", prototype 为 ArrayPrototype）
-		factory, ok := module.Factories[name]
+		factory, ok := m.Factories[name]
 		if ok {
 			return factory(&worker, Db), nil
 		}

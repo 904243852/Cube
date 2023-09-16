@@ -147,7 +147,7 @@ You can create a controller as a http/https service.
     export default function (ctx: ServiceContext): ServiceResponse {
         // return new Uint8Array([104, 101, 108, 108, 111]) // response with body "hello"
         return new ServiceResponse(500, {
-            "Content-Type": "text/plain"
+            "Content-Type": "text/plain",
         }, new Uint8Array([104, 101, 108, 108, 111]))
     }
     ```
@@ -346,41 +346,41 @@ Here are some built-in methods and modules.
     d2.div(d1) // 2
 
     // email
-    const c = $native("email")("smtp.163.com", 465, username, password)
-    c.send(["zhangsan@abc.com"], "greeting", "hello, world")
-    c.send(["zhangsan@abc.com"], "greeting", "hello, world", [{
+    const emailc = $native("email")("smtp.163.com", 465, username, password)
+    emailc.send(["zhangsan@abc.com"], "greeting", "hello, world")
+    emailc.send(["zhangsan@abc.com"], "greeting", "hello, world", [{
         name: "hello.txt",
         contentType: "text/plain",
-        base64: "aGVsbG8="
+        base64: "aGVsbG8=",
     }])
 
     // crypto
-    const crypto = $native("crypto")
+    const cryptoc = $native("crypto")
     // hash
-    crypto.createHash("md5").sum("hello, world").map(c => c.toString(16).padStart(2, "0")).join("") // "e4d7f1b4ed2e42d15898f4b27b019da4"
+    cryptoc.createHash("md5").sum("hello, world").map(c => c.toString(16).padStart(2, "0")).join("") // "e4d7f1b4ed2e42d15898f4b27b019da4"
     // hmac
-    crypto.createHmac("sha1").sum("hello, world", "123456").map(c => c.toString(16).padStart(2, "0")).join("") // "9a231f1dd39a4ff6ea778a5640d1498794f8a9f8"
+    cryptoc.createHmac("sha1").sum("hello, world", "123456").map(c => c.toString(16).padStart(2, "0")).join("") // "9a231f1dd39a4ff6ea778a5640d1498794f8a9f8"
     // rsa
     // privateKey and publicKey mentioned is PKCS#1 format
-    const rsa = crypto.createRsa(),
+    const rsa = cryptoc.createRsa(),
         { privateKey, publicKey } = rsa.generateKey();
     String.fromCharCode(
         ...rsa.decrypt(
             rsa.encrypt("hello, world", publicKey),
-            privateKey
+            privateKey,
         )
     ) // "hello, world"
     rsa.verifyPss(
         "hello, world",
         rsa.signPss("hello, world", privateKey, "sha256"),
         publicKey,
-        "sha256"
+        "sha256",
     ) // true
 
     // file
-    const file = $native("file")
-    file.write("greeting.txt", "hello, world")
-    String.fromCharCode(...file.read("greeting.txt")) // "hello, world"
+    const filec = $native("file")
+    filec.write("greeting.txt", "hello, world")
+    String.fromCharCode(...filec.read("greeting.txt")) // "hello, world"
 
     // http
     const { status, header, data } = $native("http")({
@@ -394,14 +394,14 @@ Here are some built-in methods and modules.
     data.toString() // "<html>..."
 
     // image
-    const image = $native("image")
-    const img0 = image.new(100, 200), // create a picture with width 100 and height 200
-        img1 = image.parse($native("http")().request("GET", "https://www.baidu.com/img/flexible/logo/plus_logo_web_2.png").data.toBytes()) // read a picture from network
+    const imagec = $native("image")
+    const img0 = imagec.new(100, 200), // create a picture with width 100 and height 200
+        img1 = imagec.parse($native("http")().request("GET", "https://www.baidu.com/img/flexible/logo/plus_logo_web_2.png").data.toBytes()) // read a picture from network
     img0.toBytes() // convert this picture to a byte array
 
     // template
     const content = $native("template")("greeting", { // read template greeting.tpl and render with input
-        name: "this is name"
+        name: "this is name",
     })
     ```
 
@@ -438,19 +438,19 @@ Here are some built-in methods and modules.
             <script>
                 const router = new VueRouter({
                     mode: "hash"
-                });
+                })
                 router.beforeEach((to, from, next) => {
                     if (to.matched.length) { // 当前路由已匹配上
-                        next(); // 直接渲染当前路由
-                        return;
+                        next() // 直接渲染当前路由
+                        return
                     }
                     router.addRoute({ // 动态添加路由
                         path: to.path,
-                        component: httpVueLoader(`../resource${to.path === "/" ? "/index" : to.path}.vue`) // 远程加载组件
-                    });
-                    next(to.path); // 重新进入 beforeEach 方法
-                });
-                new Vue({ router }).$mount("#container");
+                        component: httpVueLoader(`../resource${to.path === "/" ? "/index" : to.path}.vue`), // 远程加载组件
+                    })
+                    next(to.path) // 重新进入 beforeEach 方法
+                })
+                new Vue({ router }).$mount("#container")
             </script>
         </body>
         </html>
@@ -466,7 +466,7 @@ Here are some built-in methods and modules.
             module.exports = {
                 data: function() {
                     return {
-                        name: "world"
+                        name: "world",
                     }
                 }
             }
@@ -483,7 +483,7 @@ Here are some built-in methods and modules.
         // http://127.0.0.1:8090/editor.html?name=index
         export default function (ctx: ServiceContext): ServiceResponse | Uint8Array | any {
             return $native("template")("index", {
-                title: "this is title"
+                title: "this is title",
             })
         }
         ```
@@ -512,7 +512,7 @@ Here are some built-in methods and modules.
         <script src="//cdn.bootcdn.net/ajax/libs/vue/2.7.14/vue.js"></script>
         <script src="//unpkg.com/element-ui"></script>
         <script>
-            new Vue({ el: "#app" });
+            new Vue({ el: "#app" })
         </script>
         </html>
         ```
@@ -538,15 +538,15 @@ Here are some built-in methods and modules.
         export default function (ctx: ServiceContext) {
             const name = "a.mp4"
 
-            const client = $native("file"),
-                size = client.stat(name).size()
+            const filec = $native("file"),
+                size = filec.stat(name).size()
 
             const range = ctx.getHeader().Range
             if (!range) {
                 return new ServiceResponse(200, {
                     "Accept-Ranges": "bytes",
                     "Content-Length": size + "",
-                    "Content-Type": "video/mp4"
+                    "Content-Type": "video/mp4",
                 })
             }
 
@@ -555,12 +555,12 @@ Here are some built-in methods and modules.
                 start = Number(ranges[0]),
                 end = Math.min(Number(ranges[1]) || (start + slice - 1), size - 1)
             
-            const buf = client.readRange(name, start, end - start + 1) // slice the mp4 file from [start, end + 1)
+            const buf = filec.readRange(name, start, end - start + 1) // slice the mp4 file from [start, end + 1)
 
             return new ServiceResponse(206, {
                 "Content-Range": `bytes ${start}-${end}/${size}`,
                 "Content-Length": end - start + 1 + "",
-                "Content-Type": "video/mp4"
+                "Content-Type": "video/mp4",
             }, buf)
         }
         ```
@@ -587,20 +587,20 @@ Here are some built-in methods and modules.
             ctx.write(new Uint8Array(buf.slice(0, 9 + 4)))
             ctx.flush()
 
-            let i = 9 + 4;
+            let i = 9 + 4
             while (i < buf.length) {
                 const dataSize = (buf[i + 1] << 16) + (buf[i + 2] << 8) + buf[i + 3],
                     tagSize = 11 + dataSize,
-                    previousTagSize = (buf[i + tagSize] << 24) + (buf[i + tagSize + 1] << 16) + (buf[i + tagSize + 2] << 8) + buf[i + tagSize + 3];
+                    previousTagSize = (buf[i + tagSize] << 24) + (buf[i + tagSize + 1] << 16) + (buf[i + tagSize + 2] << 8) + buf[i + tagSize + 3]
                 if (tagSize != previousTagSize) {
-                    throw new Error("Invalid previous tag size: " + tagSize + ", expected: " + previousTagSize);
+                    throw new Error("Invalid previous tag size: " + tagSize + ", expected: " + previousTagSize)
                 }
 
                 // send a chunk: flv tag(each video tag is a frame of the video, total 11 + dataSize bytes) + previousTagSize(4 bytes)
                 ctx.write(new Uint8Array(buf.slice(i, i + tagSize + 4)))
                 ctx.flush()
 
-                i = i + tagSize + 4;
+                i = i + tagSize + 4
             }
         }
         ```
@@ -613,11 +613,11 @@ Here are some built-in methods and modules.
                 const flvPlayer = flvjs.createPlayer({
                     type: "flv",
                     url: "/service/foo",
-                    enableWorker: true // https://github.com/bilibili/flv.js/issues/322
-                });
-                flvPlayer.attachMediaElement(document.getElementById("videoElement"));
-                flvPlayer.load();
-                flvPlayer.play();
+                    enableWorker: true, // https://github.com/bilibili/flv.js/issues/322
+                })
+                flvPlayer.attachMediaElement(document.getElementById("videoElement"))
+                flvPlayer.load()
+                flvPlayer.play()
             }
         </script>
         ```
@@ -627,45 +627,45 @@ Here are some built-in methods and modules.
     1. Create a daemon.
         ```typescript
         export default function (ctx: ServiceContext) {
-            const listener = $native("socket").listen("tcp", 25)
+            const tcpd = $native("socket").listen("tcp", 25)
             while(true) {
-                const conn = listener.accept()
-                console.debug(toEmail(readData(conn)))
+                const c = tcpd.accept()
+                console.debug(toEmail(readData(c)))
             }
         }
 
-        function readData(conn) {
-            conn.write("220 My Mail Sever\n")
+        function readData(connection) {
+            connection.write("220 My Mail Sever\n")
 
             let data = "",
-                s = String.fromCharCode(...conn.readLine())
+                s = String.fromCharCode(...connection.readLine())
             while (s.length) {
                 switch (s.substring(0, 4).replace(/[\r\n]*$/, "")) {
                     case "HELO":
                     case "EHLO":
-                        conn.write("250 OK\n")
+                        connection.write("250 OK\n")
                         break
                     case "MAIL":
-                        conn.write("250 OK\n")
+                        connection.write("250 OK\n")
                         break
                     case "RCPT":
-                        conn.write("250 OK\n")
+                        connection.write("250 OK\n")
                         break
                     case "DATA":
-                        conn.write("354 OK\n")
+                        connection.write("354 OK\n")
                         break
                     case ".":
-                        conn.write("250 OK\n")
+                        connection.write("250 OK\n")
                         break
                     case "QUIT":
-                        conn.write("221 Bye\n")
-                        conn.close()
+                        connection.write("221 Bye\n")
+                        connection.close()
                         return data
                     default:
                         data += s
                         break
                 }
-                s = String.fromCharCode(...conn.readLine())
+                s = String.fromCharCode(...connection.readLine())
             }
             return null
         }
@@ -676,7 +676,7 @@ Here are some built-in methods and modules.
                 subject: data.match(/^Subject: (.*)$/m)?.[1],
                 from: data.match(/^From: .*(<.*>)$/m)?.[1],
                 to: data.match(/^To: .*(<.*>)$/m)?.[1],
-                body: Buffer.from(data.match(/\n\n(.*)/m)?.[1] || "", "base64").toString()
+                body: Buffer.from(data.match(/\n\n(.*)/m)?.[1] || "", "base64").toString(),
             }
         }
         ```

@@ -9,38 +9,38 @@ import (
 func init() {
 	Builtins["ServiceResponse"] = func(runtime *goja.Runtime) interface{} {
 		return func(call goja.ConstructorCall) *goja.Object { // 内置构造器不能同时返回 error 类型，否则将会失效
-			a0, ok := call.Argument(0).Export().(int64)
-			if !ok {
-				panic("invalid argument status, not a int")
+			output := &ServiceResponse{}
+
+			if v, ok := call.Argument(0).Export().(int64); ok {
+				output.status = int(v)
+			} else {
+				panic(runtime.NewTypeError("invalid status: not a number"))
 			}
-			a1, ok := call.Argument(1).Export().(map[string]interface{})
-			if !ok {
-				panic("invalid argument header, not a map")
-			}
-			header := make(map[string]string, len(a1))
-			for k, v := range a1 {
-				if s, ok := v.(string); !ok {
-					panic("invalid argument " + k + ", not a string")
-				} else {
-					header[k] = s
-				}
-			}
-			data := []byte(nil)
-			if a2 := util.ExportGojaValue(call.Argument(2)); a2 != nil {
-				if s, ok := a2.(string); !ok {
-					if data, ok = a2.([]byte); !ok {
-						panic("the data should be a string or a byte array")
+
+			if a := call.Argument(1).Export(); a != nil { // header 可以传 null
+				if m, ok := a.(map[string]interface{}); ok {
+					output.header = make(map[string]string, len(m))
+					for k, v := range m {
+						if s, ok := v.(string); !ok {
+							panic(runtime.NewTypeError("invalid header " + k + ": not a string"))
+						} else {
+							output.header[k] = s
+						}
 					}
 				} else {
-					data = []byte(s)
+					panic(runtime.NewTypeError("invalid headers: not a map"))
 				}
 			}
-			i := &ServiceResponse{
-				status: int(a0),
-				header: header,
-				data:   data,
+
+			if v := util.ExportGojaValue(call.Argument(2)); v != nil {
+				if s, ok := v.(string); ok {
+					output.data = []byte(s)
+				} else if output.data, ok = v.([]byte); !ok {
+					panic(runtime.NewTypeError("data should be a string or a byte array"))
+				}
 			}
-			iv := runtime.ToValue(i).(*goja.Object)
+
+			iv := runtime.ToValue(output).(*goja.Object)
 			iv.SetPrototype(call.This.Prototype())
 			return iv
 		}

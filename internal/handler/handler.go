@@ -28,12 +28,12 @@ func toSuccess(w http.ResponseWriter, data interface{}) {
 	switch v := data.(type) {
 	case string:
 		fmt.Fprintf(w, "%s", v)
-	case []uint8: // byte 即 uint8，通过 goja.Runtime.Set(...) 方法写入的类型为 []byte 的变量或方法返回值（见 goja.Runtime.ToValue(...) 方法实现：变量因匹配 reflect.Slice 类型从而被包装成 goja.objectGoSliceReflect 对象），在调用 goja.Value.Export() 后将会被转换成为 []uint8 类型（见 goja.Object.Export() 方法实现：变量调用 goja.objectGoReflect.origValue.Interface() 反射方法从而被还原成了原始 []uint8 类型）
+	case []uint8: // []byte 等价于 []uint8（即 type byte = uint8），通过 goja.Runtime.Set 方法写入的类型为 []byte 的变量或方法返回值（见 goja.Runtime.ToValue 方法的实现：通过 reflect.ValueOf 方法获得变量的真实类型为 reflect.Slice，然后被包装成 goja.objectGoSliceReflect 对象），在调用 goja.Value.Export 方法后将会被转换成为 []uint8 类型（见 goja.Object.Export 方法的实现：变量调用 goja.objectGoReflect.origValue.Interface 反射方法从而被还原成了原始 []uint8 类型）
 		w.Write(v)
 	case builtin.Buffer:
-		w.Write(([]byte)(v))
+		w.Write(v)
 	case *builtin.Buffer:
-		w.Write(([]byte)(*v))
+		w.Write(*v)
 	case *builtin.ServiceResponse: // 自定义响应
 		builtin.ResponseWithServiceResponse(w, v)
 	default: // map[string]interface[]

@@ -9,7 +9,7 @@
     <style>
         html, body {
             height: 100%;
-            margin: 0px;
+            margin: 0;
             background-color: #f0f2f5;
         }
         .el-table__header .cell {
@@ -40,7 +40,7 @@
             </h3>
             <el-card>
                 <el-row style="border-bottom: 1px solid #DCDFE6; padding-bottom: 10px;">
-                    <el-dropdown @command="onCreate" placement="bottom-start" trigger="click" :hide-on-click="false" style="top: 0.8px;">
+                    <el-dropdown @command="onCreate" placement="bottom-start" trigger="click" :hide-on-click="false" style="top: 0.04em;">
                         <el-button icon="el-icon-plus">New</el-button>
                         <el-dropdown-menu slot="dropdown">
                             <el-dropdown-item command="controller">Controller</el-dropdown-item>
@@ -359,7 +359,7 @@
             },
             onRowStatusSwitch(record) {
                 const that = this,
-                    status = record.status == "true" ? "false" : "true";
+                    status = record.status === "true" ? "false" : "true";
                 fetch("source", {
                     method: "PATCH",
                     body: JSON.stringify({
@@ -370,7 +370,7 @@
                     if (r.code === "0") {
                         that.$message({
                             type: "success",
-                            message: (status == "true" ? "Run" : "Stop") + " succeeded.",
+                            message: (status === "true" ? "Run" : "Stop") + " succeeded.",
                         });
                         record.status = status;
                     } else {

@@ -25,7 +25,7 @@ func init() {
 type Buffer []byte
 
 func (b *Buffer) ToString(encoding string) (string, error) {
-	return encode(([]byte)(*b), encoding)
+	return encode(*b, encoding)
 }
 
 func encode(input []byte, encoding string) (string, error) {

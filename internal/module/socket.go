@@ -55,12 +55,27 @@ func (s *SocketListener) Accept() (*SocketConn, error) {
 	}, err
 }
 
+func (s *SocketConn) Read(size int) ([]byte, error) {
+	if size == 0 {
+		size = 65535 // 默认块最大长度 65535 字节
+	}
+
+	buf := make([]byte, size)
+
+	n, err := s.reader.Read(buf)
+	if err != nil && err != io.EOF {
+		return nil, err
+	}
+	return buf[:n], nil
+}
+
 func (s *SocketConn) ReadLine() ([]byte, error) {
 	line, err := s.reader.ReadBytes('\n')
-	if err == io.EOF {
-		return nil, nil
+
+	if err != nil && err != io.EOF {
+		return nil, err
 	}
-	return line, err
+	return line, nil
 }
 
 func (s *SocketConn) Write(data []byte) (int, error) {

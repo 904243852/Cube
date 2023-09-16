@@ -34,7 +34,7 @@
             line-height: 40px;
             justify-content: center;
             border-radius: 50%;
-            box-shadow: rgb(0, 0, 0, 0.12) 0px 2px 8px 0px;
+            box-shadow: rgb(0, 0, 0, 0.12) 0 2px 8px 0;
             cursor: pointer;
             background-color: white;
             font-family: codicon;
@@ -90,7 +90,7 @@
                 }
 
                 // 获取代码坐标锚点
-                const groups = window.location.hash.substring(1).match(/(?<startLineNumber>\d*),(?<startColumn>\d*)\-(?<endLineNumber>\d*),(?<endColumn>\d*)/)?.groups,
+                const groups = window.location.hash.substring(1).match(/(?<startLineNumber>\d*),(?<startColumn>\d*)-(?<endLineNumber>\d*),(?<endColumn>\d*)/)?.groups,
                     selection = {
                         ...(groups?.startLineNumber && {
                             startLineNumber: Number(groups.startLineNumber),
@@ -113,7 +113,7 @@
                     experimentalDecorators: true, // 启用实验性的装饰器特性
                     typeRoots: ["."],
                     downlevelIteration: true, // 允许迭代器进行迭代
-                    target: monaco.languages.typescript.ScriptTarget.ESNext, // 启用 ESNext 版本
+                    target: monaco.languages.typescript.ScriptTarget.ES2015, // 启用 ES2015 版本
                     moduleResolution: ts.ModuleResolutionKind.NodeJs, // 指定使用 nodejs 模块解析策略，否则在 import node_modules/* 时无法解析模块
                 });
 
@@ -211,7 +211,7 @@
                 document.onkeydown = function (e) {
                     const keyCode = e.keyCode || e.which || e.charCode,
                         ctrlKey = e.ctrlKey || e.metaKey;
-                    if (ctrlKey && keyCode == 83) { // Ctrl + S
+                    if (ctrlKey && keyCode === 83) { // Ctrl + S
                         const src = editor.getValue(),
                             jsSrc = editor.getModel().getLanguageId() !== "typescript" ? "" : ts.transpileModule(src, {
                                 compilerOptions: {
@@ -220,6 +220,7 @@
                                     inlineSources: true, // 指定进一步将 ts 文件的内容也包含到输出文件中
                                     removeComments: true, // 移除注释
                                     downlevelIteration: true, // 当 target 为 ES5 或 ES3 时，为 for-of、spread 和 destructuring 中的迭代器提供完全支持
+                                    target: ts.ScriptTarget.ES2015, // 指定编译后的 ECMAScript 代码语法版本
                                 },
                                 fileName: `${input.name || "noname"}.ts`,
                             })?.outputText;
@@ -250,7 +251,7 @@
                         }
                         return false;
                     }
-                    if (ctrlKey && keyCode == 48) { // Ctrl + 0
+                    if (ctrlKey && keyCode === 48) { // Ctrl + 0
                         if (input.name) {
                             swal({ title: "Are you sure?", text: "Once deleted, you will not be able to recover this source!", icon: "warning", buttons: true, dangerMode: true }).then(confirm => {
                                 if (confirm) {
@@ -273,7 +274,7 @@
             // 注册保存按钮的点击事件
             setBtnClick(editor) {
                 document.getElementById("btn").onclick = function() {
-                    if (this.innerText == "\uEB74") { // 锁定
+                    if (this.innerText === "\uEB74") { // 锁定
                         editor.updateOptions({ readOnly: false });
                         this.innerText = "\uEAB2"; // 解锁
                         return;

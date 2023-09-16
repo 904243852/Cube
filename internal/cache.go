@@ -54,7 +54,7 @@ func (s *CacheClient) InitRoutes() {
 }
 
 func (s *CacheClient) SetRoute(name string, path string) {
-	s.Routes[name] = regexp.MustCompile("^" + regexp.MustCompile("\\{(.*?)\\}").ReplaceAllString(path, "(?P<$1>.*?)") + "$")
+	s.Routes[name] = regexp.MustCompile("^" + regexp.MustCompile("{(.*?)}").ReplaceAllString(path, "(?P<$1>.*?)") + "$")
 }
 
 func (s *CacheClient) GetRoute(path string) (string, map[string]string) {
