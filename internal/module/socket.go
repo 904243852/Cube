@@ -2,6 +2,7 @@ package module
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -56,13 +57,24 @@ func (s *SocketListener) Accept() (*SocketConn, error) {
 }
 
 func (s *SocketConn) Read(size int) ([]byte, error) {
+	var (
+		buf []byte
+		n   int
+		err error
+	)
+
+	if size < 0 {
+		return nil, errors.New("invalid size: must be greater than or equal to 0")
+	}
 	if size == 0 {
-		size = 65535 // 默认块最大长度 65535 字节
+		buf = make([]byte, 65535) // 默认最大缓存长度 65535 字节
+		n, err = s.reader.Read(buf)
+	}
+	if size > 0 {
+		buf = make([]byte, size)
+		n, err = io.ReadFull(s.reader, buf) // 强制读取 size 大小的字节
 	}
 
-	buf := make([]byte, size)
-
-	n, err := s.reader.Read(buf)
 	if err != nil && err != io.EOF {
 		return nil, err
 	}
