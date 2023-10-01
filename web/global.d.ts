@@ -151,23 +151,28 @@ declare function $native(name: "lock"): (name: string) => {
 
 declare function $native(name: "pipe"): (name: string) => BlockingQueue;
 
-type SocketConnection = {
+type TCPSocketConnection = {
     read(size?: number): NativeByteArray;
     readLine(): NativeByteArray;
     write(data: string | Uint8Array | NativeByteArray): number;
     close(): void;
 };
+type UDPSocketConnection = {
+    read(size?: number): NativeByteArray;
+    write(data: string | Uint8Array | NativeByteArray, host?: string, port?: number): number;
+    close(): void;
+};
 declare function $native(name: "socket"): {
     (protocol: "tcp"): {
-        dial(host: string, port: number): SocketConnection;
+        dial(host: string, port: number): TCPSocketConnection;
         listen(port: number): {
-            accept(): SocketConnection;
+            accept(): TCPSocketConnection;
         };
     }
     (protocol: "udp"): {
-        dial(host: string, port: number): SocketConnection;
-        listen(port: number): SocketConnection;
-        listenMulticast(host: string, port: number): SocketConnection;
+        dial(host: string, port: number): UDPSocketConnection;
+        listen(port: number): UDPSocketConnection;
+        listenMulticast(host: string, port: number): UDPSocketConnection;
     }
 };
 

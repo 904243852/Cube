@@ -32,11 +32,13 @@ type TCPSocket struct {
 	worker Worker
 }
 
-func (s *TCPSocket) Dial(host string, port int) (*SocketConnection, error) {
+func (s *TCPSocket) Dial(host string, port int) (*TCPSocketConnection, error) {
 	conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", host, port))
-	return &SocketConnection{
-		conn:   &conn,
-		reader: bufio.NewReader(conn),
+	return &TCPSocketConnection{
+		conn: &conn,
+		AbstractSocketConnection: AbstractSocketConnection{
+			reader: bufio.NewReader(conn),
+		},
 		writer: bufio.NewWriter(conn),
 	}, err
 }
@@ -60,13 +62,46 @@ type TCPSocketListener struct {
 	listener *net.Listener
 }
 
-func (s *TCPSocketListener) Accept() (*SocketConnection, error) {
+func (s *TCPSocketListener) Accept() (*TCPSocketConnection, error) {
 	conn, err := (*s.listener).Accept()
-	return &SocketConnection{
-		conn:   &conn,
-		reader: bufio.NewReader(conn),
-		writer: bufio.NewWriter(conn),
+	return &TCPSocketConnection{
+		&conn,
+		AbstractSocketConnection{
+			reader: bufio.NewReader(conn),
+		},
+		bufio.NewWriter(conn),
 	}, err
+}
+
+//#endregion
+
+//#region TCP Socket Connection
+
+type TCPSocketConnection struct {
+	conn *net.Conn
+	AbstractSocketConnection
+	writer *bufio.Writer
+}
+
+func (s *TCPSocketConnection) ReadLine() ([]byte, error) {
+	line, err := s.reader.ReadBytes('\n')
+
+	if err != nil && err != io.EOF {
+		return nil, err
+	}
+	return line, nil
+}
+
+func (s *TCPSocketConnection) Write(data []byte) (int, error) {
+	count, err := s.writer.Write(data)
+	s.writer.Flush()
+	return count, err
+}
+
+func (s *TCPSocketConnection) Close() {
+	if s.conn != nil {
+		(*s.conn).Close()
+	}
 }
 
 //#endregion
@@ -79,7 +114,7 @@ type UDPSocket struct {
 	worker Worker
 }
 
-func (s *UDPSocket) Dial(host string, port int) (*SocketConnection, error) {
+func (s *UDPSocket) Dial(host string, port int) (*UDPSocketConnection, error) {
 	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", host, port))
 	if err != nil {
 		return nil, err
@@ -90,14 +125,15 @@ func (s *UDPSocket) Dial(host string, port int) (*SocketConnection, error) {
 		return nil, err
 	}
 
-	return &SocketConnection{
-		conn2:  conn,
-		reader: bufio.NewReader(conn),
-		writer: bufio.NewWriter(conn),
+	return &UDPSocketConnection{
+		conn,
+		AbstractSocketConnection{
+			reader: bufio.NewReader(conn),
+		},
 	}, err
 }
 
-func (s *UDPSocket) Listen(port int) (*SocketConnection, error) {
+func (s *UDPSocket) Listen(port int) (*UDPSocketConnection, error) {
 	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return nil, err
@@ -110,14 +146,15 @@ func (s *UDPSocket) Listen(port int) (*SocketConnection, error) {
 
 	s.worker.AddHandle(conn)
 
-	return &SocketConnection{
-		conn2:  conn,
-		reader: bufio.NewReader(conn),
-		writer: bufio.NewWriter(conn),
+	return &UDPSocketConnection{
+		conn,
+		AbstractSocketConnection{
+			reader: bufio.NewReader(conn),
+		},
 	}, err
 }
 
-func (s *UDPSocket) ListenMulticast(host string, port int) (*SocketConnection, error) {
+func (s *UDPSocket) ListenMulticast(host string, port int) (*UDPSocketConnection, error) {
 	addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf("%s:%d", host, port))
 	if err != nil {
 		return nil, err
@@ -130,25 +167,22 @@ func (s *UDPSocket) ListenMulticast(host string, port int) (*SocketConnection, e
 
 	s.worker.AddHandle(conn)
 
-	return &SocketConnection{
-		conn2:  conn,
-		reader: bufio.NewReader(conn),
-		writer: bufio.NewWriter(conn),
+	return &UDPSocketConnection{
+		conn,
+		AbstractSocketConnection{
+			reader: bufio.NewReader(conn),
+		},
 	}, err
 }
 
-//#endregion
+//#region UDP Socket Connection
 
-//#region Socket Connection
-
-type SocketConnection struct {
-	conn   *net.Conn
-	conn2  *net.UDPConn
-	reader *bufio.Reader
-	writer *bufio.Writer
+type UDPSocketConnection struct {
+	conn *net.UDPConn
+	AbstractSocketConnection
 }
 
-func (s *SocketConnection) Read(size int) ([]byte, error) {
+func (s *UDPSocketConnection) Read(size int) ([]byte, error) {
 	var (
 		buf []byte
 		n   int
@@ -173,28 +207,52 @@ func (s *SocketConnection) Read(size int) ([]byte, error) {
 	return buf[:n], nil
 }
 
-func (s *SocketConnection) ReadLine() ([]byte, error) {
-	line, err := s.reader.ReadBytes('\n')
+func (s *UDPSocketConnection) Write(data []byte, host string, port int) (int, error) {
+	if host != "" && port != 0 {
+		return s.conn.WriteTo(data, &net.UDPAddr{IP: net.ParseIP(host), Port: port})
+	}
+	return s.conn.Write(data)
+}
+
+func (s *UDPSocketConnection) Close() {
+	if s.conn != nil {
+		(*s.conn).Close()
+	}
+}
+
+//#endregion
+
+//#endregion
+
+//#region Abstract Socket Connection
+
+type AbstractSocketConnection struct {
+	reader *bufio.Reader
+}
+
+func (c *AbstractSocketConnection) Read(size int) ([]byte, error) {
+	var (
+		buf []byte
+		n   int
+		err error
+	)
+
+	if size < 0 {
+		return nil, errors.New("invalid size: must be greater than or equal to 0")
+	}
+	if size == 0 {
+		buf = make([]byte, 65535) // 默认最大缓存长度 65535 字节
+		n, err = c.reader.Read(buf)
+	}
+	if size > 0 {
+		buf = make([]byte, size)
+		n, err = io.ReadFull(c.reader, buf) // 强制读取 size 大小的字节
+	}
 
 	if err != nil && err != io.EOF {
 		return nil, err
 	}
-	return line, nil
-}
-
-func (s *SocketConnection) Write(data []byte) (int, error) {
-	count, err := s.writer.Write(data)
-	s.writer.Flush()
-	return count, err
-}
-
-func (s *SocketConnection) Close() {
-	if s.conn != nil {
-		(*s.conn).Close()
-	}
-	if s.conn2 != nil {
-		(*s.conn2).Close()
-	}
+	return buf[:n], nil
 }
 
 //#endregion
