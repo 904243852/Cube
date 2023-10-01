@@ -42,6 +42,10 @@ func (w *Worker) ClearHandle() {
 			(*l).Close()
 			continue
 		}
+		if c, ok := v.(*net.UDPConn); ok {
+			(*c).Close()
+			continue
+		}
 		if l, ok := v.(*m.LockClient); ok {
 			(*l).Unlock()
 			continue

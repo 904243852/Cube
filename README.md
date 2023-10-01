@@ -627,7 +627,7 @@ Here are some built-in methods and modules.
     1. Create a daemon.
         ```typescript
         export default function (ctx: ServiceContext) {
-            const tcpd = $native("socket").listen("tcp", 25)
+            const tcpd = $native("socket")("tcp").listen(25)
             while(true) {
                 const c = tcpd.accept()
                 console.debug(toEmail(readData(c)))

@@ -158,10 +158,17 @@ type SocketConnection = {
     close(): void;
 };
 declare function $native(name: "socket"): {
-    listen(protocol: "tcp" | "udp", port: number): {
-        accept(): SocketConnection;
-    };
-    dial(protocol: "tcp" | "udp", host: string, port: number): SocketConnection;
+    (protocol: "tcp"): {
+        dial(host: string, port: number): SocketConnection;
+        listen(port: number): {
+            accept(): SocketConnection;
+        };
+    }
+    (protocol: "udp"): {
+        dial(host: string, port: number): SocketConnection;
+        listen(port: number): SocketConnection;
+        listenMulticast(host: string, port: number): SocketConnection;
+    }
 };
 
 declare function $native(name: "template"): (name: string, input: { [name: string]: any; }) => string;
