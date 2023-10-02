@@ -182,31 +182,6 @@ type UDPSocketConnection struct {
 	AbstractSocketConnection
 }
 
-func (s *UDPSocketConnection) Read(size int) ([]byte, error) {
-	var (
-		buf []byte
-		n   int
-		err error
-	)
-
-	if size < 0 {
-		return nil, errors.New("invalid size: must be greater than or equal to 0")
-	}
-	if size == 0 {
-		buf = make([]byte, 65535) // 默认最大缓存长度 65535 字节
-		n, err = s.reader.Read(buf)
-	}
-	if size > 0 {
-		buf = make([]byte, size)
-		n, err = io.ReadFull(s.reader, buf) // 强制读取 size 大小的字节
-	}
-
-	if err != nil && err != io.EOF {
-		return nil, err
-	}
-	return buf[:n], nil
-}
-
 func (s *UDPSocketConnection) Write(data []byte, host string, port int) (int, error) {
 	if host != "" && port != 0 {
 		return s.conn.WriteTo(data, &net.UDPAddr{IP: net.ParseIP(host), Port: port})
