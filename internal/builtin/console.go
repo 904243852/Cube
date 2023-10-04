@@ -7,8 +7,8 @@ import (
 )
 
 func init() {
-	Builtins["console"] = func(worker Worker) interface{} {
-		return &ConsoleClient{worker.Runtime()}
+	Builtins["console"] = func(runtime *goja.Runtime) interface{} {
+		return &ConsoleClient{runtime}
 	}
 }
 

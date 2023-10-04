@@ -17,21 +17,14 @@ type Worker struct {
 	runtime  *goja.Runtime
 	function goja.Callable
 	handles  []interface{}
-	loop     *builtin.EventLoop
 }
 
 func (w *Worker) Run(params ...goja.Value) (goja.Value, error) {
-	return w.loop.Run(func(vm *goja.Runtime) (goja.Value, error) {
-		return w.function(nil, params...)
-	})
+	return w.function(nil, params...)
 }
 
 func (w *Worker) Runtime() *goja.Runtime {
 	return w.runtime
-}
-
-func (w *Worker) EventLoop() *builtin.EventLoop {
-	return w.loop
 }
 
 func (w *Worker) AddHandle(handle interface{}) {
@@ -85,7 +78,7 @@ func CreateWorker(program *goja.Program) *Worker {
 		panic("the program is not a function")
 	}
 
-	worker := Worker{runtime, function, make([]interface{}, 0), builtin.NewEventLoop(runtime)}
+	worker := Worker{runtime: runtime, function: function, handles: make([]interface{}, 0)}
 
 	runtime.Set("require", func(id string) (goja.Value, error) {
 		program := Cache.Modules[id]
@@ -172,7 +165,7 @@ func CreateWorker(program *goja.Program) *Worker {
 	})
 
 	for name, factory := range builtin.Builtins {
-		runtime.Set(name, factory(&worker))
+		runtime.Set(name, factory(runtime))
 	}
 
 	runtime.SetMaxCallStackSize(2048)
