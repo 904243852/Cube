@@ -715,7 +715,7 @@ Here are some built-in methods and modules.
         QUIT
         ```
 
-- Using DLNA to cast a video on device in LAN
+- Using DLNA to cast a video on device in LAN.
     1. Create a controller with url `/dlna/`.
         ```typescript
         export default function (ctx: ServiceContext): ServiceResponse | Uint8Array | any {
