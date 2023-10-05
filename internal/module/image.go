@@ -18,7 +18,7 @@ func init() {
 
 type ImageClient struct{}
 
-func (i *ImageClient) New(width int, height int) *ImageBuffer {
+func (i *ImageClient) Create(width int, height int) *ImageBuffer {
 	return &ImageBuffer{
 		image:   image.NewRGBA(image.Rect(0, 0, width, height)),
 		Width:   width,

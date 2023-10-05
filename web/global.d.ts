@@ -48,6 +48,7 @@ declare class ServiceResponse {
  */
 declare interface Buffer extends NativeByteArray {
     toString(encoding?: "utf8" | "hex" | "base64" | "base64url"): string;
+    toJson(): any;
 }
 declare interface BufferConstructor {
     from(input: string | Uint8Array | NativeByteArray, encoding?: "utf8" | "hex" | "base64" | "base64url"): Buffer;
@@ -128,7 +129,7 @@ declare function $native(name: "file"): {
 };
 
 declare function $native(name: "http"): (options?: { caCert?: string; cert?: string; key?: string; insecureSkipVerify?: boolean; isHttp3?: boolean; proxy?: string; }) => {
-    request(method: string, url: string, header?: { [name: string]: string; }, body?: string | Uint8Array | NativeByteArray): { status: number; header: { [name: string]: string; }; data: { toBytes(): NativeByteArray; toString(): string; toJson(): any; }; };
+    request(method: string, url: string, header?: { [name: string]: string; }, body?: string | Uint8Array | NativeByteArray): { status: number; header: { [name: string]: string; }; data: Buffer; };
 };
 
 type Image = {
@@ -140,7 +141,7 @@ type Image = {
     resize(width: number, height: number): Image;
 };
 declare function $native(name: "image"): {
-    new(width: number, height: number): Image;
+    create(width: number, height: number): Image;
     parse(input: Uint8Array | NativeByteArray): Image;
 };
 

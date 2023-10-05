@@ -3,8 +3,8 @@ package module
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"cube/internal/builtin"
 	. "cube/internal/util"
-	"encoding/json"
 	"encoding/pem"
 	"errors"
 	"github.com/quic-go/quic-go/http3"
@@ -115,24 +115,7 @@ func (h *HttpClient) Request(method string, url string, header map[string]string
 	response = map[string]interface{}{
 		"status": resp.StatusCode,
 		"header": resp.Header,
-		"data":   &DataBuffer{data: data},
+		"data":   (*builtin.Buffer)(&data),
 	}
-	return
-}
-
-type DataBuffer struct {
-	data []byte
-}
-
-func (d *DataBuffer) ToBytes() []byte {
-	return d.data
-}
-
-func (d *DataBuffer) ToString() string {
-	return string(d.data)
-}
-
-func (d *DataBuffer) ToJson() (obj interface{}, err error) {
-	err = json.Unmarshal(d.data, &obj)
 	return
 }

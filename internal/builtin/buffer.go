@@ -3,6 +3,7 @@ package builtin
 import (
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"github.com/dop251/goja"
 )
@@ -28,6 +29,11 @@ type Buffer []byte
 
 func (b *Buffer) ToString(encoding string) (string, error) {
 	return encode(*b, encoding)
+}
+
+func (b *Buffer) ToJson() (obj interface{}, err error) {
+	err = json.Unmarshal(*b, &obj)
+	return
 }
 
 func encode(input []byte, encoding string) (string, error) {
