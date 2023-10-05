@@ -58,7 +58,10 @@ func (e *EventClient) On(call goja.FunctionCall) goja.Value { // 见 goja.Runtim
 		C: make(chan interface{}, 1),
 	}
 
-	e.worker.AddHandle(ch)
+	e.worker.AddHandle(func() {
+		close(ch.C)
+		ch.Closed = true
+	})
 
 	EventBus.Lock()
 

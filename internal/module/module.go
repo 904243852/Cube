@@ -13,7 +13,7 @@ func register(name string, factory func(worker Worker, db Db) interface{}) {
 }
 
 type Worker interface {
-	AddHandle(handle interface{})
+	AddHandle(handle func())
 	Runtime() *goja.Runtime
 }
 

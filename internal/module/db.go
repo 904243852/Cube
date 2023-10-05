@@ -73,7 +73,9 @@ func (d *DatabaseClient) BeginTx() (*DatabaseTransaction, error) {
 	if tx, err := d.db.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil { // 开启一个新事务，隔离级别为读已提交
 		return nil, err
 	} else {
-		d.worker.AddHandle(tx)
+		d.worker.AddHandle(func() {
+			tx.Rollback()
+		})
 		return &DatabaseTransaction{
 			Transaction: tx,
 		}, nil

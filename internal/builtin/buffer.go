@@ -8,7 +8,9 @@ import (
 )
 
 func init() {
-	Builtins["Buffer"] = func(runtime *goja.Runtime) interface{} {
+	Builtins["Buffer"] = func(worker Worker) interface{} {
+		runtime := worker.Runtime()
+
 		o := runtime.ToValue(func(call goja.ConstructorCall) *goja.Object {
 			return runtime.ToValue(&Buffer{}).ToObject(runtime)
 		}).ToObject(runtime)

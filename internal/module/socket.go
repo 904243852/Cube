@@ -49,7 +49,9 @@ func (s *TCPSocket) Listen(port int) (*TCPSocketListener, error) {
 		return nil, err
 	}
 
-	s.worker.AddHandle(&listener)
+	s.worker.AddHandle(func() {
+		listener.Close()
+	})
 
 	return &TCPSocketListener{
 		listener: &listener,
@@ -144,7 +146,9 @@ func (s *UDPSocket) Listen(port int) (*UDPSocketConnection, error) {
 		return nil, err
 	}
 
-	s.worker.AddHandle(conn)
+	s.worker.AddHandle(func() {
+		conn.Close()
+	})
 
 	return &UDPSocketConnection{
 		conn,
@@ -165,7 +169,9 @@ func (s *UDPSocket) ListenMulticast(host string, port int) (*UDPSocketConnection
 		return nil, err
 	}
 
-	s.worker.AddHandle(conn)
+	s.worker.AddHandle(func() {
+		conn.Close()
+	})
 
 	return &UDPSocketConnection{
 		conn,

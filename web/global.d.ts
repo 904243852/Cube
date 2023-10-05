@@ -180,6 +180,14 @@ declare function $native(name: "template"): (name: string, input: { [name: strin
 
 declare function $native(name: "ulid"): () => string;
 
+type XmlNode = {
+    find(expr: string): XmlNode[];
+    findOne(expr: string): XmlNode;
+    innerText(): string;
+    toString(): string;
+};
+declare function $native(name: "xml"): (content: string) => XmlNode;
+
 declare function $native(name: "zip"): {
     write(data: { [name: string]: string | NativeByteArray; }): NativeByteArray;
     read(data: Uint8Array | NativeByteArray): {

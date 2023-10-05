@@ -3,6 +3,7 @@ module cube
 go 1.19
 
 require (
+	github.com/antchfx/htmlquery v1.3.0
 	github.com/dop251/goja v0.0.0-20230919151941-fc55792775de
 	github.com/gorilla/websocket v1.5.0
 	github.com/mattn/go-sqlite3 v1.14.17
@@ -14,6 +15,8 @@ require (
 )
 
 require (
+	github.com/antchfx/xpath v1.2.3 // indirect
+	github.com/golang/groupcache v0.0.0-20210331224755-41bb18bfe9da // indirect
 	github.com/dlclark/regexp2 v1.10.0 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect

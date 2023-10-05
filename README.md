@@ -403,6 +403,23 @@ Here are some built-in methods and modules.
     const content = $native("template")("greeting", { // read template greeting.tpl and render with input
         name: "this is name",
     })
+
+    // xml, see https://github.com/antchfx/xpath for syntax
+    const doc = $native("xml")(`
+        <Users>
+            <User>
+                <ID>1</ID>
+                <Name>zhangsan</Name>
+            </User>
+            <User>
+                <ID>2</ID>
+                <Name>lisi</Name>
+            </User>
+        </Users>
+    `)
+    doc.find("//user[id=2]/name").pop().innerText() // lisi
+    doc.findOne("//user[1]/name").innerText() // zhangsan
+    doc.findOne("//user[1]").findOne("name").innerText() // zhangsan
     ```
 
 ### Advance

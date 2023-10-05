@@ -3,12 +3,9 @@ package internal
 import (
 	"cube/internal/builtin"
 	m "cube/internal/module"
-	"database/sql"
 	"errors"
-	"fmt"
 	"github.com/dop251/goja"
 	"github.com/dop251/goja/parser"
-	"net"
 	"path"
 	"strings"
 )
@@ -16,54 +13,68 @@ import (
 type Worker struct {
 	runtime  *goja.Runtime
 	function goja.Callable
-	handles  []interface{}
+	handles  []func()
+	loop     *builtin.EventLoop // 事件循环
+	err      error              // 中断异常
 }
 
 func (w *Worker) Run(params ...goja.Value) (goja.Value, error) {
-	return w.function(nil, params...)
+	return w.loop.Run(func(vm *goja.Runtime) (goja.Value, error) {
+		val, err := w.function(nil, params...)
+		if w.err != nil { // 优先返回 interrupt 的中断信息
+			return val, w.err
+		}
+		return val, err
+	})
 }
 
 func (w *Worker) Runtime() *goja.Runtime {
 	return w.runtime
 }
 
-func (w *Worker) AddHandle(handle interface{}) {
+func (w *Worker) EventLoop() *builtin.EventLoop {
+	return w.loop
+}
+
+func (w *Worker) AddHandle(handle func()) {
 	w.handles = append(w.handles, handle)
 }
 
-func (w *Worker) Interrupt(reason string) {
-	w.Runtime().Interrupt(reason)
-	w.ClearHandle()
+func (w *Worker) CleanHandles() {
+	if len(w.handles) == 0 {
+		return
+	}
+
+	for _, c := range w.handles {
+		c()
+	}
+
+	w.handles = make([]func(), 0) // 清空所有句柄
 }
 
-func (w *Worker) ClearHandle() {
-	for _, v := range w.handles {
-		if l, ok := v.(*net.Listener); ok { // 如果已存在监听端口服务，这里需要先关闭，否则将导致 goja.Runtime.Interrupt 无法关闭
-			(*l).Close()
-			continue
-		}
-		if c, ok := v.(*net.UDPConn); ok {
-			(*c).Close()
-			continue
-		}
-		if l, ok := v.(*m.LockClient); ok {
-			(*l).Unlock()
-			continue
-		}
-		if t, ok := v.(*sql.Tx); ok {
-			(*t).Rollback()
-			continue
-		}
-		if c, ok := v.(*m.EventChannel); ok {
-			close((*c).C)
-			(*c).Closed = true
-			continue
-		}
-		panic(fmt.Errorf("unknown handle: %T", v))
-	}
-	if len(w.handles) > 0 {
-		w.handles = make([]interface{}, 0) // 清空所有句柄
-	}
+func (w *Worker) Interrupt(reason string) {
+	// 发送中断信号
+	w.Runtime().Interrupt(reason)
+
+	// 记录中断异常
+	w.err = errors.New(reason)
+
+	// 清理句柄
+	w.CleanHandles() // 这里清理句柄，用于防止阻塞，例如监听网络连接：在此时关闭监听器，可以使得监听方法出现异常，可以避免 goja 的中断信号无法被触发问题
+}
+
+func (w *Worker) Reset() {
+	// 清理句柄
+	w.CleanHandles() // 用于非中断场景下的句柄清理
+
+	// 清理中断信号
+	w.Runtime().ClearInterrupt()
+
+	// 清理中断异常
+	w.err = nil
+
+	// 重置事件循环
+	w.loop.Reset()
 }
 
 func CreateWorker(program *goja.Program) *Worker {
@@ -78,7 +89,7 @@ func CreateWorker(program *goja.Program) *Worker {
 		panic("the program is not a function")
 	}
 
-	worker := Worker{runtime: runtime, function: function, handles: make([]interface{}, 0)}
+	worker := Worker{runtime, function, make([]func(), 0), builtin.NewEventLoop(runtime), nil}
 
 	runtime.Set("require", func(id string) (goja.Value, error) {
 		program := Cache.Modules[id]
@@ -165,7 +176,7 @@ func CreateWorker(program *goja.Program) *Worker {
 	})
 
 	for name, factory := range builtin.Builtins {
-		runtime.Set(name, factory(runtime))
+		runtime.Set(name, factory(&worker))
 	}
 
 	runtime.SetMaxCallStackSize(2048)
