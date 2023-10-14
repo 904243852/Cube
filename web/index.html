@@ -225,7 +225,12 @@
                 that.visible.loading4fetch = true;
                 fetch(`source?name=${that.search.keyword}&type=${that.search.type}&from=${(that.pagination.index - 1) * that.pagination.size}&size=${that.pagination.size}&sort=${this.sort.prop} ${this.sort.order}&basic`, {
                     method: "GET",
-                }).then(r => r.json()).then(r => {
+                }).then(r => {
+                    if (r.status != 200) {
+                        throw new Error(r.statusText);
+                    }
+                    return r.json();
+                }).then(r => {
                     that.pagination.count = r.data.total;
                     that.pagination.index = Math.min(that.pagination.index, Math.ceil(r.data.total / that.pagination.size));
                     that.records = r.data.sources;

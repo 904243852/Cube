@@ -722,9 +722,9 @@ Here are some built-in methods and modules.
             const videoUri = "https://s.xlzys.com/play/9b64Eq9e/index.m3u8" // m3u8 or mp4
 
             // 1. Search for a device using SSDP
-            // create a udp connection using a random port
+            // create a virtual udp connection using a random port
             const ssdpc = $native("socket")("udp").listen(0)
-            // send a M-Search broadcast packet to 239.255.255.250:1900
+            // send a M-Search broadcast packet to 239.255.255.250:1900 (the source port is exactly what "ssdpc" used)
             ssdpc.write([
                 "M-SEARCH * HTTP/1.1",
                 "HOST: 239.255.255.250:1900", // broadcast address (239.255.255.250:1900 is the default ip and port of SSDP broadcast)
@@ -735,7 +735,7 @@ Here are some built-in methods and modules.
             ].join("\r\n"), "239.255.255.250", 1900)
             // wait for device response
             const devices = [...new Array(1)].reduce((p) => {
-                const b = Buffer.from(ssdpc.read()).toString()
+                const b = Buffer.from(ssdpc.read()).toString() // listen on the port that "ssdpc" used and read bytes
                 return [
                     ...p,
                     {
@@ -746,7 +746,7 @@ Here are some built-in methods and modules.
             }, [])
 
             // 2. Query controlURL from a device
-            const [{ location }] = devices // here we use the first device
+            const [{ location }] = devices // here we just use the first device for example
             const host = location.match(/^https?:\/\/[^\/]+/)[0]
             const service = $native("xml")($native("http")().request("get", location).data.toString()) // request location and parse it into an XML dom
                 .find("//service").map(i => {
