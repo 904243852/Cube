@@ -113,7 +113,7 @@
                     experimentalDecorators: true, // 启用实验性的装饰器特性
                     typeRoots: ["."],
                     downlevelIteration: true, // 允许迭代器进行迭代
-                    target: monaco.languages.typescript.ScriptTarget.ES2015, // 启用 ES2015 版本
+                    target: monaco.languages.typescript.ScriptTarget.ES2017, // 启用 ES2017 版本，可兼容 String 的 padStart、padEnd 方法
                     moduleResolution: ts.ModuleResolutionKind.NodeJs, // 指定使用 nodejs 模块解析策略，否则在 import node_modules/* 时无法解析模块
                 });
 
