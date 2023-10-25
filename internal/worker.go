@@ -11,6 +11,7 @@ import (
 )
 
 type Worker struct {
+	id       int
 	runtime  *goja.Runtime
 	function goja.Callable
 	handles  []func()
@@ -26,6 +27,10 @@ func (w *Worker) Run(params ...goja.Value) (goja.Value, error) {
 		}
 		return val, err
 	})
+}
+
+func (w *Worker) Id() int {
+	return w.id
 }
 
 func (w *Worker) Runtime() *goja.Runtime {
@@ -77,7 +82,7 @@ func (w *Worker) Reset() {
 	w.loop.Reset()
 }
 
-func CreateWorker(program *goja.Program) *Worker {
+func CreateWorker(program *goja.Program, id int) *Worker {
 	runtime := goja.New()
 
 	entry, err := runtime.RunProgram(program) // 这里使用 RunProgram，可复用已编译的代码，相比直接调用 RunString 更显著提升性能
@@ -89,7 +94,7 @@ func CreateWorker(program *goja.Program) *Worker {
 		panic("the program is not a function")
 	}
 
-	worker := Worker{runtime, function, make([]func(), 0), builtin.NewEventLoop(runtime), nil}
+	worker := Worker{id, runtime, function, make([]func(), 0), builtin.NewEventLoop(runtime), nil}
 
 	runtime.Set("require", func(id string) (goja.Value, error) {
 		program := Cache.Modules[id]

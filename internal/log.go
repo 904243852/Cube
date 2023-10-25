@@ -11,4 +11,5 @@ func InitLog() {
 		panic(err)
 	}
 	log.SetOutput(fd)
+	log.SetFlags(log.Lmsgprefix) // 去除日志每行开头自带的时间戳前缀
 }

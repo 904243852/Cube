@@ -3,6 +3,7 @@ package handler
 import (
 	"cube/internal"
 	"cube/internal/util"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -57,12 +58,15 @@ func HandleService(w http.ResponseWriter, r *http.Request) {
 	// 标记脚本执行完成
 	completed = true
 
-	if err != nil {
-		toError(w, err)
+	if internal.Returnless(ctx) == true { // 如果是 WebSocket 或 chunk 响应，不需要封装响应
+		if err != nil {
+			log.Println(append(append([]interface{}{"\033[0;31m" + time.Now().Format("2006-01-02 15:04:05.000"), worker.Id(), "Error"}, err), "\033[m")...)
+		}
 		return
 	}
 
-	if internal.Returnless(ctx) == true { // 如果是 WebSocket 或 chunk 响应，不需要封装响应
+	if err != nil {
+		toError(w, err) // 如果 returnless 为 true，则可能已经执行了 response.Write，此时不能调用 toError 或 toSuccess（该方法会间接调用 WriteHeader），由于 Write 必须在 WriteHeader 之后调用，从而导致异常 http: superfluous response.WriteHeader call from ...
 		return
 	}
 
