@@ -3,7 +3,6 @@ package handler
 import (
 	"cube/internal"
 	"cube/internal/util"
-	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -60,7 +59,7 @@ func HandleService(w http.ResponseWriter, r *http.Request) {
 
 	if internal.Returnless(ctx) == true { // 如果是 WebSocket 或 chunk 响应，不需要封装响应
 		if err != nil {
-			log.Println(append(append([]interface{}{"\033[0;31m" + time.Now().Format("2006-01-02 15:04:05.000"), worker.Id(), "Error"}, err), "\033[m")...)
+			internal.LogWithError(err, worker)
 		}
 		return
 	}

@@ -21,16 +21,17 @@ func RunDaemons(name string) {
 		go func() {
 			worker := <-WorkerPool.Channels
 			defer func() {
+				worker.Reset()
 				WorkerPool.Channels <- worker
+				delete(Cache.Daemons, n)
 			}()
 
 			Cache.Daemons[n] = worker
 
-			worker.Run(worker.Runtime().ToValue("./daemon/" + n))
-
-			worker.Runtime().ClearInterrupt()
-
-			delete(Cache.Daemons, n)
+			_, err := worker.Run(worker.Runtime().ToValue("./daemon/" + n))
+			if err != nil {
+				LogWithError(err, worker)
+			}
 		}()
 	}
 }
