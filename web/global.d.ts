@@ -110,7 +110,12 @@ declare function $native(name: "email"): (host: string, port: number, username: 
 
 declare function $native(name: "event"): {
     emit(topic: string, data: any): void;
-    on(topic: string, func: (data: any) => void): void;
+    createSubscriber(...topics: string[]): {
+        next(): any;
+    };
+    on(topic: string, func: (data: any) => void): {
+        cancel(): void;
+    };
 };
 
 declare function $native(name: "file"): {

@@ -64,7 +64,7 @@ func handleSourceGet(w http.ResponseWriter, r *http.Request) (interface{}, bool,
 	}
 
 	// 查询总数
-	if err := Db.QueryRow("select count(1) from source where name like ? and type like ?", "%"+name+"%", stype).Scan(&data.Total); err != nil { // 调用 QueryRow 方法后，须调用 Scan 方法，否则连接将不会被释放
+	if err := Db.QueryRow("select count(1) from source where name like ? and type like ?", name, stype).Scan(&data.Total); err != nil { // 调用 QueryRow 方法后，须调用 Scan 方法，否则连接将不会被释放
 		return data, false, err
 	}
 
@@ -73,7 +73,7 @@ func handleSourceGet(w http.ResponseWriter, r *http.Request) (interface{}, bool,
 	if p.Has("basic") { // 不返回 content、compiled 字段，用于列表查询
 		columns = "rowid, name, type, lang, '' content, '' compiled, active, method, url, cron, last_modified_date"
 	}
-	rows, err := Db.Query("select "+columns+" from source where name like ? and type like ? order by "+orders+" limit ?, ?", "%"+name+"%", stype, from, size)
+	rows, err := Db.Query("select "+columns+" from source where name like ? and type like ? order by "+orders+" limit ?, ?", name, stype, from, size)
 	if err != nil {
 		return data, false, err
 	}

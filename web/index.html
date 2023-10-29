@@ -223,7 +223,7 @@
                     that.pagination.index = 1;
                 }
                 that.visible.loading4fetch = true;
-                fetch(`source?name=${that.search.keyword}&type=${that.search.type}&from=${(that.pagination.index - 1) * that.pagination.size}&size=${that.pagination.size}&sort=${this.sort.prop} ${this.sort.order}&basic`, {
+                fetch(`source?name=%25${that.search.keyword}%25&type=${that.search.type}&from=${(that.pagination.index - 1) * that.pagination.size}&size=${that.pagination.size}&sort=${this.sort.prop} ${this.sort.order}&basic`, {
                     method: "GET",
                 }).then(r => {
                     if (r.status != 200) {

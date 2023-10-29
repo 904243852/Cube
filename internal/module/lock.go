@@ -24,7 +24,7 @@ func init() {
 				}
 				LockCache.clients[name] = client
 			}
-			worker.AddHandle(func() {
+			worker.AddDefer(func() {
 				client.Unlock()
 			})
 			return client

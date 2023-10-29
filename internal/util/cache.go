@@ -15,10 +15,18 @@ type MemoryCache struct {
 }
 
 func (c *MemoryCache) Set(key interface{}, value interface{}, timeout int) {
-	c.Store(key, value)
-	time.AfterFunc(time.Duration(timeout)*time.Millisecond, func() {
+	if value == nil { // 如果值为 nil，表示删除该缓存
 		c.Delete(key)
-	})
+		return
+	}
+
+	c.Store(key, value)
+
+	if timeout > 0 { // 如果 timeout 大于 0，缓存超过该毫秒将会自动被清除
+		time.AfterFunc(time.Duration(timeout)*time.Millisecond, func() {
+			c.Delete(key)
+		})
+	}
 }
 
 func (c *MemoryCache) Get(key interface{}) interface{} {

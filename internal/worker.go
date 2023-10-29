@@ -14,13 +14,13 @@ type Worker struct {
 	id       int
 	runtime  *goja.Runtime
 	function goja.Callable
-	handles  []func()
+	defers   []func()
 	loop     *builtin.EventLoop // 事件循环
 	err      error              // 中断异常
 }
 
 func (w *Worker) Run(params ...goja.Value) (goja.Value, error) {
-	return w.loop.Run(func(vm *goja.Runtime) (goja.Value, error) {
+	return w.loop.Run(func() (goja.Value, error) {
 		val, err := w.function(nil, params...)
 		if w.err != nil { // 优先返回 interrupt 的中断信息
 			return val, w.err
@@ -41,23 +41,26 @@ func (w *Worker) EventLoop() *builtin.EventLoop {
 	return w.loop
 }
 
-func (w *Worker) AddHandle(handle func()) {
-	w.handles = append(w.handles, handle)
+func (w *Worker) AddDefer(d func()) {
+	w.defers = append(w.defers, d)
 }
 
-func (w *Worker) CleanHandles() {
-	if len(w.handles) == 0 {
+func (w *Worker) CleanDefers() {
+	if len(w.defers) == 0 {
 		return
 	}
 
-	for _, c := range w.handles {
-		c()
+	for _, d := range w.defers {
+		d()
 	}
 
-	w.handles = make([]func(), 0) // 清空所有句柄
+	w.defers = make([]func(), 0)
 }
 
 func (w *Worker) Interrupt(reason string) {
+	// 中断事件循环
+	w.loop.Interrupt()
+
 	// 发送中断信号
 	w.Runtime().Interrupt(reason)
 
@@ -65,12 +68,12 @@ func (w *Worker) Interrupt(reason string) {
 	w.err = errors.New(reason)
 
 	// 清理句柄
-	w.CleanHandles() // 这里清理句柄，用于防止阻塞，例如监听网络连接：在此时关闭监听器，可以使得监听方法出现异常，可以避免 goja 的中断信号无法被触发问题
+	w.CleanDefers() // 这里清理句柄，用于防止阻塞，例如监听网络连接：在此时关闭监听器，可以使得监听方法出现异常，可以避免 goja 的中断信号无法被触发问题
 }
 
 func (w *Worker) Reset() {
 	// 清理句柄
-	w.CleanHandles() // 用于非中断场景下的句柄清理
+	w.CleanDefers() // 用于非中断场景下的句柄清理
 
 	// 清理中断信号
 	w.Runtime().ClearInterrupt()
@@ -94,7 +97,7 @@ func CreateWorker(program *goja.Program, id int) *Worker {
 		panic("the program is not a function")
 	}
 
-	worker := Worker{id, runtime, function, make([]func(), 0), builtin.NewEventLoop(runtime), nil}
+	worker := Worker{id, runtime, function, make([]func(), 0), builtin.NewEventLoop(), nil}
 
 	runtime.Set("require", func(id string) (goja.Value, error) {
 		program := Cache.Modules[id]

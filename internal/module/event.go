@@ -11,76 +11,129 @@ func init() {
 	})
 }
 
-type EventChannel struct {
-	C      chan interface{}
-	Closed bool
+//#region 事件订阅者
+
+type EventSubscriber struct {
+	ch     chan interface{}
+	stop   chan interface{}
+	closed bool
 }
 
-var EventBus struct {
+func (s *EventSubscriber) Next() interface{} {
+	return <-s.ch
+}
+
+func (s *EventSubscriber) Cancel() {
+	if !s.closed {
+		s.stop <- nil
+	}
+}
+
+//#endregion
+
+//#region 事件总线
+
+var MyEventBus EventBus
+
+type EventBus struct {
 	sync.RWMutex
-	Subscribers map[string][]*EventChannel
+	subscribers map[string][]*EventSubscriber
 }
 
-type EventClient struct {
-	worker Worker
+func (b *EventBus) subscribe(topic string, s *EventSubscriber) {
+	b.RLock()
+
+	if b.subscribers == nil {
+		b.subscribers = make(map[string][]*EventSubscriber)
+	}
+	if subscribers, found := b.subscribers[topic]; found {
+		b.subscribers[topic] = append(subscribers, s)
+	} else {
+		b.subscribers[topic] = append([]*EventSubscriber{}, s)
+	}
+
+	b.RUnlock()
 }
 
-func (e *EventClient) Emit(topic string, data interface{}) {
-	EventBus.RLock()
+func (b *EventBus) emit(topic string, data interface{}) {
+	b.RLock()
 
-	if chans, found := EventBus.Subscribers[topic]; found {
+	if subscribers, found := b.subscribers[topic]; found {
 		go func() { // 避免阻塞发布者
 			i := 0
-			for _, ch := range chans {
-				if !ch.Closed { // 通过位移法删除已关闭的通道
-					chans[i] = ch
+			for _, s := range subscribers {
+				if !s.closed { // 通过位移法删除已关闭的通道
+					subscribers[i] = s
 					i += 1
-					ch.C <- data
+					s.ch <- data
 				}
 			}
 		}()
 	}
 
-	EventBus.RUnlock()
+	b.RUnlock()
 }
 
-func (e *EventClient) On(call goja.FunctionCall) goja.Value { // 见 goja.Runtime.ToValue 函数，这里需要传递 func(FunctionCall) Value 类型的方法
+//#endregion
+
+type EventClient struct {
+	worker Worker
+}
+
+func (c *EventClient) Emit(topic string, data interface{}) {
+	MyEventBus.emit(topic, data)
+}
+
+func (c *EventClient) CreateSubscriber(topics ...string) *EventSubscriber {
+	s := &EventSubscriber{
+		ch:   make(chan interface{}),
+		stop: make(chan interface{}),
+	}
+	c.worker.AddDefer(func() {
+		if !s.closed {
+			close(s.stop)
+			s.closed = true
+			close(s.ch)
+		}
+	})
+	for _, topic := range topics {
+		MyEventBus.subscribe(topic, s)
+	}
+	return s
+}
+
+func (c *EventClient) On(call goja.FunctionCall) goja.Value { // 见 goja.Runtime.ToValue 函数，这里需要传递 func(FunctionCall) Value 类型的方法
 	topic, ok := call.Argument(0).Export().(string)
 	if !ok {
-		panic("invalid argument topic, not a string")
+		c.worker.Interrupt("invalid argument topic, not a string")
+		return nil
 	}
-	function, ok := goja.AssertFunction(call.Argument(1))
+	fn, ok := goja.AssertFunction(call.Argument(1))
 	if !ok {
-		panic("invalid argument func, not a function")
+		c.worker.Interrupt("invalid argument callback, not a function")
+		return nil
 	}
 
-	ch := &EventChannel{
-		C: make(chan interface{}, 1),
-	}
+	runtime := c.worker.Runtime()
 
-	e.worker.AddHandle(func() {
-		close(ch.C)
-		ch.Closed = true
+	val, _ := c.worker.EventLoop().Put(func(add func(task func()), stop func()) (interface{}, error) {
+		s := c.CreateSubscriber(topic)
+		go func() {
+		L:
+			for {
+				select {
+				case <-s.stop:
+					s.closed = true
+					stop()
+					break L
+				case data := <-s.ch:
+					add(func() {
+						fn(nil, runtime.ToValue(data))
+					})
+				}
+			}
+		}()
+		return s, nil
 	})
-
-	EventBus.Lock()
-
-	if EventBus.Subscribers == nil {
-		EventBus.Subscribers = make(map[string][]*EventChannel)
-	}
-	if prev, found := EventBus.Subscribers[topic]; found {
-		EventBus.Subscribers[topic] = append(prev, ch)
-	} else {
-		EventBus.Subscribers[topic] = append([]*EventChannel{}, ch)
-	}
-
-	EventBus.Unlock()
-
-	go func(c chan interface{}, r *goja.Runtime) {
-		for data := range c {
-			function(nil, r.ToValue(data))
-		}
-	}(ch.C, e.worker.Runtime())
-
-	return nil
+	return runtime.ToValue(val)
 }

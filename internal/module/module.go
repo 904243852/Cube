@@ -2,6 +2,7 @@ package module
 
 import (
 	"context"
+	"cube/internal/builtin"
 	"database/sql"
 	"github.com/dop251/goja"
 )
@@ -13,8 +14,10 @@ func register(name string, factory func(worker Worker, db Db) interface{}) {
 }
 
 type Worker interface {
-	AddHandle(handle func())
+	AddDefer(d func())
 	Runtime() *goja.Runtime
+	EventLoop() *builtin.EventLoop
+	Interrupt(reason string)
 }
 
 type Db interface {
