@@ -78,11 +78,12 @@ L:
 	for l.count > 0 {
 		select {
 		case task := <-l.queue:
-			task()
+			task() // 如果需要关闭任务，需要在 task 执行期间完成任务计数器扣减操作，否则在下次循环获取队列中下一个任务时会出现阻塞
 		case <-l.interrupt:
 			break L
 		}
 	}
+
 	// 返回同步任务的结果
 	return val, err
 }

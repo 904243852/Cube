@@ -646,8 +646,7 @@ Here are some built-in methods and modules.
         export default function (ctx: ServiceContext) {
             if (!("v" in ctx.getURL().params)) {
                 return new ServiceResponse(200, null, `<script src="https://cdn.bootcdn.net/ajax/libs/flv.js/1.6.2/flv.min.js"></script>
-        <button onclick="player.play()">Play</button>
-        <video id="videoElement"></video>
+        <video id="videoElement" onclick="player.play()" style="width: 100%; height: 100%;"></video>
         <script>
             if (flvjs.isSupported()) {
                 var player = flvjs.createPlayer({
@@ -657,7 +656,7 @@ Here are some built-in methods and modules.
                 })
                 player.attachMediaElement(document.getElementById("videoElement"))
                 player.load()
-                // player.play() // play() failed because the user didn't interect with the document first. see https://goo.gl/xX8pDD
+                // player.play() // play() failed here because the user didn't interect with the document first. see https://goo.gl/xX8pDD
             }
         </script>`)
             }
@@ -750,8 +749,13 @@ Here are some built-in methods and modules.
             const metaData = c.readChunk().data.slice(16)
         
             ctx.write(new Uint8Array([
-                0x46, 0x4c, 0x56, 0x01, 0x05, 0x00, 0x00, 0x00, 0x09, // flv header
-                0x00, 0x00, 0x00, 0x00, // previousTagSize0
+                // FLV Header
+                0x46, 0x4c, 0x56, // 即 "FLV"
+                0x01, // 版本号：1
+                0x05, // 第 0 到 4 位必须为 0，第 6 位表示是否存在音频，第 7 位保留必须为 0，第 8 位表示是否存在视频
+                0x00, 0x00, 0x00, 0x09, // FLV Header 的字节长度
+                // previousTagSize0
+                0x00, 0x00, 0x00, 0x00,
             ]))
             ctx.flush()
         
