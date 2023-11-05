@@ -289,7 +289,7 @@
             onExport() {
                 // 移动端浏览器无法通过 window.open 在新标签打开链接，这里使用 a 标签下载
                 const a = document.createElement("a");
-                a.href = `source?name=${this.search.keyword}&type=${this.search.type}&size=5000&bulk`;
+                a.href = `source?name=%25${this.search.keyword}%25&type=${this.search.type}&size=5000&bulk`;
                 a.download = ""; // 如果不设置 download 属性，移动端取消下载任务时，可能会影响当前页面的加载状态
                 a.click();
             },
