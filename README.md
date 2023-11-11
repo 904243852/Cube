@@ -729,8 +729,13 @@ Here are some built-in methods and modules.
 
             const cache = $native("cache")
             cache.set("FLV_HEADER_TAG", new Uint8Array([
-                0x46, 0x4c, 0x56, 0x01, 0x05, 0x00, 0x00, 0x00, 0x09, // flv header
-                0x00, 0x00, 0x00, 0x00, // previousTagSize0
+                // FLV Header
+                0x46, 0x4c, 0x56, // 'F'、'L'、'V'
+                0x01, // 版本号为 1
+                0x05, // 即 0b00000101，其中第 6 位表示是否存在音频，第 8 位表示是否存在视频，其余位均为 0
+                0x00, 0x00, 0x00, 0x09, // FLV Header 的字节长度
+                // Previous Tag Size 0
+                0x00, 0x00, 0x00, 0x00,
             ]), -1)
             cache.set("FLV_META_TAG", FLVTag.encode(0x12, metaData, 0), -1) // Script Tag
 
@@ -1128,7 +1133,7 @@ Here are some built-in methods and modules.
     4. Push a stream using ffmpeg.
         ```bash
         ffmpeg -re \
-            -stream_loop -1
+            -stream_loop -1 \
             -i "https://s.xlzys.com/play/9b64Eq9e/index.m3u8" \
             -vcodec libx264 -r 25 -b:v 800000 \
             -acodec aac -ac 2 -ar 44100 -ab 128k \
