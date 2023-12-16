@@ -44,7 +44,7 @@ func CreateULID() string {
 
 	var buf [26]byte
 
-	alphabet := "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
+	alphabet := "0123456789ABCDEFGHJKMNPQRSTVWXYZ" // Crockford Base32 编码字母表（排除了 "I"、"L"、"O"、"U" 四个字母）
 	for i := 0; i < 10; i++ { // 前 10 个字符为时间戳
 		buf[i] = alphabet[timestamp>>(45-i*5)&0b11111]
 	}

@@ -3,7 +3,10 @@
 
 <head>
     <meta charset="UTF-8">
-    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/element-ui/2.15.14/theme-chalk/index.min.css">
+    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/element-plus/2.4.3/theme-chalk/index.min.css" />
+    <script src="https://cdn.bootcdn.net/ajax/libs/vue/3.3.4/vue.global.prod.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/element-plus/2.4.3/index.full.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/element-plus-icons-vue/2.3.1/index.iife.min.js"></script>
     <title>Cube</title>
     <base target="_blank" /><!-- 网页中所有的超链接的目标地址都在新建窗口中打开 -->
     <style>
@@ -12,11 +15,19 @@
             margin: 0;
             background-color: #f0f2f5;
         }
+        .el-table {
+            border-top: 1px solid #dcdfe6;
+            width: 100%;
+        }
         .el-table__header .cell {
             padding-right: 0 !important;
         }
-        .el-pagination .el-pagination__total {
-            float: left;
+        .el-pagination {
+            flex: auto;
+            margin-top: 13px;
+        }
+        .el-pagination .is-first {
+            flex: auto;
         }
         .el-table button {
             padding: 0;
@@ -26,405 +37,391 @@
             color: #c0c4cc;
             cursor: not-allowed;
         }
-        .danger {
-            color: #F56C6C;
-        }
     </style>
 </head>
 
 <body>
-    <div id="app" v-cloak>
-        <div style="height: 100%; padding: 32px; position: relative;">
-            <h3 style="margin: 0 0 20px; font-weight: 400; color: #1f2f3d; font-size: 22px; border-left: 5px solid #50bfff; padding: 8px 16px;">
-                Cube
-            </h3>
-            <el-card>
-                <el-row style="border-bottom: 1px solid #DCDFE6; padding-bottom: 10px;">
-                    <el-dropdown @command="onCreate" placement="bottom-start" trigger="click" :hide-on-click="false" style="top: 0.04em;">
-                        <el-button icon="el-icon-plus">New</el-button>
-                        <el-dropdown-menu slot="dropdown">
-                            <el-dropdown-item command="controller">Controller</el-dropdown-item>
-                            <el-dropdown-item command="daemon">Daemon</el-dropdown-item>
-                            <el-dropdown-item command="crontab">Crontab</el-dropdown-item>
-                            <el-dropdown-item command="module">Module</el-dropdown-item>
-                            <el-dropdown-item command="template,html" divided>Template(Html)</el-dropdown-item>
-                            <el-dropdown-item divided>
-                                <el-dropdown @command="onCreate" placement="right-start" trigger="click">
-                                    <span class="el-dropdown-link">
-                                        Resource<i class="el-icon-arrow-right el-icon--right"></i>
-                                    </span>
-                                    <el-dropdown-menu slot="dropdown">
-                                        <el-dropdown-item command="resource,html">Html</el-dropdown-item>
-                                        <el-dropdown-item command="resource,vue">Vue</el-dropdown-item>
-                                    </el-dropdown-menu>
-                                </el-dropdown>
-                            </el-dropdown-item>
-                        </el-dropdown-menu>
-                    </el-dropdown>
-                    <el-upload ref="uploader" :auto-upload="false" action="" :on-change="onImport" :show-file-list="false" accept="application/json" style="display: none;">
-                    </el-upload>
-                    <el-button-group>
-                        <el-button icon="el-icon-upload2" @click="() => this.$refs.uploader.$refs['upload-inner'].$refs.input.click()">Import</el-button>
-                        <el-button icon="el-icon-download" @click="onExport">Export</el-button>
-                    </el-button-group>
-                    <div style="float: right; display: flex;">
-                        <el-select v-model="search.type" placeholder="Select a type" clearable @change="onFetch(true)">
-                            <el-option label="Controller" value="controller">
-                            </el-option>
-                            <el-option label="Daemon" value="daemon">
-                            </el-option>
-                            <el-option label="Crontab" value="crontab">
-                            </el-option>
-                            <el-option label="Module" value="module">
-                            </el-option>
-                            <el-option label="Template" value="template">
-                            </el-option>
-                            <el-option label="Resource" value="resource">
-                            </el-option>
-                        </el-select>
-                        <el-input v-model="search.keyword" placeholder="Enter keyword here" clearable @change="onFetch(true)">
-                            <i class="el-icon-search el-input__icon" slot="suffix"></i>
-                        </el-input>
-                    </div>
-                </el-row>
-                <el-row style="padding-top: 0;">
-                    <el-table v-loading="visible.loading4fetch" :data="records" stripe :row-class-name="({ row: record }) => record.active ? '' : 'disabled'" style="width: 100%;" @sort-change="onSortChange">
-                        <el-table-column type="expand">
-                            <template slot-scope="scope">
-                                <el-descriptions style="margin-left: 56px;" :column="3" size="medium" border>
-                                    <el-descriptions-item label="Name">
-                                        {{ scope.row.name }}
-                                    </el-descriptions-item>
-                                    <el-descriptions-item label="Type">
-                                        {{ scope.row.type }}
-                                    </el-descriptions-item>
-                                    <el-descriptions-item label="Language">
-                                        {{ scope.row.lang }}
-                                    </el-descriptions-item>
-                                    <el-descriptions-item label="Url" v-if='!!~["controller", "resource"].indexOf(scope.row.type)' :span="2">
-                                        <el-link type="primary" :href='({ controller: "/service/", resource: "/resource/" }[scope.row.type] || "") + scope.row.url'>
-                                            {{ ({ controller: "/service/", resource: "/resource/" }[scope.row.type] || "") + scope.row.url }}
-                                        </el-link>
-                                    </el-descriptions-item>
-                                    <el-descriptions-item label="Method" v-if='scope.row.type == "controller"'>
-                                        {{ scope.row.method || "Any" }}
-                                    </el-descriptions-item>
-                                    <el-descriptions-item label="Cron" v-if="scope.row.cron">
-                                        {{ scope.row.cron }}
-                                    </el-descriptions-item>
-                                </el-descriptions>
-                            </template>
-                        </el-table-column>
-                        <el-table-column label="Name" prop="name" sortable :show-overflow-tooltip="true">
-                        </el-table-column>
-                        <el-table-column label="Type">
-                            <template slot-scope="scope">
-                                {{ scope.row.type.charAt(0).toUpperCase() + scope.row.type.slice(1) }}
-                            </template>
-                        </el-table-column>
-                        <el-table-column label="Language">
-                            <template slot-scope="scope">
-                                {{ scope.row.lang.charAt(0).toUpperCase() + scope.row.lang.slice(1) }}
-                            </template>
-                        </el-table-column>
-                        <el-table-column label="Last Modified Date" prop="last_modified_date" :formatter="(row, column, value) => value?.replace(/T/, ' ')?.replace(/Z/, '')" sortable>
-                        </el-table-column>
-                        <el-table-column label="Operation">
-                            <template slot-scope="scope">
-                                <el-switch v-model="scope.row.active" @change="onRowActiveSwitch(scope.row)" style="margin-right: 12px;" :disabled='scope.row.status == "true"'>
-                                </el-switch>
-                                <el-button type="text" @click="onRowEdit(scope.row)" icon="el-icon-edit">
-                                </el-button>
-                                <el-button type="text" @click="onRowSetting(scope.row)" icon="el-icon-setting" v-if="!scope.row.active">
-                                </el-button>
-                                <el-button type="text" @click="onRowDelete(scope.row)" icon="el-icon-delete" v-if="!scope.row.active" class="danger">
-                                </el-button>
-                                <el-button type="text" @click="onRowStatusSwitch(scope.row)" :icon='scope.row.status == "true" ? "el-icon-video-pause" : "el-icon-video-play"' v-if='scope.row.type == "daemon" && scope.row.active' :class='{ danger: scope.row.status == "true" }'>
-                                </el-button>
-                            </template>
-                        </el-table-column>
-                    </el-table>
-                    <el-pagination @size-change="onPageSizeChange" @current-change="onPageCurrentChange" :current-page="pagination.index" :page-sizes="[5, 10, 20, 50]" :page-size="pagination.size" layout="total, sizes, prev, pager, next, jumper" :total="pagination.count" style="text-align: right; margin-top: 13px;">
-                    </el-pagination>
-                </el-row>
-            </el-card>
-            <el-drawer title="Setting" :visible.sync="visible.setting" size="36">
-                <el-form ref="form" :model="record" label-position="right" label-width="80px" style="padding: 30px;">
-                    <el-form-item label="Name">
-                        <el-input v-model="record.name" disabled></el-input>
-                    </el-form-item>
-                    <el-form-item label="Type">
-                        <el-input v-model="record.type" disabled></el-input>
-                    </el-form-item>
-                    <el-form-item label="Language">
-                        <el-input v-model="record.lang" disabled></el-input>
-                    </el-form-item>
-                    <el-form-item label="Method" v-if='record.type == "controller"'>
-                        <el-select v-model="record.method" placeholder="Please select a method">
-                            <el-option label="Any" value=""></el-option>
-                            <el-option label="Get" value="GET"></el-option>
-                            <el-option label="Post" value="POST"></el-option>
-                            <el-option label="Put" value="PUT"></el-option>
-                            <el-option label="Delete" value="DELETE"></el-option>
-                        </el-select>
-                    </el-form-item>
-                    <el-form-item label="Url" v-if='!!~["controller", "resource"].indexOf(record.type)'>
-                        <el-input v-model="record.url">
-                            <template slot="prepend">
-                                {{ { controller: "/service/", resource: "/resource/" }[record.type] }}
-                            </template>
-                        </el-input>
-                    </el-form-item>
-                    <el-form-item label="Cron" prop="cron" :rules='[{ required: true, message: "Cron is required.", trigger: "blur" }, { pattern: /^(\*|([0-9]|1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9])|\*\/([0-9]|1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9])) (\*|([0-9]|1[0-9]|2[0-3])|\*\/([0-9]|1[0-9]|2[0-3])) (\*|([1-9]|1[0-9]|2[0-9]|3[0-1])|\*\/([1-9]|1[0-9]|2[0-9]|3[0-1])) (\*|([1-9]|1[0-2])|\*\/([1-9]|1[0-2])) (\*|([0-6])|\*\/([0-6]))$/, message: "Invalid cron expression.", trigger: ["blur", "change"] }]' v-if='record.type == "crontab"'>
-                        <el-input v-model="record.cron" placeholder="For example: */5 * * * *"></el-input>
-                    </el-form-item>
-                    <el-form-item>
-                        <el-button type="primary" :loading="visible.loading4setting" @click="onSettingSubmit">Submit</el-button>
-                        <el-button @click="visible.setting = !visible.setting">Cancel</el-button>
-                    </el-form-item>
-                </el-form>
-            </el-drawer>
-        </div>
+    <div id="app" v-cloak style="height: 100%; padding: 32px; position: relative;">
+        <h3 style="margin: 0 0 20px; font-weight: 400; color: #1f2f3d; font-size: 22px; border-left: 5px solid #50bfff; padding: 8px 16px;">
+            Cube
+        </h3>
+        <el-card>
+            <el-row style="padding-bottom: 10px;">
+                <el-button :icon="Plus" @click="onDialogNew">New</el-button>
+                <el-upload :auto-upload="false" action="" :on-change="onTableImport" :show-file-list="false" accept="application/json" style="display: none;">
+                    <el-button ref="UploadRef"></el-button>
+                </el-upload>
+                <el-button-group style="padding-left: 5px;">
+                    <el-button :icon="Upload" @click="UploadClick">Import</el-button>
+                    <el-button :icon="Download" @click="onTableExport">Export</el-button>
+                </el-button-group>
+                <div style="margin-left: auto; display: inline-flex;">
+                    <el-input v-model="table.search.keyword" placeholder="Enter keyword here" clearable @change="onTableFetch(true)" :suffix-icon="Search">
+                        <template #prepend>
+                            <el-select v-model="table.search.type" placeholder="Select a type" clearable @change="onTableFetch(true)" style="width: 160px; background-color: var(--el-fill-color-blank);">
+                                <el-option v-for="type in Object.keys(constants.type)" :key="type" :label="type" :value="type">
+                                </el-option>
+                            </el-select>
+                        </template>
+                    </el-input>
+                </div>
+            </el-row>
+            <el-row>
+                <el-table v-loading="table.loading" :data="table.records" stripe :row-class-name="({ row: record }) => record.active ? '' : 'disabled'" @sort-change="onTableSortChange" table-layout="fixed">
+                    <el-table-column label="Name" prop="name" sortable :show-overflow-tooltip="true">
+                        <template #default="scope">
+                            <el-button link type="primary" @click="onTableRowEdit(scope.row)">
+                                {{ scope.row.name }}
+                            </el-button>
+                        </template>
+                    </el-table-column>
+                    <el-table-column label="Type">
+                        <template #default="scope">
+                            {{ scope.row.type }}
+                        </template>
+                    </el-table-column>
+                    <el-table-column label="Language">
+                        <template #default="scope">
+                            {{ scope.row.lang }}
+                        </template>
+                    </el-table-column>
+                    <el-table-column label="Last Modified Date" prop="last_modified_date" :formatter="(row, column, value) => value?.replace(/T/, ' ')?.replace(/Z/, '')" sortable>
+                    </el-table-column>
+                    <el-table-column label="Operation">
+                        <template #default="scope">
+                            <el-switch v-model="scope.row.active" @change="onTableRowActiveSwitch(scope.row)" style="margin-right: 12px;" :disabled='scope.row.status == "true"'>
+                            </el-switch>
+                            <el-button link type="primary" @click="onTableRowCode(scope.row)" :icon="Edit" v-if="scope.row.status !== 'true'">
+                            </el-button>
+                            <el-button link type="danger" @click="onTableRowDelete(scope.row)" :icon="Delete" v-if="!scope.row.active">
+                            </el-button>
+                            <el-button link :type="scope.row.status === 'true' ? 'danger' : 'primary'" @click="onTableRowStatusSwitch(scope.row)" v-if="scope.row.type == 'daemon' && scope.row.active">
+                                <el-icon>
+                                    <component :is="scope.row.status === 'true' ? VideoPause : VideoPlay"></component>
+                                </el-icon>
+                            </el-button>
+                        </template>
+                    </el-table-column>
+                </el-table>
+                <el-pagination @size-change="onTablePageSizeChange" @current-change="onTablePageCurrentChange" :current-page="table.pagination.index" :page-sizes="[5, 10, 20, 50]" :page-size="table.pagination.size" layout="total, sizes, prev, pager, next, jumper" :total="table.pagination.count">
+                </el-pagination>
+            </el-row>
+        </el-card>
+        <el-dialog v-model="dialog.visible" :title="dialog.record.rowid ? dialog.record.active ? 'View' : 'Edit' : 'New'">
+            <el-form ref="FormRef" :model="dialog.record" label-position="right" label-width="80px" :rules="dialog.rules">
+                <el-form-item label="Type" prop="type">
+                    <el-select v-model="dialog.record.type" :disabled="dialog.record.rowid" @change="dialog.record.lang = ''" placeholder="Select a type">
+                        <el-option v-for="type in Object.keys(constants.type)" :key="type" :label="type" :value="type">
+                        </el-option>
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="Language" prop="lang">
+                    <el-select v-model="dialog.record.lang" :disabled="dialog.record.rowid" placeholder="Select a language">
+                        <el-option v-for="lang in constants.type[dialog.record.type]" :key="lang" :label="lang" :value="lang">
+                        </el-option>
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="Name" prop="name">
+                    <el-input v-model="dialog.record.name" :disabled="dialog.record.rowid"></el-input>
+                </el-form-item>
+                <el-form-item label="Method" v-if="dialog.record.type == 'controller'">
+                    <el-select v-model="dialog.record.method" placeholder="Please select a method" :disabled="dialog.record.active">
+                        <el-option label="Any" value=""></el-option>
+                        <el-option label="Get" value="GET"></el-option>
+                        <el-option label="Post" value="POST"></el-option>
+                        <el-option label="Put" value="PUT"></el-option>
+                        <el-option label="Delete" value="DELETE"></el-option>
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="Url" v-if="!!~['controller', 'resource'].indexOf(dialog.record.type)">
+                    <el-input v-model="dialog.record.url" :disabled="dialog.record.active">
+                        <template #prepend>
+                            {{ { controller: "/service/", resource: "/resource/", }[dialog.record.type] }}
+                        </template>
+                    </el-input>
+                </el-form-item>
+                <el-form-item label="Cron" prop="cron" v-if="dialog.record.type == 'crontab'">
+                    <el-input v-model="dialog.record.cron" placeholder="For example: */5 * * * *" :disabled="dialog.record.active"></el-input>
+                </el-form-item>
+                <el-form-item v-if="!dialog.record.active">
+                    <el-button type="primary" :loading="dialog.loading" @click="onDialogSubmit(FormRef)">Submit</el-button>
+                    <el-button @click="onDialogCancel(FormRef)">Cancel</el-button>
+                </el-form-item>
+            </el-form>
+        </el-dialog>
     </div>
-</body>
-<script src="https://cdn.bootcdn.net/ajax/libs/vue/2.7.14/vue.min.js"></script>
-<script src="https://cdn.bootcdn.net/ajax/libs/element-ui/2.15.14/index.min.js"></script>
-<script>
-    new Vue({
-        el: "#app",
-        data() {
-            return {
-                records: [],
-                pagination: {
-                    index: 1,
-                    size: 5,
-                    count: 0,
-                },
-                search: {
-                    keyword: "",
-                    type: "",
-                },
-                sort: {
-                    prop: "rowid",
-                    order: "desc",
-                },
-                visible: {
-                    setting: false,
-                    loading4fetch: true,
-                    loading4setting: false,
-                },
-                record: {},
-            }
-        },
-        methods: {
-            onFetch(reset) {
-                const that = this;
-                if (reset) {
-                    that.pagination.index = 1;
-                }
-                that.visible.loading4fetch = true;
-                fetch(`source?name=%25${that.search.keyword}%25&type=${that.search.type}&from=${(that.pagination.index - 1) * that.pagination.size}&size=${that.pagination.size}&sort=${this.sort.prop} ${this.sort.order}&basic`, {
-                    method: "GET",
-                }).then(r => {
-                    if (r.status != 200) {
-                        throw new Error(r.statusText);
-                    }
-                    return r.json();
-                }).then(r => {
-                    that.pagination.count = r.data.total;
-                    that.pagination.index = Math.min(that.pagination.index, Math.ceil(r.data.total / that.pagination.size));
-                    that.records = r.data.sources;
-                }).catch(e => {
-                    that.$message({
-                        type: "error",
-                        message: e.message,
-                    });
-                }).finally(() => {
-                    that.visible.loading4fetch = false;
-                });
-            },
-            onPageSizeChange(value) {
-                this.pagination.size = value;
-                this.onFetch();
-            },
-            onPageCurrentChange(value) {
-                this.pagination.index = value;
-                this.onFetch();
-            },
-            onCreate(command) {
-                if (arguments[1].$children[0]) {
-                    arguments[1].$children[0].show(); // 如果存在二级下拉框，则打开二级下拉框
-                    return;
-                }
-                if (!command) {
-                    return;
-                }
-                const [type, lang] = command.split(",");
-                window.open(`editor.html?type=${type}&lang=${lang || "typescript"}`);
-            },
-            onImport(file) {
-                const that = this;
-                const reader = new FileReader();
-                reader.onload = function () {
-                    fetch("source?bulk", {
-                        method: "POST",
-                        body: this.result,
-                    }).then(r => r.json()).then(r => {
-                        if (r.code === "0") {
-                            that.$message({
-                                type: "success",
-                                message: "Import succeeded.",
-                            });
-                            that.onFetch();
-                        } else {
-                            that.$message({
-                                type: "error",
-                                message: r.message,
-                            });
-                        }
-                    });
-                };
-                reader.readAsText(file.raw, "utf-8");
-            },
-            onExport() {
-                // 移动端浏览器无法通过 window.open 在新标签打开链接，这里使用 a 标签下载
-                const a = document.createElement("a");
-                a.href = `source?name=%25${this.search.keyword}%25&type=${this.search.type}&size=5000&bulk`;
-                a.download = ""; // 如果不设置 download 属性，移动端取消下载任务时，可能会影响当前页面的加载状态
-                a.click();
-            },
-            onSortChange({ prop, order }) {
-                if (!order) {
-                    this.sort.prop = "rowid";
-                    this.sort.order = "desc";
-                } else {
-                    this.sort.prop = prop;
-                    this.sort.order = { ascending: "asc", descending: "desc" }[order];
-                }
-                this.onFetch();
-            },
-            onRowSetting(record) {
-                this.record = { ...record };
-                this.visible.setting = true;
-            },
-            onRowEdit(record) {
-                window.open(`editor.html?name=${record.name}&type=${record.type}&lang=${record.lang}`);
-            },
-            onRowDelete(record) {
-                const that = this;
-                that.$confirm("This operation will permanently delete the record. Do you want to continue?", "Tips", {
-                    confirmButtonText: "Confirm",
-                    cancelButtonText: "Cancel",
-                    type: "warning",
-                    beforeClose: (action, instance, done) => {
-                        if (action === "confirm") {
-                            instance.confirmButtonLoading = true;
-                            instance.confirmButtonText = "Delete...";
-                            fetch(`source?name=${record.name}&type=${record.type}`, {
-                                method: "DELETE",
-                            }).then(r => r.json()).then(r => {
-                                if (r.code === "0") {
-                                    that.$message({
-                                        type: "success",
-                                        message: "Delete succeeded.",
-                                    });
-                                    that.onFetch();
-                                } else {
-                                    that.$message({
-                                        type: "error",
-                                        message: r.message,
-                                    });
-                                }
-                                instance.confirmButtonLoading = false;
-                            });
-                        }
-                        done();
+    <script>
+        const { ElMessage, ElMessageBox, } = ElementPlus
+        Vue.createApp({
+            setup() {
+                const { ref } = Vue
+                const { Delete, Download, Edit, Search, Plus, Upload, VideoPause, VideoPlay, } = ElementPlusIconsVue
+                const UploadRef = ref()
+                return {
+                    Delete,
+                    Download,
+                    Edit,
+                    Search,
+                    Plus,
+                    Upload,
+                    VideoPause,
+                    VideoPlay,
+                    FormRef: ref(),
+                    UploadRef,
+                    UploadClick: () => {
+                        UploadRef.value.ref.click()
                     },
-                }).catch(() => { });
+                }
             },
-            onRowActiveSwitch(record) {
-                const that = this;
-                fetch("source", {
-                    method: "PATCH",
-                    body: JSON.stringify(record),
-                }).then(r => r.json()).then(r => {
-                    if (r.code === "0") {
-                        that.$message({
-                            type: "success",
-                            message: (record.active ? "Active" : "Inactive") + " succeeded.",
-                        });
+            data() {
+                return {
+                    constants: {
+                        type: {
+                            controller: ["typescript"],
+                            crontab: ["typescript"],
+                            daemon: ["typescript"],
+                            module: ["typescript"],
+                            resource: ["html", "text", "vue"],
+                            template: ["html", "text", "vue"],
+                        },
+                    },
+                    table: {
+                        records: [],
+                        pagination: {
+                            index: 1,
+                            size: 5,
+                            count: 0,
+                        },
+                        search: {
+                            keyword: "",
+                            type: "",
+                        },
+                        sort: {
+                            prop: "rowid",
+                            order: "desc",
+                        },
+                        loading: false,
+                    },
+                    dialog: {
+                        record: {},
+                        visiable: false,
+                        loading: false,
+                        rules: {
+                            type: [{
+                                required: true,
+                                message: "Type is required",
+                                trigger: "blur",
+                            }],
+                            lang: [{
+                                required: true,
+                                message: "Language is required",
+                                trigger: "blur",
+                            }],
+                            name: [{
+                                required: true,
+                                message: "Name is required",
+                                trigger: "blur",
+                            }, {
+                                validator: (rule, value, callback) => {
+                                    if (this.dialog.record.type === "module") {
+                                        if (!/^(node_modules\/)?\w{2,32}$/.test(value)) {
+                                            return callback(new Error("Name must be a string that matches /(node_modules/)?[A-Za-z0-9_]{2,32}/"))
+                                        }
+                                    } else if (!/^\w{2,32}$/.test(value)) {
+                                        return callback(new Error("Name must be a string that matches /[A-Za-z0-9_]{2,32}/"))
+                                    }
+                                    callback()
+                                },
+                                trigger: "blur",
+                            }],
+                            cron: [{
+                                required: true,
+                                message: "Cron is required",
+                                trigger: "blur",
+                            }, {
+                                pattern: /^(\*|([0-9]|1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9])|\*\/([0-9]|1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9])) (\*|([0-9]|1[0-9]|2[0-3])|\*\/([0-9]|1[0-9]|2[0-3])) (\*|([1-9]|1[0-9]|2[0-9]|3[0-1])|\*\/([1-9]|1[0-9]|2[0-9]|3[0-1])) (\*|([1-9]|1[0-2])|\*\/([1-9]|1[0-2])) (\*|([0-6])|\*\/([0-6]))$/,
+                                message: "Invalid cron expression",
+                                trigger: ["blur", "change"],
+                            }],
+                        },
+                    },
+                }
+            },
+            methods: {
+                onTableFetch(reset) {
+                    const that = this
+                    if (reset) {
+                        that.table.pagination.index = 1
+                    }
+                    that.table.loading = true
+                    fetch(`source?name=%25${that.table.search.keyword}%25&type=${that.table.search.type}&from=${(that.table.pagination.index - 1) * that.table.pagination.size}&size=${that.table.pagination.size}&sort=${that.table.sort.prop} ${that.table.sort.order}&basic`, {
+                        method: "GET",
+                    }).then(r => {
+                        if (r.status != 200) {
+                            throw new Error(r.statusText)
+                        }
+                        return r.json()
+                    }).then(r => {
+                        that.table.pagination.count = r.data.total
+                        that.table.pagination.index = Math.min(that.table.pagination.index, Math.ceil(r.data.total / that.table.pagination.size))
+                        that.table.records = r.data.sources
+                    }).catch(e => {
+                        ElMessage.error(e.message)
+                    }).finally(() => {
+                        that.table.loading = false
+                    })
+                },
+                onTablePageSizeChange(value) {
+                    this.table.pagination.size = value
+                    this.onTableFetch()
+                },
+                onTablePageCurrentChange(value) {
+                    this.table.pagination.index = value
+                    this.onTableFetch()
+                },
+                onTableImport(file) {
+                    const that = this
+                    const reader = new FileReader()
+                    reader.onload = function () {
+                        fetch("source?bulk", {
+                            method: "POST",
+                            body: this.result,
+                        }).then(r => r.json()).then(r => {
+                            if (r.code === "0") {
+                                ElMessage.success("Import succeeded")
+                                that.onTableFetch()
+                            } else {
+                                ElMessage.error(r.message)
+                            }
+                        })
+                    }
+                    reader.readAsText(file.raw, "utf-8")
+                },
+                onTableExport() {
+                    // 移动端浏览器无法通过 window.open 在新标签打开链接，这里使用 a 标签下载
+                    const a = document.createElement("a")
+                    a.href = `source?name=%25${this.table.search.keyword}%25&type=${this.table.search.type}&size=5000&bulk`
+                    a.download = "" // 如果不设置 download 属性，移动端取消下载任务时，可能会影响当前页面的加载状态
+                    a.click()
+                },
+                onTableSortChange({ prop, order }) {
+                    if (!order) {
+                        this.table.sort.prop = "rowid"
+                        this.table.sort.order = "desc"
                     } else {
-                        that.$message({
-                            type: "error",
-                            message: r.message,
-                        });
-                        record.active = !record.active;
+                        this.table.sort.prop = prop
+                        this.table.sort.order = { ascending: "asc", descending: "desc" }[order]
                     }
-                });
-            },
-            onRowStatusSwitch(record) {
-                const that = this,
-                    status = record.status === "true" ? "false" : "true";
-                fetch("source", {
-                    method: "PATCH",
-                    body: JSON.stringify({
-                        ...record,
-                        status,
-                    }),
-                }).then(r => r.json()).then(r => {
-                    if (r.code === "0") {
-                        that.$message({
-                            type: "success",
-                            message: (status === "true" ? "Run" : "Stop") + " succeeded.",
-                        });
-                        record.status = status;
-                    } else {
-                        that.$message({
-                            type: "error",
-                            message: r.message,
-                        });
-                    }
-                });
-            },
-            onSettingSubmit() {
-                const that = this;
-                that.$refs["form"].validate(valid => {
-                    if (!valid) {
-                        return false;
-                    }
+                    this.onTableFetch()
+                },
+                onTableRowEdit(record) {
+                    this.dialog.record = { ...record, }
+                    this.dialog.visible = true
+                },
+                onTableRowCode(record) {
+                    window.open(`editor.html?name=${record.name}&type=${record.type}` + (record.rowid ? "" : "&eg"))
+                },
+                onTableRowDelete(record) {
+                    const that = this
+                    ElMessageBox.confirm("This operation will permanently delete the record. Do you want to continue ?", "Tips", {
+                        confirmButtonText: "Confirm",
+                        cancelButtonText: "Cancel",
+                        type: "warning",
+                        beforeClose: (action, instance, done) => {
+                            if (action === "confirm") {
+                                instance.confirmButtonLoading = true
+                                instance.confirmButtonText = "Delete..."
+                                fetch(`source?name=${record.name}&type=${record.type}`, {
+                                    method: "DELETE",
+                                }).then(r => r.json()).then(r => {
+                                    if (r.code === "0") {
+                                        ElMessage.success("Delete succeeded")
+                                        that.onTableFetch()
+                                    } else {
+                                        ElMessage.error(r.message)
+                                    }
+                                    instance.confirmButtonLoading = false
+                                })
+                            }
+                            done()
+                        },
+                    }).catch(() => { })
+                },
+                onTableRowActiveSwitch(record) {
+                    const that = this
                     fetch("source", {
-                        method: "PATCH",
+                        method: "PUT",
                         body: JSON.stringify({
-                            name: that.record.name,
-                            type: that.record.type,
-                            lang: that.record.lang,
-                            active: that.record.active,
-                            method: that.record.method,
-                            url: that.record.url,
-                            cron: that.record.cron,
+                            name: record.name,
+                            type: record.type,
+                            active: record.active,
                         }),
                     }).then(r => r.json()).then(r => {
                         if (r.code === "0") {
-                            that.$message({
-                                type: "success",
-                                message: "Setting succeeded.",
-                            });
-                            that.visible.setting = false;
-                            that.onFetch();
+                            ElMessage.success((record.active ? "Active" : "Inactive") + " succeeded")
                         } else {
-                            that.$message({
-                                type: "error",
-                                message: r.message,
-                            });
+                            ElMessage.error(r.message)
+                            record.active = !record.active
                         }
-                    });
-                });
-            }
-        },
-        mounted: function () {
-            this.onFetch();
-        },
-    });
-</script>
+                    })
+                },
+                onTableRowStatusSwitch(record) {
+                    const that = this,
+                        status = record.status === "true" ? "false" : "true"
+                    fetch("source", {
+                        method: "PUT",
+                        body: JSON.stringify({
+                            name: record.name,
+                            type: record.type,
+                            status,
+                        }),
+                    }).then(r => r.json()).then(r => {
+                        if (r.code === "0") {
+                            ElMessage.success((status === "true" ? "Run" : "Stop") + " succeeded")
+                            record.status = status
+                        } else {
+                            ElMessage.error(r.message)
+                        }
+                    })
+                },
+                onDialogNew() {
+                    this.dialog.record = {
+                        method: "",
+                    }
+                    this.dialog.visible = true
+                },
+                onDialogSubmit(FormRef) {
+                    const that = this
+                    FormRef.validate(valid => {
+                        if (!valid) {
+                            return false
+                        }
+                        const { name, type, lang, method, url, cron, } = that.dialog.record
+                        fetch("source", {
+                            method: !that.dialog.record.rowid ? "POST" : "PUT",
+                            body: JSON.stringify({ name, type, lang, method, url, cron, }),
+                        }).then(r => r.json()).then(r => {
+                            if (r.code === "0") {
+                                ElMessage.success("Submit succeeded")
+                                that.dialog.visible = false
+                                that.onTableFetch()
+                                !that.dialog.record.rowid && that.onTableRowCode(that.dialog.record)
+                            } else {
+                                ElMessage.error(r.message)
+                            }
+                        })
+                    })
+                },
+                onDialogCancel(FormRef) {
+                    FormRef.resetFields()
+                    this.dialog.visible = false
+                },
+            },
+            mounted: function () {
+                this.onTableFetch()
+            },
+        }).use(ElementPlus).mount("#app")
+    </script>
+</body>
 
 </html>

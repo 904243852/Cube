@@ -39,3 +39,9 @@ wrk:
 
 fmt:
 	@find ./ -name "*.go" | xargs -I {} go fmt {}
+
+buildz: # 构建一个不依赖于 cdn 的版本，依赖的 js、css 等库文件将下载至本地 web/libs 目录下（Makefile 中命令需要转义字符 `$` -> `$$`、`'` -> `'\''`）
+	@bash -c 'grep -hor "https://cdn.bootcdn.net/ajax/libs/[^\"'\'''\'']*" ./web | grep -v "monaco-editor" | while read uri; do name=$${uri#https://cdn.bootcdn.net/ajax/}; mkdir -p "web/$$(dirname $${name})"; curl -s "https://cdn.bootcdn.net/ajax/$$name" -o "web/$${name}"; done'
+	@curl -sOL "https://registry.npm.taobao.org/monaco-editor/-/monaco-editor-0.38.0.tgz" && mkdir -p "./web/libs/monaco-editor/0.38.0/" && tar -zxf monaco-editor-0.38.0.tgz -C "./web/libs/monaco-editor/0.38.0/" --strip-components 1 "package/min" && rm monaco-editor-0.38.0.tgz
+	@sed -i 's#https://cdn.bootcdn.net/ajax/libs#/libs#g' web/*.html
+	@go build -ldflags "-s -w" .

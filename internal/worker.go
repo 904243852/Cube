@@ -101,7 +101,7 @@ func CreateWorker(program *goja.Program, id int) *Worker {
 
 	runtime.Set("require", func(id string) (goja.Value, error) {
 		program := Cache.Modules[id]
-		if program == nil { // 如果已被缓存，直接从缓存中获取
+		if program == nil { // 如果缓存不存在，则查询数据库
 			// 获取名称、类型
 			var name, stype string
 			if strings.HasPrefix(id, "./controller/") {

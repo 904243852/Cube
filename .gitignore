@@ -9,3 +9,4 @@ files
 *.crt
 *.srl
 *.csr
+web/libs

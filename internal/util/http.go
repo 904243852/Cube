@@ -4,6 +4,8 @@ import (
 	"crypto/md5"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
+	"io"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -73,4 +75,18 @@ func (a *DigestAuth) Random(size int) string {
 	b := make([]byte, size/2+1)
 	rand.Read(b)
 	return hex.EncodeToString(b)[:size]
+}
+
+func UnmarshalWithIoReader(r io.Reader, v interface{}) error {
+	bytes, err := io.ReadAll(r)
+	if err != nil {
+		return err
+	}
+
+	err = json.Unmarshal(bytes, v)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

@@ -20,7 +20,7 @@ func InitDb() {
 			name varchar(64) not null,
 			type varchar(16) not null,
 			lang varchar(16) not null,
-			content text not null,
+			content text not null default '',
 			compiled text not null default '',
 			active boolean not null default false,
 			method varchar(8) not null default '',
