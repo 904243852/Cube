@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no"><!-- 网页的宽度自动适应手机屏幕的宽度 -->
     <title>Cube</title>
-    <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.38.0/min/vs/editor/editor.main.css">
+    <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.45.0/min/vs/editor/editor.main.css">
     <style>
         * {
             margin: 0;
@@ -34,10 +34,14 @@
             line-height: 40px;
             justify-content: center;
             border-radius: 50%;
-            box-shadow: rgb(0, 0, 0, 0.12) 0 2px 8px 0;
+            box-shadow: 0 0 8px 0 rgb(255, 255, 255, 0.82);
             cursor: pointer;
             background-color: white;
-            font-family: codicon;
+            -webkit-tap-highlight-color: transparent; /* 去除移动端点击后出现的阴影 */
+        }
+        #btn:active {
+            box-shadow: 0 0;
+            transform: scale(0.95);
         }
         #btn svg {
             width: 24px;
@@ -56,10 +60,10 @@
 
     <script src="https://cdn.bootcdn.net/ajax/libs/sweetalert/2.1.2/sweetalert.min.js"></script>
 
-    <script>var require = { paths: { "vs": "https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.38.0/min/vs" } }</script>
-    <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.38.0/min/vs/loader.js"></script>
-    <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.38.0/min/vs/editor/editor.main.nls.js"></script>
-    <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.38.0/min/vs/editor/editor.main.js"></script>
+    <script>var require = { paths: { "vs": "https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.45.0/min/vs" } }</script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.45.0/min/vs/loader.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.45.0/min/vs/editor/editor.main.nls.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.45.0/min/vs/editor/editor.main.js"></script>
 
     <script>
         ({
@@ -71,13 +75,38 @@
                 vue: `<template>\n    <p>hello, {{ name }}</p>\n</template>\n\n\x3Cscript>\n    module.exports = {\n        data: function() {\n            return {\n                name: "world"\n            }\n        }\n    }\n\x3C/script>\n\n<style scoped>\n\n</style>`,
             },
 
+            // 页面模型对象，用于双向绑定
+            vdata: (function (data) {
+                const funcs = {}
+                return new Proxy({
+                    ...data,
+                    $bind(property, func) { // 绑定属性的渲染方法，当对应属性被赋值时触发
+                        func.call(data, data[property]) // 初始化渲染一次
+                        funcs[property] = func
+                    },
+                }, {
+                    get: function(target, property) {
+                        return target[property]
+                    },
+                    set: function(target, property, value) {
+                        if (funcs[property]) {
+                            funcs[property].call(target, value)
+                        }
+                        target[property] = value
+                    },
+                })
+            })({
+                status: "writable", // 源码状态，readonly=只读、writable=可写
+                loaded: false, // 源码是否已加载
+            }),
+
             // 请求入参
             input: (function () {
                 // 获取 URL 查询参数
                 const params = new URL(window.location).searchParams,
                     name = params.get("name"),
                     type = params.get("type"),
-                    eg = params.has("eg")
+                    example = params.has("example")
 
                 // 获取代码坐标锚点
                 const groups = window.location.hash.substring(1).match(/(?<startLineNumber>\d*),(?<startColumn>\d*)-(?<endLineNumber>\d*),(?<endColumn>\d*)/)?.groups,
@@ -92,7 +121,7 @@
                         }),
                     }
 
-                return { name, type, selection, eg, }
+                return { name, type, selection, example, }
             })(),
 
             // 渲染 Monaco Editor
@@ -118,7 +147,7 @@
 
                     // 预加载所有 module source，用于 import
                     fetch("source?lang=typescript&type=module&size=100", {
-                        method: "GET"
+                        method: "GET",
                     }).then(r => r.json()).then(r => {
                         (r.data.sources || []).forEach(s => {
                             monaco.languages.typescript.typescriptDefaults.addExtraLib(s.content, s.name + ".ts")
@@ -127,7 +156,7 @@
                 }
 
                 // 创建 Editor
-                const editor = monaco.editor.create(document.getElementById("container"), {
+                const editor = monaco.editor.create(document.querySelector("#container"), {
                     language: lang,
                     theme: "vs-dark",
                     model: monaco.editor.createModel(this.examples[this.input.type] || this.examples[lang] || "", lang, new monaco.Uri("noname")),
@@ -153,13 +182,13 @@
                     const matches = input.resource.path.match(/^(?:\/(node_modules\/\w+)|\.\/(\w+))\.ts$/),
                         name = matches?.[1] || matches?.[2]
                     if (name) {
-                        window.open(`/editor.html?name=${name}&type=module&lang=typescript#${selection.startLineNumber},${selection.startColumn}-${selection.endLineNumber},${selection.endColumn}`)
+                        window.open(`/editor.html?name=${name}&type=module#${selection.startLineNumber},${selection.startColumn}-${selection.endLineNumber},${selection.endColumn}`)
                     }
                 }
 
                 // 注册事件以及按键命令
                 editor.onDidFocusEditorText(() => {
-                    if (document.getElementById("btn").innerText === "\uEB74") {
+                    if (that.vdata.status === "readonly") {
                         document.activeElement.blur() // 防止在只读模式下，移动端点击编辑框时弹出软键盘
                     }
                 })
@@ -202,6 +231,11 @@
                     const keyCode = e.keyCode || e.which || e.charCode,
                         ctrlKey = e.ctrlKey || e.metaKey
                     if (ctrlKey && keyCode === 83) { // Ctrl + S
+                        if (!that.vdata.loaded) { // 如果没有加载完禁止保存提交，防止被覆盖
+                            that.alert("Source has not been loaded yet", "error")
+                            return
+                        }
+
                         const src = editor.getValue(),
                             jsSrc = editor.getModel().getLanguageId() !== "typescript" ? "" : ts.transpileModule(src, {
                                 compilerOptions: {
@@ -244,29 +278,24 @@
                 }
             },
 
-            // 注册保存按钮的点击事件
+            // 注册保存按钮的图标状态和点击事件
             setBtnClick(editor) {
-                const that = this
-                document.getElementById("btn").onclick = function () {
-                    if (this.children[0].style.display !== "none") { // 已锁定
+                const that = this,
+                    b = document.querySelector("#btn"),
+                    [u, s] = b.children
+                // 绑定 vdata 属性 status 到按钮状态图标的绑定
+                that.vdata.$bind("status", function (value) {
+                    [u.style.display, s.style.display] = ["", "none"].sort((a, b) => a.localeCompare(b) - 1 - (value !== "readonly"))
+                })
+                // 注册按钮点击事件
+                b.onclick = function () {
+                    if (that.vdata.status === "readonly") { // 已锁定
                         // 解锁
+                        that.vdata.status = "writable"
                         editor.updateOptions({ readOnly: false, })
-                        that.setBtnStatus(false)
                         return
                     }
-                    document.onkeydown({ ctrlKey: true, keyCode: 83 }) // 触发保存事件
-                }
-            },
-
-            // 设置按钮已锁定、可提交状态
-            setBtnStatus(locked) {
-                const e = document.getElementById("btn")
-                if (locked) {
-                    e.children[0].style.display = ""
-                    e.children[1].style.display = "none"
-                } else {
-                    e.children[0].style.display = "none"
-                    e.children[1].style.display = ""
+                    document.onkeydown({ ctrlKey: true, keyCode: 83, }) // 触发保存事件
                 }
             },
 
@@ -296,12 +325,13 @@
 
                 const lang = { vue: "html" }[source.lang] || source.lang,
                     editor = this.render(lang)
-                if (!!source.content || !this.input.eg) {
-                    editor.setValue(source.content)
+                if (!!source.content || !this.input.example) {
+                    editor.setValue(source.content || "")
                     this.setEditorFocus(editor, this.input.selection) // 光标跳转至指定代码位置
-                    this.setBtnStatus(true)
+                    this.vdata.status = "readonly"
                     editor.updateOptions({ readOnly: true, })
                 }
+                this.vdata.loaded = true
             },
         }).mount()
     </script>

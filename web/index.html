@@ -37,6 +37,19 @@
             color: #c0c4cc;
             cursor: not-allowed;
         }
+        .el-dialog .el-input-group__prepend .el-checkbox-group {
+            margin: 0 -20px;
+        }
+        .el-dialog .el-input-group__prepend .el-checkbox-button__inner {
+            border-right: 0;
+            border-top-right-radius: 0 !important;
+            border-bottom-right-radius: 0 !important;
+            text-decoration: line-through;
+            color: var(--el-disabled-text-color);
+        }
+        .el-dialog .el-input-group__prepend .is-checked .el-checkbox-button__inner {
+            text-decoration: none;
+        }
     </style>
 </head>
 
@@ -107,8 +120,8 @@
                 </el-pagination>
             </el-row>
         </el-card>
-        <el-dialog v-model="dialog.visible" :title="dialog.record.rowid ? dialog.record.active ? 'View' : 'Edit' : 'New'">
-            <el-form ref="FormRef" :model="dialog.record" label-position="right" label-width="80px" :rules="dialog.rules">
+        <el-dialog v-model="dialog.visible" :title="dialog.record.rowid ? this['dialog.editable'] ? 'Edit' : 'View' : 'New'">
+            <el-form ref="FormRef" :model="dialog.record" label-position="right" label-width="80px" :rules="constants.rules">
                 <el-form-item label="Type" prop="type">
                     <el-select v-model="dialog.record.type" :disabled="dialog.record.rowid" @change="dialog.record.lang = ''" placeholder="Select a type">
                         <el-option v-for="type in Object.keys(constants.type)" :key="type" :label="type" :value="type">
@@ -122,7 +135,15 @@
                     </el-select>
                 </el-form-item>
                 <el-form-item label="Name" prop="name">
-                    <el-input v-model="dialog.record.name" :disabled="dialog.record.rowid"></el-input>
+                    <el-input v-model="this['proxy.dialog.record.name.value']" placeholder="Please input a name" minlength="2" maxlength="32" show-word-limit v-if="dialog.record.type === 'module' && !dialog.record.rowid">
+                        <template #prepend v-if="dialog.record.type === 'module'">
+                            <el-checkbox-group v-model="this['proxy.dialog.record.name.prefix']" :disabled="dialog.record.active">
+                                <el-checkbox-button label="node_modules/" key="node_modules/"></el-checkbox-button>
+                            </el-checkbox-group>
+                        </template>
+                    </el-input>
+                    <el-input v-model="dialog.record.name" placeholder="Please input a name" minlength="2" maxlength="32" show-word-limit :disabled="dialog.record.rowid" v-else>
+                    </el-input>
                 </el-form-item>
                 <el-form-item label="Method" v-if="dialog.record.type == 'controller'">
                     <el-select v-model="dialog.record.method" placeholder="Please select a method" :disabled="dialog.record.active">
@@ -143,7 +164,7 @@
                 <el-form-item label="Cron" prop="cron" v-if="dialog.record.type == 'crontab'">
                     <el-input v-model="dialog.record.cron" placeholder="For example: */5 * * * *" :disabled="dialog.record.active"></el-input>
                 </el-form-item>
-                <el-form-item v-if="!dialog.record.active">
+                <el-form-item v-if="this['dialog.editable']">
                     <el-button type="primary" :loading="dialog.loading" @click="onDialogSubmit(FormRef)">Submit</el-button>
                     <el-button @click="onDialogCancel(FormRef)">Cancel</el-button>
                 </el-form-item>
@@ -173,6 +194,30 @@
                     },
                 }
             },
+            computed: {
+                "dialog.editable"() {
+                    if (["daemon", "module", "template"].indexOf(this.dialog.record.type) !== -1) { // 这三种无字段可修改
+                        return !this.dialog.record.rowid
+                    }
+                    return !this.dialog.record.active
+                },
+                "proxy.dialog.record.name.prefix": {
+                    get() {
+                        return [this.dialog.record.name?.indexOf("node_modules/") === 0 && "node_modules/"].filter(i => i)
+                    },
+                    set(v) {
+                        this.dialog.record.name = (v[0] || "") + this["proxy.dialog.record.name.value"]
+                    },
+                },
+                "proxy.dialog.record.name.value": {
+                    get() {
+                        return this.dialog.record.name?.replace(/^node_modules\//, "") || ""
+                    },
+                    set(v) {
+                        this.dialog.record.name = (this["proxy.dialog.record.name.prefix"][0] || "") + v
+                    },
+                },
+            },
             data() {
                 return {
                     constants: {
@@ -183,6 +228,44 @@
                             module: ["typescript"],
                             resource: ["html", "text", "vue"],
                             template: ["html", "text", "vue"],
+                        },
+                        rules: {
+                            type: [{
+                                required: true,
+                                message: "Type is required",
+                                trigger: "blur",
+                            }],
+                            lang: [{
+                                required: true,
+                                message: "Language is required",
+                                trigger: "blur",
+                            }],
+                            name: [{
+                                required: true,
+                                message: "Name is required",
+                                trigger: "submit", // 提交表单的时候校验必填
+                            }, {
+                                validator: (rule, value, callback) => {
+                                    if (this.dialog.record.type === "module") {
+                                        if (/^(node_modules\/)?\w{2,32}$/.test(value)) {
+                                            return callback()
+                                        }
+                                    } else if (/^\w{2,32}$/.test(value)) {
+                                        return callback()
+                                    }
+                                    return callback(new Error("Name must be a string that matches /[A-Za-z0-9_]{2,32}/"))
+                                },
+                                trigger: "blur",
+                            }],
+                            cron: [{
+                                required: true,
+                                message: "Cron is required",
+                                trigger: "blur",
+                            }, {
+                                pattern: /^(\*|([0-9]|1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9])|\*\/([0-9]|1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9])) (\*|([0-9]|1[0-9]|2[0-3])|\*\/([0-9]|1[0-9]|2[0-3])) (\*|([1-9]|1[0-9]|2[0-9]|3[0-1])|\*\/([1-9]|1[0-9]|2[0-9]|3[0-1])) (\*|([1-9]|1[0-2])|\*\/([1-9]|1[0-2])) (\*|([0-6])|\*\/([0-6]))$/,
+                                message: "Invalid cron expression",
+                                trigger: ["blur", "change"],
+                            }],
                         },
                     },
                     table: {
@@ -206,44 +289,6 @@
                         record: {},
                         visiable: false,
                         loading: false,
-                        rules: {
-                            type: [{
-                                required: true,
-                                message: "Type is required",
-                                trigger: "blur",
-                            }],
-                            lang: [{
-                                required: true,
-                                message: "Language is required",
-                                trigger: "blur",
-                            }],
-                            name: [{
-                                required: true,
-                                message: "Name is required",
-                                trigger: "blur",
-                            }, {
-                                validator: (rule, value, callback) => {
-                                    if (this.dialog.record.type === "module") {
-                                        if (!/^(node_modules\/)?\w{2,32}$/.test(value)) {
-                                            return callback(new Error("Name must be a string that matches /(node_modules/)?[A-Za-z0-9_]{2,32}/"))
-                                        }
-                                    } else if (!/^\w{2,32}$/.test(value)) {
-                                        return callback(new Error("Name must be a string that matches /[A-Za-z0-9_]{2,32}/"))
-                                    }
-                                    callback()
-                                },
-                                trigger: "blur",
-                            }],
-                            cron: [{
-                                required: true,
-                                message: "Cron is required",
-                                trigger: "blur",
-                            }, {
-                                pattern: /^(\*|([0-9]|1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9])|\*\/([0-9]|1[0-9]|2[0-9]|3[0-9]|4[0-9]|5[0-9])) (\*|([0-9]|1[0-9]|2[0-3])|\*\/([0-9]|1[0-9]|2[0-3])) (\*|([1-9]|1[0-9]|2[0-9]|3[0-1])|\*\/([1-9]|1[0-9]|2[0-9]|3[0-1])) (\*|([1-9]|1[0-2])|\*\/([1-9]|1[0-2])) (\*|([0-6])|\*\/([0-6]))$/,
-                                message: "Invalid cron expression",
-                                trigger: ["blur", "change"],
-                            }],
-                        },
                     },
                 }
             },
@@ -319,7 +364,7 @@
                     this.dialog.visible = true
                 },
                 onTableRowCode(record) {
-                    window.open(`editor.html?name=${record.name}&type=${record.type}` + (record.rowid ? "" : "&eg"))
+                    window.open(`editor.html?name=${record.name}&type=${record.type}` + (record.rowid ? "" : "&example"))
                 },
                 onTableRowDelete(record) {
                     const that = this
