@@ -23,20 +23,17 @@
             height: 100%;
         }
         #btn {
-            position: fixed;
-            z-index: 10;
-            bottom: 40px;
-            right: 40px;
-            width: 40px;
-            height: 40px;
-            font-size: 18px;
+            position: fixed; bottom: 40px; right: 40px; /* 固定定位在屏幕右下角 */
+            z-index: 10; /* 置顶显示 */
+            width: 40px; height: 40px; /* 固定大小为 40x40 */
             display: flex;
             line-height: 40px;
             justify-content: center;
-            border-radius: 50%;
-            box-shadow: 0 0 8px 0 rgb(255, 255, 255, 0.82);
-            cursor: pointer;
             background-color: white;
+            border-radius: 50%;
+            cursor: pointer;
+            transition-duration: .3s;
+            box-shadow: 0 0 8px 0 rgb(255, 255, 255, 0.82);
             -webkit-tap-highlight-color: transparent; /* 去除移动端点击后出现的阴影 */
         }
         #btn:active {
