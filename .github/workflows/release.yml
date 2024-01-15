@@ -106,10 +106,10 @@ jobs:
               CXX=x86_64-w64-mingw32-g++
           export GOOS=windows \
               GOARCH=amd64
-          make buildz
+          make buildz && mv cube.exe .out
       - name: Compress
         run: |
-          upx -9 -q -o cube.exe cube
+          upx -9 -q -o cube.exe .out
       - name: Package
         run: |
           zip cube-latest-windows-amd64-nocdn.zip cube.exe README.md LICENSE
