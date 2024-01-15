@@ -83,3 +83,46 @@ jobs:
           overwrite: true
           file_glob: true
           body: ""
+  build-windows-nocdn:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Set up Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.19
+      - name: Set up Upx
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y upx
+      - name: Set up MinGW
+        run: |
+          sudo apt-get install -y gcc-mingw-w64-x86-64
+      - name: Build
+        run: |
+          export CGO_ENABLED=1 \
+              CC=x86_64-w64-mingw32-gcc \
+              CXX=x86_64-w64-mingw32-g++
+          export GOOS=windows \
+              GOARCH=amd64
+          make buildz
+      - name: Compress
+        run: |
+          upx -9 -q -o cube.exe cube
+      - name: Package
+        run: |
+          zip cube-latest-windows-amd64-nocdn.zip cube.exe README.md LICENSE
+      - name: Checksum
+        run: |
+          md5sum cube-latest-windows-amd64-nocdn.zip | cut -d ' ' -f 1 > cube-latest-windows-amd64-nocdn.zip.md5
+      - name: Upload
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: cube-latest-windows-amd64-nocdn.zip*
+          tag: latest
+          release_name: latest
+          overwrite: true
+          file_glob: true
+          body: ""
