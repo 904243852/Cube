@@ -40,9 +40,26 @@ wrk:
 fmt:
 	@find ./ -name "*.go" | xargs -I {} go fmt {}
 
+.ONESHELL:
 buildz: # 构建一个不依赖于 cdn 的版本，依赖的 js、css 等库文件将下载至本地 web/libs 目录下（Makefile 中命令需要转义字符 `$` -> `$$`、`'` -> `'\''`）
-	@bash -c 'grep -hor "https://cdn.bootcdn.net/ajax/libs/[^\"'\'''\'']*" ./web | grep -v "monaco-editor" | while read uri; do name=$${uri#https://cdn.bootcdn.net/ajax/}; mkdir -p "web/$$(dirname $${name})"; curl -s "https://cdn.bootcdn.net/ajax/$$name" -o "web/$${name}"; done'
-	@bash -c 'version=`grep -horP "monaco-editor/[\d\.]+" ./web | uniq | cut -d "/" -f 2`; curl -sOL "https://registry.npm.taobao.org/monaco-editor/-/monaco-editor-$$version.tgz"; mkdir -p "./web/libs/monaco-editor/$$version/"; tar -zxf monaco-editor-$$version.tgz -C "./web/libs/monaco-editor/$$version/" --strip-components 1 "package/min"; rm monaco-editor-$$version.tgz'
-	@sed -i 's#https://cdn.bootcdn.net/ajax/libs#/libs#g' web/*.html
-	@go build -ldflags "-s -w" .
-	@sed -i 's#/libs#https://cdn.bootcdn.net/ajax/libs#g' web/*.html
+	@
+	# 下载除 monaco-editor 外所有 css、js 资源文件
+	grep -hor "https://cdn.bootcdn.net/ajax/libs/[^\"'\'''\'']*" ./web | grep -v "monaco-editor" | while read uri
+	do
+		name=$${uri#https://cdn.bootcdn.net/ajax/}
+		mkdir -p "web/$$(dirname $${name})"
+		curl -s "https://cdn.bootcdn.net/ajax/$$name" -o "web/$${name}"
+	done
+	# 下载 monaco-editor 资源文件
+	export LANG=C.UTF-8
+	export version=`grep -horP "monaco-editor/[\d\.]+" ./web | uniq | cut -d "/" -f 2`
+	curl -sOL "https://registry.npm.taobao.org/monaco-editor/-/monaco-editor-$$version.tgz"
+	mkdir -p "./web/libs/monaco-editor/$$version/"
+	tar -zxf monaco-editor-$$version.tgz -C "./web/libs/monaco-editor/$$version/" --strip-components 1 "package/min"
+	rm monaco-editor-$$version.tgz
+	# 替换 html 中的 cdn 地址
+	sed -i 's#https://cdn.bootcdn.net/ajax/libs#/libs#g' web/*.html
+	# 编译
+	go build -ldflags "-s -w" .
+	# 还原 html 中的 cdn 地址
+	sed -i 's#/libs#https://cdn.bootcdn.net/ajax/libs#g' web/*.html
