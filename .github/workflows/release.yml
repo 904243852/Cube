@@ -106,7 +106,7 @@ jobs:
               CXX=x86_64-w64-mingw32-g++
           export GOOS=windows \
               GOARCH=amd64
-          make build-nocdn && mv cube.exe .out
+          make build ENABLE_CDN=0 && mv cube.exe .out
       - name: Compress
         run: |
           upx -9 -q -o cube.exe .out
