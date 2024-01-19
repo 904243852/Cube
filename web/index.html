@@ -157,7 +157,10 @@
                 <el-form-item label="Url" v-if="!!~['controller', 'resource'].indexOf(dialog.record.type)">
                     <el-input v-model="dialog.record.url" :disabled="dialog.record.active">
                         <template #prepend>
-                            {{ { controller: "/service/", resource: "/resource/", }[dialog.record.type] }}
+                            {{ this["dialog.url.prepend"] }}
+                        </template>
+                        <template #append v-if="!this['dialog.editable']">
+                            <el-link type="primary" :underline="false" :icon="Position" :href="this['dialog.url.prepend'] + dialog.record.url"></el-link>
                         </template>
                     </el-input>
                 </el-form-item>
@@ -176,7 +179,7 @@
         Vue.createApp({
             setup() {
                 const { ref } = Vue
-                const { Delete, Download, Edit, Search, Plus, Upload, VideoPause, VideoPlay, } = ElementPlusIconsVue
+                const { Delete, Download, Edit, Search, Plus, Position, Upload, VideoPause, VideoPlay, } = ElementPlusIconsVue
                 const UploadRef = ref()
                 return {
                     Delete,
@@ -184,6 +187,7 @@
                     Edit,
                     Search,
                     Plus,
+                    Position,
                     Upload,
                     VideoPause,
                     VideoPlay,
@@ -200,6 +204,9 @@
                         return !this.dialog.record.rowid
                     }
                     return !this.dialog.record.active
+                },
+                "dialog.url.prepend"() {
+                    return { controller: "/service/", resource: "/resource/", }[this.dialog.record.type]
                 },
                 "proxy.dialog.record.name.prefix": {
                     get() {
