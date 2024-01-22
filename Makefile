@@ -1,5 +1,7 @@
 # Makefile 中命令需要转义字符 `$` -> `$$`、`'` -> `'\''`
 
+.ONESHELL: # target 中的每行命令使用同一个 shell，用于支持多行命令
+
 # 运行
 run: # 从代码中运行
 	@go run . -n 8
@@ -11,7 +13,6 @@ kill:
 	@ps -ef | grep -P "/cube|/gowatch" | grep -v "grep" | awk '{print $$2}' | xargs kill -9
 
 # 编译
-.ONESHELL:
 build: clean # 默认使用 CDN 资源并且不使用 UPX 压缩，即 make build ENABLE_CDN=1 ENABLE_UPX=0
 	@
 	# 是否使用 CDN 资源
@@ -20,8 +21,8 @@ build: clean # 默认使用 CDN 资源并且不使用 UPX 压缩，即 make buil
 		grep -hor "https://cdn.bootcdn.net/ajax/libs/[^\"'\'''\'']*" ./web | grep -v "monaco-editor" | while read uri
 		do
 			name=$${uri#https://cdn.bootcdn.net/ajax/}
-			mkdir -p "web/$$(dirname $${name})"
-			curl -s "https://cdn.bootcdn.net/ajax/$$name" -o "web/$${name}"
+			mkdir -p "web/$$(dirname $$name)"
+			curl -s "https://cdn.bootcdn.net/ajax/$$name" -o "web/$$name"
 		done
 		# 下载 monaco-editor 资源文件
 		export LANG=C.UTF-8
@@ -58,16 +59,23 @@ tidy: # 安装依赖、删除 go.mod、go.sum 中的无用依赖
 update: # 更新依赖
 	@go get -u .
 
-wrk:
+wrk: # 性能压测
 	@wrk -t8 -c256 -R 20000 -d5s http://127.0.0.1:8090/service/greeting
 
-fmt:
+fmt: # 格式化 .go 文件代码
 	@find ./ -name "*.go" | xargs -I {} go fmt {}
 
-# 证书
-crt:
-	@ls | grep -P 'ca\.(key|crt)' > /dev/null && echo 'The ca.key or ca.crt already existed, skip.' || openssl req -new -days 3650 -x509 -nodes -subj "/C=CN/ST=BJ/L=BJ/O=Sunke, Inc./CN=Sunke Root CA" -keyout ca.key -out ca.crt
-	@bash -c 'openssl req -newkey rsa:2048 -nodes -keyout server.key -subj "/C=CN/ST=BJ/L=BJ/O=Sunke, Inc./CN=localhost" -out server.csr && openssl x509 -sha256 -req -extfile <(printf "subjectAltName=DNS:localhost,IP:127.0.0.1") -days 365 -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt'
+crt: # 创建 CA 证书和服务端证书
+	@
+	ls | grep -P 'ca\.(key|crt)' > /dev/null \
+		&& echo 'The ca.key or ca.crt already existed, skip.' \
+		|| openssl req -new -days 3650 -x509 -nodes -subj "/C=CN/ST=BJ/L=BJ/O=Sunke, Inc./CN=Sunke Root CA" -keyout ca.key -out ca.crt
+	bash -c '
+		openssl req -newkey rsa:2048 -nodes -keyout server.key -subj "/C=CN/ST=BJ/L=BJ/O=Sunke, Inc./CN=localhost" -out server.csr \
+			&& openssl x509 -sha256 -req -extfile <(printf "subjectAltName=DNS:localhost,IP:127.0.0.1") -days 365 -in server.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out server.crt
+	'
 
-ccrt:
-	@openssl req -newkey rsa:2048 -nodes -keyout client.key -subj "/C=CN/ST=BJ/L=BJ/O=/CN=" -out client.csr && openssl x509 -sha256 -req -days 365 -in client.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out client.crt
+ccrt: # 创建客户端证书
+	@
+	openssl req -newkey rsa:2048 -nodes -keyout client.key -subj "/C=CN/ST=BJ/L=BJ/O=/CN=" -out client.csr \
+		&& openssl x509 -sha256 -req -days 365 -in client.csr -CA ca.crt -CAkey ca.key -CAcreateserial -out client.crt
