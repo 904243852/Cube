@@ -25,7 +25,13 @@ func HandleService(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 获取 vm 实例
-	worker := <-internal.WorkerPool.Channels
+	var worker *internal.Worker
+	select {
+	case worker = <-internal.WorkerPool.Channels:
+	default:
+		http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
+		return
+	}
 	defer func() {
 		worker.Reset()
 		internal.WorkerPool.Channels <- worker

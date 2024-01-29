@@ -45,13 +45,16 @@ func CreateULID() string {
 	var buf [26]byte
 
 	alphabet := "0123456789ABCDEFGHJKMNPQRSTVWXYZ" // Crockford Base32 编码字母表（排除了 "I"、"L"、"O"、"U" 四个字母）
-	for i := 0; i < 10; i++ { // 前 10 个字符为时间戳
+	for i := 0; i < 10; i++ {
+		// 前 10 个字符为时间戳
 		buf[i] = alphabet[timestamp>>(45-i*5)&0b11111]
 	}
-	for i := 10; i < 18; i++ { // 中 8 个字符为随机数
+	for i := 10; i < 18; i++ {
+		// 中 8 个字符为随机数
 		buf[i] = alphabet[randomness[i-10]&0b11111]
 	}
-	for i := 18; i < 26; i++ { // 后 8 个字符为递增随机数
+	for i := 18; i < 26; i++ {
+		// 后 8 个字符为递增随机数
 		buf[i] = alphabet[num>>(56-(i-18)*8)&0b11111]
 	}
 
