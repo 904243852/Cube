@@ -143,7 +143,7 @@
                     })
 
                     // 预加载所有 module source，用于 import
-                    fetch("source?lang=typescript&type=module&size=100", {
+                    fetch("source?type=module&size=100", {
                         method: "GET",
                     }).then(r => r.json()).then(r => {
                         (r.data.sources || []).forEach(s => {

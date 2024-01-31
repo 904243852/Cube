@@ -245,7 +245,7 @@ func handleSourceGet(w http.ResponseWriter, r *http.Request) (interface{}, bool,
 
 	// 解析 URL 入参
 	p := &util.QueryParams{Values: r.URL.Query()}
-	name, stype := p.Get("name"), p.GetOrDefault("type", "%")
+	name, stype := p.GetOrDefault("name", "%"), p.GetOrDefault("type", "%")
 	from, size := p.GetIntOrDefault("from", 0), p.GetIntOrDefault("size", 10)
 	sort := p.Get("sort")
 
