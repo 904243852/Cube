@@ -65,6 +65,9 @@ wrk: # 性能压测
 fmt: # 格式化 .go 文件代码
 	@find ./ -name "*.go" | xargs -I {} go fmt {}
 
+vet: # 静态代码检查
+	@go vet ./...
+
 crt: # 创建 CA 证书和服务端证书
 	@
 	ls | grep -P 'ca\.(key|crt)' > /dev/null \

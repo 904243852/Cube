@@ -25,12 +25,12 @@ func (s *ServiceContextReader) Read(size int) ([]byte, error) {
 	return buf, err
 }
 
-func (s *ServiceContextReader) ReadByte() (int, error) {
+func (s *ServiceContextReader) ReadByte() (byte, error) {
 	b, err := s.reader.ReadByte() // 如果是 chunk 传输，该方法不会返回 chunk size 和 "\r\n"，而是按 chunk data 到达顺序依次读取每个 chunk data 中的每个字节，如果已到达的 chunk 已读完且下一个 chunk 未到达，该方法将阻塞
 	if err == io.EOF {
-		return -1, nil
+		return 0, nil
 	}
-	return int(b), err
+	return b, err
 }
 
 type ServiceContext struct {
