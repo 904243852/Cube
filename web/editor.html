@@ -142,8 +142,8 @@
                         monaco.languages.typescript.typescriptDefaults.addExtraLib(r, "global.d.ts")
                     })
 
-                    // 预加载所有 module source，用于 import
-                    fetch("source?type=module&size=100", {
+                    // 预加载 module source，用于 import
+                    fetch("source?type=module&size=999", {
                         method: "GET",
                     }).then(r => r.json()).then(r => {
                         (r.data.sources || []).forEach(s => {
