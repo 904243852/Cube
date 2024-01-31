@@ -4,30 +4,29 @@ A simple web server that can be developed online using typescript/javascript.
 
 ## Getting started
 
-1. Clone the git repo.
+1. Clone the repository.
 
-2. Make sure all dependencies are installed:
+2. Build from the source code.
     ```bash
-    make tidy
+    make build
     ```
 
-3. Start the server:
+3. Start the server.
     ```bash
-    make build && ./cube
+    ./cube -n 8
     ```
-    Or start from source code:
+    Or you can start directly from the source code:
     ```bash
     make run
     ```
-
-4. For more startup parameters, please refer to:
+    For more startup parameters, please refer to:
     ```bash
     ./cube --help
-    ``` 
+    ```
 
 4. Open `http://127.0.0.1:8090/` in browser.
 
-## Run with SSL/TLS
+### Run with SSL/TLS
 
 1. Ensure that `ca.key`, `ca.crt`, `server.key` and `server.crt` have been created:
     ```bash
@@ -67,7 +66,7 @@ A simple web server that can be developed online using typescript/javascript.
     chrome https://127.0.0.1:8443/
     ```
 
-## Run with HTTP/3
+### Run with HTTP/3
 
 1. Ensure that `ca.key`, `ca.crt`, `server.key` and `server.crt` have been created:
     ```bash
@@ -120,7 +119,7 @@ You can create a controller as a http/https service.
     }
     ```
 
-- Get request parameters.  
+- Get request parameters.
     1. Create a controller with name `greeting`, type `controller` and url `/service/{name}/greeting/{words}`.
         ```typescript
         export default function (ctx: ServiceContext) {
@@ -195,7 +194,7 @@ You can create a controller as a http/https service.
             arr.push(byte)
             byte = reader.readByte()
         }
-        
+
         console.debug(String.fromCharCode(...arr))
     }
     ```
@@ -571,7 +570,7 @@ Here are some built-in methods and modules.
                 slice = 1024 * 1024 * 2, // The slice size is 2 MB
                 start = Number(ranges[0]),
                 end = Math.min(Number(ranges[1]) || (start + slice - 1), size - 1)
-            
+
             const buf = filec.readRange(name, start, end - start + 1) // slice the mp4 file from [start, end + 1)
 
             return new ServiceResponse(206, {
@@ -595,7 +594,7 @@ Here are some built-in methods and modules.
             -y a.flv
         ```
         > We need encode with libx264. Otherwise, using flv.js to pull the stream may cause an error: "DemuxException: type = CodecUnsupported, info = Flv: Unsupported codec in video frame: 2"
-    2. Create a controller with url `/service/foo`. 
+    2. Create a controller with url `/service/foo`.
         ```typescript
         export default function (ctx: ServiceContext) {
             const buf = $native("file").read("a.flv")
@@ -1329,7 +1328,7 @@ Here are some built-in methods and modules.
                         </D:response>
                                 `;
                             }).join("")
-                        }                
+                        }
                     </D:multistatus>`.replace(/>[\s\n\r]*</g, "><")
                 );
             }
