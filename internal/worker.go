@@ -94,7 +94,7 @@ func CreateWorker(program *goja.Program, id int) *Worker {
 	}
 	function, ok := goja.AssertFunction(entry)
 	if !ok {
-		panic("the program is not a function")
+		panic("program is not a function")
 	}
 
 	worker := Worker{id, runtime, function, make([]func(), 0), builtin.NewEventLoop(), nil}
@@ -162,7 +162,7 @@ func CreateWorker(program *goja.Program, id int) *Worker {
 				return nil, err
 			}
 		} else {
-			return nil, errors.New("the entry is not a function")
+			return nil, errors.New("entry is not a function")
 		}
 
 		return module.Get("exports"), nil

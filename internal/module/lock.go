@@ -61,7 +61,7 @@ func (l *LockClient) Lock(timeout int) error {
 		time.Sleep(time.Millisecond)
 	}
 	l.Unlock()
-	return errors.New("Acquire lock " + *l.name + " timeout.")
+	return errors.New("acquire lock " + *l.name + " timeout")
 }
 
 func (l *LockClient) Unlock() {

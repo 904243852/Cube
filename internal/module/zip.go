@@ -31,7 +31,7 @@ func (z *ZipClient) Write(data map[string]interface{}) ([]byte, error) {
 		case []byte:
 			_, err = f.Write(v)
 		default:
-			err = errors.New("Type of value " + k + " is not supported.")
+			err = errors.New("type of value " + k + " is not supported")
 		}
 		if err != nil {
 			return nil, err

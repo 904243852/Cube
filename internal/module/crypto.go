@@ -68,7 +68,7 @@ func (c *CryptoRsaClient) GenerateKey(length int) (*map[string][]byte, error) {
 func (c *CryptoRsaClient) Encrypt(input []byte, key []byte) ([]byte, error) {
 	block, _ := pem.Decode(key)
 	if block == nil {
-		return nil, errors.New("the public key is invalid")
+		return nil, errors.New("public key is invalid")
 	}
 	publicKey, err := x509.ParsePKCS1PublicKey(block.Bytes)
 	if err != nil {
@@ -80,7 +80,7 @@ func (c *CryptoRsaClient) Encrypt(input []byte, key []byte) ([]byte, error) {
 func (c *CryptoRsaClient) Decrypt(input []byte, key []byte) ([]byte, error) {
 	block, _ := pem.Decode(key)
 	if block == nil {
-		return nil, errors.New("the private key is invalid")
+		return nil, errors.New("private key is invalid")
 	}
 	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 	if err != nil {
@@ -126,7 +126,7 @@ func (c *CryptoRsaClient) SignPss(input []byte, key []byte, algorithm string) ([
 func (c *CryptoRsaClient) Verify(input []byte, sign []byte, key []byte, algorithm string) (bool, error) {
 	block, _ := pem.Decode(key)
 	if block == nil {
-		return false, errors.New("the public key is invalid")
+		return false, errors.New("public key is invalid")
 	}
 	publicKey, err := x509.ParsePKCS1PublicKey(block.Bytes)
 	if err != nil {
@@ -148,7 +148,7 @@ func (c *CryptoRsaClient) Verify(input []byte, sign []byte, key []byte, algorith
 func (c *CryptoRsaClient) VerifyPss(input []byte, sign []byte, key []byte, algorithm string) (bool, error) {
 	block, _ := pem.Decode(key)
 	if block == nil {
-		return false, errors.New("the public key is invalid")
+		return false, errors.New("public key is invalid")
 	}
 	publicKey, err := x509.ParsePKCS1PublicKey(block.Bytes)
 	if err != nil {
@@ -180,7 +180,7 @@ func GetHash(algorithm string) (crypto.Hash, error) {
 	case "sha512":
 		return crypto.SHA512, nil
 	default:
-		return crypto.SHA256, errors.New("Hash algorithm " + algorithm + " is not supported.")
+		return crypto.SHA256, errors.New("hash algorithm " + algorithm + " is not supported")
 	}
 }
 
