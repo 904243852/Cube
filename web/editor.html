@@ -95,6 +95,7 @@
             })({
                 status: "writable", // 源码状态，readonly=只读、writable=可写
                 loaded: false, // 源码是否已加载
+                broadcaster: null, // 广播频道，用于跨页面通讯，如修改 module 源码时通知其它编辑器页面实时更新依赖
             }),
 
             // 请求入参
@@ -150,6 +151,22 @@
                             monaco.languages.typescript.typescriptDefaults.addExtraLib(s.content, s.name + ".ts")
                         })
                     })
+
+                    // 注册广播通道，并监听 module source 更新事件消息
+                    if (BroadcastChannel) {
+                        this.broadcaster = new BroadcastChannel("cube")
+                        this.broadcaster.onmessage = function({ data }) {
+                            if (data.action === "update" && data.type === "module") {
+                                fetch(`source?name=${data.name}&type=${data.type}`, {
+                                    method: "GET",
+                                }).then(r => r.json()).then(r => {
+                                    (r.data.sources || []).forEach(s => {
+                                        monaco.languages.typescript.typescriptDefaults.addExtraLib(s.content, s.name + ".ts")
+                                    })
+                                })
+                            }
+                        }
+                    }
                 }
 
                 // 创建 Editor
@@ -254,6 +271,12 @@
                                 if (r.code === "0") {
                                     that.alert("Saved successfully", "success")
                                     input.name = name
+                                    // 如果是 module 类型，则发送广播消息，通知其它页面更新依赖
+                                    that.broadcaster && input.type === "module" && that.broadcaster.postMessage({
+                                        action: "update",
+                                        name,
+                                        type: input.type,
+                                    })
                                 } else {
                                     that.alert(r.message, "error")
                                 }
