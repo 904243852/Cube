@@ -124,7 +124,7 @@
 
             // 渲染 Monaco Editor
             render(lang) {
-                // 初始化 Editor 的 typescript 编译选项
+                // 初始化 editor 的 typescript 编译选项
                 monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
                     allowNonTsExtensions: true,
                     experimentalDecorators: true, // 启用实验性的装饰器特性
@@ -143,7 +143,7 @@
                         monaco.languages.typescript.typescriptDefaults.addExtraLib(r, "global.d.ts")
                     })
 
-                    // 预加载 module source，用于 import
+                    // 预加载 module 源码，用于 import
                     fetch("source?type=module&size=999", {
                         method: "GET",
                     }).then(r => r.json()).then(r => {
@@ -152,7 +152,7 @@
                         })
                     })
 
-                    // 注册广播通道，并监听 module source 更新事件消息
+                    // 注册广播通道，并监听 module 源码更新事件消息
                     if (BroadcastChannel) {
                         this.broadcaster = new BroadcastChannel("cube")
                         this.broadcaster.onmessage = function({ data }) {
@@ -169,7 +169,7 @@
                     }
                 }
 
-                // 创建 Editor
+                // 创建 editor
                 const editor = monaco.editor.create(document.querySelector("#container"), {
                     language: lang,
                     theme: "vs-dark",
@@ -210,7 +210,7 @@
                 // 注册全局 resize 事件，当浏览器窗口大小发生改变时，编辑器自动调整大小
                 window.onresize = () => editor.layout()
 
-                // 注册 Editor 快捷键
+                // 注册 editor 快捷键
                 this.setEditorShortcutKeys(editor, this.input)
 
                 // 注册保存按钮的点击事件
@@ -219,7 +219,7 @@
                 return editor
             },
 
-            // 设置 Editor 的光标位置
+            // 设置 editor 的光标位置
             setEditorFocus(editor, selection) {
                 if (!selection || !Object.keys(selection).length) {
                     return
@@ -238,7 +238,7 @@
                 editor.focus()
             },
 
-            // 注册 Editor 快捷键
+            // 注册 editor 快捷键
             setEditorShortcutKeys(editor, input) {
                 const that = this
                 document.onkeydown = function (e) {

@@ -5,6 +5,7 @@ import (
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
@@ -65,7 +66,7 @@ func (c *CryptoRsaClient) GenerateKey(length int) (*map[string][]byte, error) {
 	}, nil
 }
 
-func (c *CryptoRsaClient) Encrypt(input []byte, key []byte) ([]byte, error) {
+func (c *CryptoRsaClient) Encrypt(input []byte, key []byte, padding string) ([]byte, error) {
 	block, _ := pem.Decode(key)
 	if block == nil {
 		return nil, errors.New("public key is invalid")
@@ -74,10 +75,13 @@ func (c *CryptoRsaClient) Encrypt(input []byte, key []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if padding == "oaep" {
+		return rsa.EncryptOAEP(sha256.New(), rand.Reader, publicKey, input, nil)
+	}
 	return rsa.EncryptPKCS1v15(rand.Reader, publicKey, input)
 }
 
-func (c *CryptoRsaClient) Decrypt(input []byte, key []byte) ([]byte, error) {
+func (c *CryptoRsaClient) Decrypt(input []byte, key []byte, padding string) ([]byte, error) {
 	block, _ := pem.Decode(key)
 	if block == nil {
 		return nil, errors.New("private key is invalid")
@@ -86,10 +90,13 @@ func (c *CryptoRsaClient) Decrypt(input []byte, key []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if padding == "oaep" {
+		return rsa.DecryptOAEP(sha256.New(), rand.Reader, privateKey, input, nil)
+	}
 	return rsa.DecryptPKCS1v15(rand.Reader, privateKey, input)
 }
 
-func (c *CryptoRsaClient) Sign(input []byte, key []byte, algorithm string) ([]byte, error) {
+func (c *CryptoRsaClient) Sign(input []byte, key []byte, algorithm string, padding string) ([]byte, error) {
 	hash, err := GetHash(algorithm)
 	if err != nil {
 		return nil, err
@@ -101,29 +108,16 @@ func (c *CryptoRsaClient) Sign(input []byte, key []byte, algorithm string) ([]by
 	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
 	if err != nil {
 		return nil, err
+	}
+	if padding == "pss" {
+		return rsa.SignPSS(rand.Reader, privateKey, hash, digest, &rsa.PSSOptions{
+			SaltLength: rsa.PSSSaltLengthEqualsHash,
+		})
 	}
 	return rsa.SignPKCS1v15(nil, privateKey, hash, digest)
 }
 
-func (c *CryptoRsaClient) SignPss(input []byte, key []byte, algorithm string) ([]byte, error) {
-	hash, err := GetHash(algorithm)
-	if err != nil {
-		return nil, err
-	}
-	h := hash.New()
-	h.Write(input)
-	digest := h.Sum(nil)
-	block, _ := pem.Decode(key)
-	privateKey, err := x509.ParsePKCS1PrivateKey(block.Bytes)
-	if err != nil {
-		return nil, err
-	}
-	return rsa.SignPSS(rand.Reader, privateKey, hash, digest, &rsa.PSSOptions{
-		SaltLength: rsa.PSSSaltLengthEqualsHash,
-	})
-}
-
-func (c *CryptoRsaClient) Verify(input []byte, sign []byte, key []byte, algorithm string) (bool, error) {
+func (c *CryptoRsaClient) Verify(input []byte, sign []byte, key []byte, algorithm string, padding string) (bool, error) {
 	block, _ := pem.Decode(key)
 	if block == nil {
 		return false, errors.New("public key is invalid")
@@ -139,30 +133,14 @@ func (c *CryptoRsaClient) Verify(input []byte, sign []byte, key []byte, algorith
 	h := hash.New()
 	h.Write(input)
 	digest := h.Sum(nil)
-	if err = rsa.VerifyPKCS1v15(publicKey, hash, digest[:], sign); err != nil {
-		return false, nil
-	}
-	return true, nil
-}
-
-func (c *CryptoRsaClient) VerifyPss(input []byte, sign []byte, key []byte, algorithm string) (bool, error) {
-	block, _ := pem.Decode(key)
-	if block == nil {
-		return false, errors.New("public key is invalid")
-	}
-	publicKey, err := x509.ParsePKCS1PublicKey(block.Bytes)
-	if err != nil {
-		return false, err
-	}
-	hash, err := GetHash(algorithm)
-	if err != nil {
-		return false, err
-	}
-	h := hash.New()
-	h.Write(input)
-	digest := h.Sum(nil)
-	if err = rsa.VerifyPSS(publicKey, hash, digest[:], sign, nil); err != nil {
-		return false, nil
+	if padding == "pss" {
+		if err = rsa.VerifyPSS(publicKey, hash, digest[:], sign, nil); err != nil {
+			return false, nil
+		}
+	} else {
+		if err = rsa.VerifyPKCS1v15(publicKey, hash, digest[:], sign); err != nil {
+			return false, nil
+		}
 	}
 	return true, nil
 }

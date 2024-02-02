@@ -369,11 +369,12 @@ Here are some built-in methods and modules.
             privateKey,
         )
     ) // "hello, world"
-    rsa.verifyPss(
+    rsa.verify(
         "hello, world",
-        rsa.signPss("hello, world", privateKey, "sha256"),
+        rsa.sign("hello, world", privateKey, "sha256", "pss"),
         publicKey,
         "sha256",
+        "pss",
     ) // true
 
     // file

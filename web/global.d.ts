@@ -76,12 +76,10 @@ declare function $native(name: "crypto"): {
     };
     createRsa(): {
         generateKey(): { privateKey: NativeByteArray; publicKey: NativeByteArray; };
-        encrypt(input: string | Uint8Array | NativeByteArray, key: string | Uint8Array | NativeByteArray): NativeByteArray;
-        decrypt(input: string | Uint8Array | NativeByteArray, key: string | Uint8Array | NativeByteArray): NativeByteArray;
-        sign(input: string | Uint8Array | NativeByteArray, key: string | Uint8Array | NativeByteArray, algorithm: "md5" | "sha1" | "sha256" | "sha512"): NativeByteArray;
-        signPss(input: string | Uint8Array | NativeByteArray, key: string | Uint8Array | NativeByteArray, algorithm: "md5" | "sha1" | "sha256" | "sha512"): NativeByteArray;
-        verify(input: string | Uint8Array | NativeByteArray, sign: string | Uint8Array | NativeByteArray, key: string | Uint8Array | NativeByteArray, algorithm: "md5" | "sha1" | "sha256" | "sha512"): boolean;
-        verifyPss(input: string | Uint8Array | NativeByteArray, sign: string | Uint8Array | NativeByteArray, key: string | Uint8Array | NativeByteArray, algorithm: "md5" | "sha1" | "sha256" | "sha512"): boolean;
+        encrypt(input: string | Uint8Array | NativeByteArray, publicKey: string | Uint8Array | NativeByteArray, padding: "pkcs1" | "oaep" = "pkcs1"): NativeByteArray;
+        decrypt(input: string | Uint8Array | NativeByteArray, privateKey: string | Uint8Array | NativeByteArray, padding: "pkcs1" | "oaep" = "pkcs1"): NativeByteArray;
+        sign(input: string | Uint8Array | NativeByteArray, key: string | Uint8Array | NativeByteArray, algorithm: "md5" | "sha1" | "sha256" | "sha512", padding: "pkcs1" | "pss" = "pkcs1"): NativeByteArray;
+        verify(input: string | Uint8Array | NativeByteArray, sign: string | Uint8Array | NativeByteArray, key: string | Uint8Array | NativeByteArray, algorithm: "md5" | "sha1" | "sha256" | "sha512", padding: "pkcs1" | "pss" = "pkcs1"): boolean;
     };
 }
 
