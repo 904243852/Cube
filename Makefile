@@ -22,12 +22,12 @@ build: clean # 默认使用 CDN 资源并且不使用 UPX 压缩，即 make buil
 		do
 			name=$${uri#https://cdn.bootcdn.net/ajax/}
 			mkdir -p "web/$$(dirname $$name)"
-			curl -s "https://cdn.bootcdn.net/ajax/$$name" -o "web/$$name"
+			curl -sk "https://cdn.bootcdn.net/ajax/$$name" -o "web/$$name"
 		done
 		# 下载 monaco-editor 资源文件
 		export LANG=C.UTF-8
 		export version=`grep -horP "monaco-editor/[\d\.]+" ./web | uniq | cut -d "/" -f 2`
-		curl -sOL "https://registry.npm.taobao.org/monaco-editor/-/monaco-editor-$$version.tgz"
+		curl -skOL "https://registry.npm.taobao.org/monaco-editor/-/monaco-editor-$$version.tgz"
 		mkdir -p "./web/libs/monaco-editor/$$version/"
 		tar -zxf monaco-editor-$$version.tgz -C "./web/libs/monaco-editor/$$version/" --strip-components 1 "package/min"
 		rm monaco-editor-$$version.tgz
