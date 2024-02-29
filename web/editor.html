@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no"><!-- 网页的宽度自动适应手机屏幕的宽度 -->
-    <title>Cube</title>
+    <title>Loading</title>
     <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.45.0/min/vs/editor/editor.main.css">
     <style>
         * {
@@ -53,7 +53,7 @@
         <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 512 512"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="32" d="M416 128L192 384l-96-96"></path></svg>
     </div>
 
-    <script src="https://cdn.bootcdn.net/ajax/libs/typescript/5.2.2/typescript.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/typescript/5.3.3/typescript.min.js"></script>
 
     <script src="https://cdn.bootcdn.net/ajax/libs/sweetalert/2.1.2/sweetalert.min.js"></script>
 
@@ -258,7 +258,7 @@
                                     inlineSources: true, // 指定进一步将 ts 文件的内容也包含到输出文件中
                                     removeComments: true, // 移除注释
                                     downlevelIteration: true, // 当 target 为 ES5 或 ES3 时，为 for-of、spread 和 destructuring 中的迭代器提供完全支持
-                                    target: ts.ScriptTarget.ES2015, // 指定编译后的 ECMAScript 代码语法版本
+                                    target: ts.ScriptTarget.ES5, // 指定编译目标 ES5 版本（ES2015 及以上版本的部分语法 goja 不兼容）
                                 },
                                 fileName: `${input.name || "noname"}.ts`,
                             })?.outputText
@@ -342,6 +342,9 @@
                     this.alert(`${this.input.type} "${this.input.name}" does not existed`)
                     return
                 }
+
+                // 渲染页面标题
+                document.title = this.input.name + " - " + this.input.type
 
                 const lang = { vue: "html" }[source.lang] || source.lang,
                     editor = this.render(lang)

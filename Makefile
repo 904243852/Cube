@@ -18,19 +18,24 @@ build: clean # 默认使用 CDN 资源并且不使用 UPX 压缩，即 make buil
 	# 是否使用 CDN 资源
 	if [ "$(ENABLE_CDN)" = "0" ]; then # 构建一个不依赖于 CDN 的版本，依赖的 js、css 等库文件将下载至本地 web/libs 目录下
 		# 下载除 monaco-editor 外所有 css、js 资源文件
-		grep -hor "https://cdn.bootcdn.net/ajax/libs/[^\"'\'''\'']*" ./web | grep -v "monaco-editor" | while read uri
+		grep -hor "https://cdn.bootcdn.net/ajax/libs/[^\"'\'''\'']*" ./web | grep -v "monaco-editor" | sort | uniq | while read uri
 		do
 			name=$${uri#https://cdn.bootcdn.net/ajax/}
+			if [ -f "web/$$name" ]; then
+				continue
+			fi
 			mkdir -p "web/$$(dirname $$name)"
 			curl -sk "https://cdn.bootcdn.net/ajax/$$name" -o "web/$$name"
 		done
 		# 下载 monaco-editor 资源文件
 		export LANG=C.UTF-8
 		export version=`grep -horP "monaco-editor/[\d\.]+" ./web | uniq | cut -d "/" -f 2`
-		curl -skOL "https://registry.npm.taobao.org/monaco-editor/-/monaco-editor-$$version.tgz"
-		mkdir -p "./web/libs/monaco-editor/$$version/"
-		tar -zxf monaco-editor-$$version.tgz -C "./web/libs/monaco-editor/$$version/" --strip-components 1 "package/min"
-		rm monaco-editor-$$version.tgz
+		if [ ! -d "./web/libs/monaco-editor/$$version/" ]; then
+			curl -skOL "https://registry.npm.taobao.org/monaco-editor/-/monaco-editor-$$version.tgz"
+			mkdir -p "./web/libs/monaco-editor/$$version/"
+			tar -zxf monaco-editor-$$version.tgz -C "./web/libs/monaco-editor/$$version/" --strip-components 1 "package/min"
+			rm monaco-editor-$$version.tgz
+		fi
 		# 替换 html 中的 cdn 地址
 		sed -i 's#https://cdn.bootcdn.net/ajax/libs#/libs#g' web/*.html
 		# 编译（删除符号、调试信息）

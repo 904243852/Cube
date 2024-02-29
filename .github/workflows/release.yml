@@ -26,7 +26,7 @@ jobs:
           upx -9 -q -o cube .out
       - name: Package
         run: |
-          tar -zcvf cube-latest-linux-amd64.tar.gz cube README.md LICENSE
+          tar -zcvf cube-latest-linux-amd64.tar.gz cube docs README.md LICENSE
       - name: Checksum
         run: |
           md5sum cube-latest-linux-amd64.tar.gz | cut -d ' ' -f 1 > cube-latest-linux-amd64.tar.gz.md5
@@ -69,7 +69,7 @@ jobs:
           upx -9 -q -o cube.exe .out
       - name: Package
         run: |
-          zip cube-latest-windows-amd64.zip cube.exe README.md LICENSE
+          zip cube-latest-windows-amd64.zip cube.exe docs README.md LICENSE
       - name: Checksum
         run: |
           md5sum cube-latest-windows-amd64.zip | cut -d ' ' -f 1 > cube-latest-windows-amd64.zip.md5
@@ -112,7 +112,7 @@ jobs:
           upx -9 -q -o cube.exe .out
       - name: Package
         run: |
-          zip cube-latest-windows-amd64-nocdn.zip cube.exe README.md LICENSE
+          zip cube-latest-windows-amd64-nocdn.zip cube.exe docs README.md LICENSE
       - name: Checksum
         run: |
           md5sum cube-latest-windows-amd64-nocdn.zip | cut -d ' ' -f 1 > cube-latest-windows-amd64-nocdn.zip.md5

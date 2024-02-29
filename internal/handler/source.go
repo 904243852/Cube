@@ -68,19 +68,30 @@ func handleSourcePost(r *http.Request) error {
 			return errors.New("name is required, it must be a string that matches /[A-Za-z0-9_]{2,32}/")
 		}
 	}
+	// 校验 active 必须为 false，不支持在创建过程中直接激活
+	if source.Active {
+		return errors.New("active must be false")
+	}
 	// 校验 url 不能重复
 	if source.Type == "controller" || source.Type == "resource" {
 		var count int
-		if err := Db.QueryRow("select count(1) from source where type = ? and url = ? and active = true and name != ?", source.Type, source.Url, source.Name).Scan(&count); err != nil {
+		if err := Db.QueryRow("select count(1) from source where type = ? and url = ? and name != ?", source.Type, source.Url, source.Name).Scan(&count); err != nil {
 			return err
 		}
 		if count > 0 {
 			return errors.New("url already existed")
 		}
 	}
+	// 校验 name 和 type 不能重复
+	{
+		var count int
+		if Db.QueryRow("select count(1) from source where name = ? and type = ?", source.Name, source.Type).Scan(&count); count > 0 {
+			return errors.New("source already existed")
+		}
+	}
 
 	// 新增
-	if _, err := Db.Exec("insert into source (name, type, lang, method, url, cron, last_modified_date) values(?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))", source.Name, source.Type, source.Lang, source.Method, source.Url, source.Cron); err != nil {
+	if _, err := Db.Exec("insert into source (name, type, lang, content, compiled, active, method, url, cron, last_modified_date) values(?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))", source.Name, source.Type, source.Lang, source.Content, source.Compiled, source.Active, source.Method, source.Url, source.Cron); err != nil {
 		return err
 	}
 
@@ -237,12 +248,6 @@ func handleSourcePut(r *http.Request) error {
 }
 
 func handleSourceGet(w http.ResponseWriter, r *http.Request) (interface{}, bool, error) {
-	// 初始化返回对象
-	var data struct {
-		Sources []model.Source `json:"sources"`
-		Total   int            `json:"total"`
-	}
-
 	// 解析 URL 入参
 	p := &util.QueryParams{Values: r.URL.Query()}
 	name, stype := p.GetOrDefault("name", "%"), p.GetOrDefault("type", "%")
@@ -254,6 +259,13 @@ func handleSourceGet(w http.ResponseWriter, r *http.Request) (interface{}, bool,
 	if ok, _ := regexp.MatchString("^(rowid|name|last_modified_date) (asc|desc)$", sort); ok {
 		orders = sort
 	}
+
+	// 初始化返回对象
+	var data struct {
+		Sources []model.Source `json:"sources"`
+		Total   int            `json:"total"`
+	}
+	data.Sources = make([]model.Source, 0, size)
 
 	// 查询总数
 	if err := Db.QueryRow("select count(1) from source where name like ? and type like ?", name, stype).Scan(&data.Total); err != nil { // 调用 QueryRow 方法后，须调用 Scan 方法，否则连接将不会被释放
