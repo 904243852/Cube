@@ -69,7 +69,7 @@ jobs:
           upx -9 -q -o cube.exe .out
       - name: Package
         run: |
-          zip cube-latest-windows-amd64.zip cube.exe docs README.md LICENSE
+          zip -r cube-latest-windows-amd64.zip cube.exe docs README.md LICENSE
       - name: Checksum
         run: |
           md5sum cube-latest-windows-amd64.zip | cut -d ' ' -f 1 > cube-latest-windows-amd64.zip.md5
@@ -112,7 +112,7 @@ jobs:
           upx -9 -q -o cube.exe .out
       - name: Package
         run: |
-          zip cube-latest-windows-amd64-nocdn.zip cube.exe docs README.md LICENSE
+          zip -r cube-latest-windows-amd64-nocdn.zip cube.exe docs README.md LICENSE
       - name: Checksum
         run: |
           md5sum cube-latest-windows-amd64-nocdn.zip | cut -d ' ' -f 1 > cube-latest-windows-amd64-nocdn.zip.md5
