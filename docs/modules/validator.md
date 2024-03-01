@@ -1,7 +1,7 @@
 # Validator
 
 ```typescript
-//#node_modules/validator&type=module
+//?name=node_modules/validator&type=module
 import "date";
 
 type GeneralSchema = {

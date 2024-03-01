@@ -2,7 +2,7 @@
 
 1. Create a controller with url `/service/webdav/{path}` and method `Any`.
     ```typescript
-    //#name=webdav&type=controller&url=webdav/{path}
+    //?name=webdav&type=controller&url=webdav/{path}
     const webdav = new class {
         public propfind(path: string) {
             let res = []

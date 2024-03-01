@@ -77,7 +77,7 @@
                 // 渲染多行代码块
                 document.querySelectorAll("pre code").forEach(e => {
                     // 获取 name、type 等源码信息，用于安装配置
-                    const [metadata] = e.innerText.match(/^\/\/#name=[\w\/]+&type=\w+[^\n]*\n/) || [""]
+                    const [metadata] = e.innerText.match(/^\/\/\?name=[\w\/]+&type=\w+[^\n]*\n/) || [""]
 
                     // 获取代码内容
                     const content = e.textContent = e.innerText.substring(metadata.length)

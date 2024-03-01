@@ -1,7 +1,7 @@
 # Date
 
 ```typescript
-//#name=node_modules/date&type=module
+//?name=node_modules/date&type=module
 declare global {
     interface Date {
         toString(layout?: string): string

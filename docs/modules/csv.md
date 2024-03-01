@@ -1,7 +1,7 @@
 # CSV
 
 ```typescript
-//#name=node_modules/csv&type=module
+//?name=node_modules/csv&type=module
 export class CSV {
     public static toJsonArray(content: string): object[] {
         let options = {

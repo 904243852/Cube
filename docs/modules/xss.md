@@ -1,7 +1,7 @@
 # XSS
 
 ```typescript
-//#node_modules/xss&type=module
+//?name=node_modules/xss&type=module
 export class XSS {
     public static ESCAPTION = {
         "<": "&lt;",

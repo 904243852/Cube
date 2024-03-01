@@ -1,7 +1,7 @@
 # WebFlow
 
 ```typescript
-//#node_modules/webflow&type=module
+//?name=node_modules/webflow&type=module
 interface Transition {
     on: string;
     to: string;

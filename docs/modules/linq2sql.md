@@ -1,7 +1,7 @@
 # Linq to SQL
 
 ```typescript
-//#name=node_modules/linq2sql&type=module
+//?name=node_modules/linq2sql&type=module
 const db = $native("db")
 
 type SQLBuilder = {

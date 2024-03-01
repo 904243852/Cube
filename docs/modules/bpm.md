@@ -1,7 +1,7 @@
 # BPM
 
 ```typescript
-//#name=node_modules/bpm&type=module
+//?name=node_modules/bpm&type=module
 //#region types
 
 enum ActivityType {

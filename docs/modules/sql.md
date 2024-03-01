@@ -1,7 +1,7 @@
 # SQL
 
 ```typescript
-//#name=node_modules/sql&type=module
+//?name=node_modules/sql&type=module
 export function sql(stmt: string): any {
     return function () {
         return function (this: any, ...params: any[]) {

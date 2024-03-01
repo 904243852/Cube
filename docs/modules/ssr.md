@@ -1,7 +1,7 @@
 # Server-Side Rendering
 
 ```typescript
-//#name=node_modules/ssr&type=module
+//?name=node_modules/ssr&type=module
 interface App {
     created?: () => object
     methods?: { [name: string]: Function }

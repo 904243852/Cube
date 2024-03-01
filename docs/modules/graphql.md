@@ -1,7 +1,7 @@
 # GraphQL
 
 ```typescript
-//#name=node_modules/graphql&type=module
+//?name=node_modules/graphql&type=module
 //#region record
 
 export type Record = {
