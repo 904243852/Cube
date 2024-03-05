@@ -1,8 +1,7 @@
 # Download a mp4 using HTTP Range
 
-1. Create a controller with url `/service/foo`.
+1. Create a controller with url `/service/mp4`.
     ```typescript
-    // http://127.0.0.1:8090/editor.html?name=foo
     export default function (ctx: ServiceContext) {
         const name = "a.mp4"
 
@@ -33,4 +32,4 @@
     }
     ```
 
-2. You can preview at `http://127.0.0.1:8090/service/foo` in browser.
+2. You can preview at `http://127.0.0.1:8090/service/mp4` in browser.

@@ -1,8 +1,7 @@
 # Return a view with asynchronous vues
 
-1. Create a template with lang `html`.
+1. Create a template with lang `html` and name `index`.
     ```html
-    <!-- http://127.0.0.1:8090/editor.html?name=index&type=template&lang=html -->
     <!DOCTYPE html>
     <html>
     <head>
@@ -50,7 +49,6 @@
 
 2. Create a resource with lang `vue` and url `/resource/greeting.vue`.
     ```html
-    <!-- http://127.0.0.1:8090/editor.html?name=greeting&type=reaource&lang=vue -->
     <template>
         <p>hello, {{ name }}</p>
     </template>
@@ -74,7 +72,6 @@
 
 3. Create a controller with url `/service/`.
     ```typescript
-    // http://127.0.0.1:8090/editor.html?name=index
     export default function (ctx: ServiceContext): ServiceResponse | Uint8Array | any {
         return $native("template")("index", {
             title: "this is title",
