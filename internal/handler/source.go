@@ -34,16 +34,19 @@ func HandleSource(w http.ResponseWriter, r *http.Request) {
 		err = handleSourcePut(r)
 	case http.MethodGet:
 		data, returnless, err = handleSourceGet(w, r)
+	case "EVAL":
+		handleSourceEval(w, r)
+		returnless = true
 	default:
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		Error(w, http.StatusMethodNotAllowed)
 		return
 	}
 	if err != nil {
-		toError(w, err)
+		Error(w, err)
 		return
 	}
 	if !returnless {
-		toSuccess(w, data)
+		Success(w, data)
 	}
 }
 
@@ -272,10 +275,14 @@ func handleSourceGet(w http.ResponseWriter, r *http.Request) (interface{}, bool,
 		return data, false, err
 	}
 
-	// 分页查询
+	// 分页查询，默认查询所有字段
 	columns := "rowid, name, type, lang, content, compiled, active, method, url, cron, last_modified_date"
+	if p.Has("content") { // 不返回 compiled 字段，用于编辑器查询源码
+		columns = strings.Replace(columns, ", compiled", ", '' compiled", 1)
+	}
 	if p.Has("basic") { // 不返回 content、compiled 字段，用于列表查询
-		columns = "rowid, name, type, lang, '' content, '' compiled, active, method, url, cron, last_modified_date"
+		columns = strings.Replace(columns, ", content", ", '' content", 1)
+		columns = strings.Replace(columns, ", compiled", ", '' compiled", 1)
 	}
 	rows, err := Db.Query("select "+columns+" from source where name like ? and type like ? order by "+orders+" limit ?, ?", name, stype, from, size)
 	if err != nil {
@@ -300,4 +307,64 @@ func handleSourceGet(w http.ResponseWriter, r *http.Request) (interface{}, bool,
 	}
 
 	return data, false, err
+}
+
+func handleSourceEval(w http.ResponseWriter, r *http.Request) {
+	script, err := util.StringWithIoReader(r.Body)
+	if err != nil {
+		Error(w, err)
+		return
+	}
+
+	// 获取 vm 实例
+	var worker *Worker
+	select {
+	case worker = <-WorkerPool.Channels:
+	default:
+		Error(w, http.StatusServiceUnavailable)
+		return
+	}
+	defer func() {
+		if x := recover(); x != nil {
+			Error(w, x)
+		}
+		worker.Reset()
+		WorkerPool.Channels <- worker
+	}()
+
+	// 允许最大执行的时间为 60 秒
+	timer := time.AfterFunc(60*time.Second, func() {
+		worker.Interrupt("service executed timeout")
+	})
+	defer timer.Stop()
+
+	// 脚本执行完成标记
+	completed := false
+
+	// 监听客户端是否主动取消请求
+	go func() {
+		<-r.Context().Done() // 客户端主动取消
+		if !completed {      // 如果脚本已执行结束，不再中断 goja 运行时，否则中断信号无法被触发和清除（需要 goja 运行时执行指令栈才会触发中断操作），导致回收再复用时直接抛出 "Client cancelled." 的异常
+			worker.Interrupt("client cancelled")
+		}
+	}()
+
+	// 执行
+	value, err := worker.Runtime().RunString(strings.Join([]string{
+		"(function () {",
+		"const console = { __logs__: [], log: function(...args) { this.__logs__.push(['log', new Date(), ...args]) }, };",
+		script,
+		";return { logs: console.__logs__, };",
+		"})()",
+	}, "\n"))
+
+	// 标记脚本执行完成
+	completed = true
+
+	if err != nil {
+		Error(w, err)
+		return
+	}
+
+	Success(w, util.ExportGojaValue(value))
 }

@@ -1,6 +1,7 @@
 package module
 
 import (
+	"cube/internal/builtin"
 	"errors"
 	"io"
 	"io/fs"
@@ -26,7 +27,7 @@ func (f *FileClient) getPath(name string) (string, error) {
 	return fp, nil
 }
 
-func (f *FileClient) Read(name string) ([]byte, error) {
+func (f *FileClient) Read(name string) (builtin.Buffer, error) {
 	fp, err := f.getPath(name)
 	if err != nil {
 		return nil, err
@@ -35,7 +36,7 @@ func (f *FileClient) Read(name string) ([]byte, error) {
 	return os.ReadFile(fp)
 }
 
-func (f *FileClient) ReadRange(name string, offset int64, length int64) ([]byte, error) {
+func (f *FileClient) ReadRange(name string, offset int64, length int64) (builtin.Buffer, error) {
 	fp, err := f.getPath(name)
 	if err != nil {
 		return nil, err

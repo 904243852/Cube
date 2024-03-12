@@ -2,6 +2,7 @@
 
 1. Create a daemon.
     ```typescript
+    //?name=smtpd&type=daemon
     export default function (ctx: ServiceContext) {
         const tcpd = $native("socket")("tcp").listen(25)
         while(true) {
@@ -16,7 +17,7 @@
         let data = "",
             s = String.fromCharCode(...connection.readLine())
         while (s.length) {
-            switch (s.substring(0, 4).replace(/[\r\n]*$/, "")) {
+            switch (s.substring(0, 4).replace(/[\r\n]*$/, "").toUpperCase()) {
                 case "HELO":
                 case "EHLO":
                     connection.write("250 OK\n")

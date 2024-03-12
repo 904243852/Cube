@@ -2,6 +2,7 @@ package module
 
 import (
 	"bytes"
+	"cube/internal/builtin"
 	"github.com/nfnt/resize"
 	"image"
 	"image/color"
@@ -61,7 +62,7 @@ func (i *ImageBuffer) Set(x int, y int, p uint32) {
 	i.image.(*image.RGBA).Set(x+i.offsetX, y+i.offsetY, color.RGBA{R: uint8(p >> 24), G: uint8(p >> 16), B: uint8(p >> 8), A: uint8(p)})
 }
 
-func (i *ImageBuffer) ToBytes() ([]byte, error) {
+func (i *ImageBuffer) ToBytes() (builtin.Buffer, error) {
 	buf := new(bytes.Buffer)
 	if err := jpeg.Encode(buf, i.image, nil); err != nil {
 		return nil, err

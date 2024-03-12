@@ -25,7 +25,7 @@ func InitHandle(web *embed.FS) {
 	http.Handle("/", http.FileServer(http.FS(fileList)))
 }
 
-func toSuccess(w http.ResponseWriter, data interface{}) {
+func Success(w http.ResponseWriter, data interface{}) {
 	switch v := data.(type) {
 	case string:
 		fmt.Fprintf(w, "%s", v)
@@ -49,24 +49,33 @@ func toSuccess(w http.ResponseWriter, data interface{}) {
 	}
 }
 
-func toError(w http.ResponseWriter, err error) {
-	code, message := "1", err.Error() // 错误信息默认包含了异常信息和调用栈
-	if e, ok := err.(*goja.Exception); ok {
-		if o, ok := e.Value().Export().(map[string]interface{}); ok {
-			if m, ok := util.ExportMapValue(o, "message", "string"); ok {
-				message = m.(string) // 获取 throw 对象中的 message 和 code 属性，作为失败响应的错误信息和错误码
-			}
-			if c, ok := util.ExportMapValue(o, "code", "string"); ok {
-				code = c.(string)
+func Error(w http.ResponseWriter, data interface{}) {
+	switch err := data.(type) {
+	case int:
+		http.Error(w, http.StatusText(err), err)
+	case string:
+		http.Error(w, err, http.StatusBadRequest)
+	case error:
+		code, message := "1", err.Error() // 错误信息默认包含了异常信息和调用栈
+		if e, ok := err.(*goja.Exception); ok {
+			if o, ok := e.Value().Export().(map[string]interface{}); ok {
+				if m, ok := util.ExportMapValue(o, "message", "string"); ok {
+					message = m.(string) // 获取 throw 对象中的 message 和 code 属性，作为失败响应的错误信息和错误码
+				}
+				if c, ok := util.ExportMapValue(o, "code", "string"); ok {
+					code = c.(string)
+				}
 			}
 		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest) // 在同一次请求响应过程中，只能调用一次 WriteHeader，否则会抛出异常 http: superfluous response.WriteHeader call from ...
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"code":    code,
+			"message": message,
+		})
+	default:
+		http.Error(w, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 	}
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusBadRequest) // 在同一次请求响应过程中，只能调用一次 WriteHeader，否则会抛出异常 http: superfluous response.WriteHeader call from ...
-	json.NewEncoder(w).Encode(map[string]interface{}{
-		"code":    code,
-		"message": message,
-	})
 }
 
 func authenticate(next func(w http.ResponseWriter, r *http.Request)) func(w http.ResponseWriter, r *http.Request) {

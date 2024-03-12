@@ -12,7 +12,7 @@ func HandleDocument(w http.ResponseWriter, r *http.Request) {
 
 	fp := path.Clean("docs/" + name)
 	if !strings.HasPrefix(fp+"/", "docs/") {
-		http.Error(w, "permission denial", http.StatusForbidden)
+		Error(w, http.StatusForbidden)
 		return
 	}
 
@@ -22,5 +22,5 @@ func HandleDocument(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	toSuccess(w, string(content))
+	Success(w, string(content))
 }

@@ -2,7 +2,7 @@ package internal
 
 import (
 	"bufio"
-	"encoding/json"
+	"cube/internal/builtin"
 	"errors"
 	"github.com/gorilla/websocket"
 	"io"
@@ -16,7 +16,7 @@ type ServiceContextReader struct {
 	reader *bufio.Reader
 }
 
-func (s *ServiceContextReader) Read(size int) ([]byte, error) {
+func (s *ServiceContextReader) Read(size int) (builtin.Buffer, error) {
 	buf := make([]byte, size)
 	_, err := s.reader.Read(buf)
 	if err == io.EOF {
@@ -66,20 +66,12 @@ func (s *ServiceContext) GetURL() interface{} {
 	}
 }
 
-func (s *ServiceContext) GetBody() ([]byte, error) {
+func (s *ServiceContext) GetBody() (builtin.Buffer, error) { // 返回类型如果是 []byte 则对应 goja 中 Array<number> 类型，这里转成 builtin.Buffer 类型以方便使用 toString、toJson 拓展方法
 	if s.body != nil {
 		return s.body.([]byte), nil
 	}
 	defer s.request.Body.Close()
 	return io.ReadAll(s.request.Body)
-}
-
-func (s *ServiceContext) GetJsonBody() (interface{}, error) {
-	data, err := s.GetBody()
-	if err != nil {
-		return nil, err
-	}
-	return s.body, json.Unmarshal(data, &s.body)
 }
 
 func (s *ServiceContext) GetMethod() string {
@@ -116,7 +108,7 @@ func (s *ServiceContext) GetFile(name string) (interface{}, error) {
 	return map[string]interface{}{
 		"name": header.Filename,
 		"size": header.Size,
-		"data": data,
+		"data": builtin.Buffer(data),
 	}, nil
 }
 
@@ -209,7 +201,7 @@ func (s *ServiceWebSocket) Read() (interface{}, error) {
 	}
 	return map[string]interface{}{
 		"messageType": messageType,
-		"data":        data,
+		"data":        builtin.Buffer(data),
 	}, nil
 }
 

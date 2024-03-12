@@ -295,17 +295,15 @@ Here are some built-in methods and modules.
     // hash
     cryptoc.createHash("md5").sum("hello, world").map(c => c.toString(16).padStart(2, "0")).join("") // "e4d7f1b4ed2e42d15898f4b27b019da4"
     // hmac
-    cryptoc.createHmac("sha1").sum("hello, world", "123456").map(c => c.toString(16).padStart(2, "0")).join("") // "9a231f1dd39a4ff6ea778a5640d1498794f8a9f8"
+    cryptoc.createHmac("sha1").sum("hello, world", "123456").toString("hex") // "9a231f1dd39a4ff6ea778a5640d1498794f8a9f8"
     // rsa
     // privateKey and publicKey mentioned is PKCS#1 format
     const rsa = cryptoc.createRsa(),
         { privateKey, publicKey } = rsa.generateKey();
-    String.fromCharCode(
-        ...rsa.decrypt(
-            rsa.encrypt("hello, world", publicKey),
-            privateKey,
-        )
-    ) // "hello, world"
+    rsa.decrypt(
+        rsa.encrypt("hello, world", publicKey),
+        privateKey,
+    ).toString() // "hello, world"
     rsa.verify(
         "hello, world",
         rsa.sign("hello, world", privateKey, "sha256", "pss"),
@@ -393,7 +391,7 @@ Here are some built-in methods and modules.
         // http://127.0.0.1:8090/editor.html?name=foo
         export default function (ctx: ServiceContext) {
             const file = ctx.getFile("file"),
-                hash = $native("crypto").md5(file.data).map(c => c.toString(16).padStart(2, "0")).join("")
+                hash = $native("crypto").md5(file.data).toString("hex")
             console.info(hash)
         }
         ```

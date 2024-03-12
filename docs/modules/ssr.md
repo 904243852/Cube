@@ -132,7 +132,7 @@ export default function (ctx: ServiceContext): ServiceResponse | Uint8Array | an
         )
     }
 
-    const { name, params, } = ctx.getJsonBody()
+    const { name, params, } = ctx.getBody().toJson()
     return p.post(name, ...params)
 }
 ```

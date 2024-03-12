@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no"><!-- 网页的宽度自动适应手机屏幕的宽度 -->
     <title>Loading</title>
-    <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.45.0/min/vs/editor/editor.main.css">
+    <link rel="stylesheet" data-name="vs/editor/editor.main" href="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.46.0/min/vs/editor/editor.main.css">
     <style>
         * {
             margin: 0;
@@ -52,15 +52,25 @@
         <svg style="display: none;" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 512 512"><path d="M336 112a80 80 0 0 0-160 0v96" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="32"></path><rect x="96" y="208" width="320" height="272" rx="48" ry="48" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="32"></rect></svg>
         <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 512 512"><path fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="32" d="M416 128L192 384l-96-96"></path></svg>
     </div>
+    <div id="dialog" style="z-index: 99; position: fixed; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, .5); display: flex; justify-content: center; align-items: center; visibility: hidden;">
+        <div style="min-width: 256px; background-color: #fff; padding: 10px; border-radius: 4px; border: 1px solid #ebeef5; box-shadow: 0 2px 12px 0 rgba(0, 0, 0, .1); max-width: calc(100% - 160px);">
+            <div style="text-align: right;">
+                <button style="position: relative; width: 16px; height: 16px; border: 0; background: transparent; cursor: pointer;">
+                    <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 32 32"><path d="M24 9.4L22.6 8L16 14.6L9.4 8L8 9.4l6.6 6.6L8 22.6L9.4 24l6.6-6.6l6.6 6.6l1.4-1.4l-6.6-6.6L24 9.4z" fill="currentColor"></path></svg>
+                </button>
+            </div>
+            <div style="overflow: auto; white-space: nowrap;"></div>
+        </div>
+    </div>
 
     <script src="https://cdn.bootcdn.net/ajax/libs/typescript/5.3.3/typescript.min.js"></script>
 
     <script src="https://cdn.bootcdn.net/ajax/libs/sweetalert/2.1.2/sweetalert.min.js"></script>
 
-    <script>var require = { paths: { "vs": "https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.45.0/min/vs" } }</script>
-    <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.45.0/min/vs/loader.js"></script>
-    <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.45.0/min/vs/editor/editor.main.nls.js"></script>
-    <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.45.0/min/vs/editor/editor.main.js"></script>
+    <script>var require = { paths: { "vs": "https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.46.0/min/vs" } }</script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.46.0/min/vs/loader.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.46.0/min/vs/editor/editor.main.nls.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/monaco-editor/0.46.0/min/vs/editor/editor.main.js"></script>
 
     <script>
         ({
@@ -96,6 +106,7 @@
                 status: "writable", // 源码状态，readonly=只读、writable=可写
                 loaded: false, // 源码是否已加载
                 broadcaster: null, // 广播频道，用于跨页面通讯，如修改 module 源码时通知其它编辑器页面实时更新依赖
+                abortController: null, // 中断控制器，用于主动中断 fetch 请求
             }),
 
             // 请求入参
@@ -124,43 +135,53 @@
 
             // 渲染 Monaco Editor
             render(lang) {
-                // 初始化 editor 的 typescript 编译选项
-                monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
-                    allowNonTsExtensions: true,
-                    experimentalDecorators: true, // 启用实验性的装饰器特性
-                    typeRoots: ["."],
-                    downlevelIteration: true, // 允许迭代器进行迭代
-                    target: monaco.languages.typescript.ScriptTarget.ES2017, // 启用 ES2017 版本，可兼容 String 的 padStart、padEnd 方法
-                    moduleResolution: ts.ModuleResolutionKind.NodeJs, // 指定使用 nodejs 模块解析策略，否则在 import node_modules/* 时无法解析模块
-                })
+                const that = this
 
-                // 如果当前语言是 typescript，需要提前加载定义文件和模块文件
                 if (lang === "typescript") {
-                    // 预加载 global.d.ts
-                    fetch("global.d.ts", {
-                        method: "GET",
-                    }).then(r => r.text()).then(r => {
-                        monaco.languages.typescript.typescriptDefaults.addExtraLib(r, "global.d.ts")
+                    // 初始化编辑器的编译选项
+                    monaco.languages.typescript.typescriptDefaults.setCompilerOptions({
+                        allowNonTsExtensions: true, // 允许文件名（如 createModel 中的 uri）可以不包含 ".ts" 拓展名（默认为 false，则文件名必须包含 ".ts" 拓展名，否则将出现异常："Could not find source file"）
+                        experimentalDecorators: true, // 启用实验性的装饰器特性
+                        downlevelIteration: true, // 允许迭代器进行迭代
+                        lib: ["esnext"], // 引用的库，如果不指定则默认会包含所有的库（如 "dom"、"scripthost" 等）
+                        moduleResolution: ts.ModuleResolutionKind.NodeJs, // 指定使用 nodejs 模块解析策略，否则在 import node_modules/* 时无法解析模块
                     })
 
-                    // 预加载 module 源码，用于 import
-                    fetch("source?type=module&size=999", {
-                        method: "GET",
-                    }).then(r => r.json()).then(r => {
-                        (r.data.sources || []).forEach(s => {
+                    // 设置编辑器的代码自动补全
+                    monaco.languages.registerCompletionItemProvider("typescript", {
+                        provideCompletionItems: function() {
+                            return {
+                                suggestions: [
+                                    ...(that.input.type === "controller" && [
+                                        {
+                                            label: "main",
+                                            insertText: that.examples.controller,
+                                        },
+                                    ] || []),
+                                ],
+                            }
+                        },
+                    })
+
+                    // 预加载全局类型声明文件
+                    fetch("global.d.ts").then(r => r.text()).then(t => {
+                        monaco.languages.typescript.typescriptDefaults.addExtraLib(t, "global.d.ts")
+                    })
+
+                    // 预加载自定义模块
+                    fetch("source?type=module&size=999&content").then(r => r.json()).then(r => {
+                        r.data.sources?.forEach(s => {
                             monaco.languages.typescript.typescriptDefaults.addExtraLib(s.content, s.name + ".ts")
                         })
                     })
 
-                    // 注册广播通道，并监听 module 源码更新事件消息
+                    // 注册广播通道，并监听自定义模块更新事件消息
                     if (BroadcastChannel) {
-                        this.broadcaster = new BroadcastChannel("cube")
-                        this.broadcaster.onmessage = function({ data }) {
+                        that.broadcaster = new BroadcastChannel("cube")
+                        that.broadcaster.onmessage = function({ data }) {
                             if (data.action === "update" && data.type === "module") {
-                                fetch(`source?name=${data.name}&type=${data.type}`, {
-                                    method: "GET",
-                                }).then(r => r.json()).then(r => {
-                                    (r.data.sources || []).forEach(s => {
+                                fetch(`source?name=${data.name}&type=${data.type}`).then(r => r.json()).then(r => {
+                                    r.data.sources?.forEach(s => {
                                         monaco.languages.typescript.typescriptDefaults.addExtraLib(s.content, s.name + ".ts")
                                     })
                                 })
@@ -173,7 +194,7 @@
                 const editor = monaco.editor.create(document.querySelector("#container"), {
                     language: lang,
                     theme: "vs-dark",
-                    model: monaco.editor.createModel(this.examples[this.input.type] || this.examples[lang] || "", lang, new monaco.Uri("noname")),
+                    model: monaco.editor.createModel(that.examples[that.input.type] || that.examples[lang] || "", lang, new monaco.Uri("noname")),
                     options: {
                         selectOnLineNumbers: true,
                         roundedSelection: false,
@@ -184,7 +205,6 @@
                 })
 
                 // 重写 editorService 的 openEditor 方法，实现代码的跳转定义
-                const that = this
                 editor._codeEditorService.doOpenEditor = function (editor, input) {
                     const model = this.findModel(editor, input.resource),
                         selection = input.options.selection
@@ -207,14 +227,42 @@
                     }
                 })
 
+                if (lang === "typescript") {
+                    // 注册弹窗关闭事件
+                    document.querySelector("#dialog > div > div > button").onclick = function() {
+                        this.parentNode.parentNode.parentNode.style.visibility = "hidden"
+                        that.abortController?.abort() // 取消请求
+                    }
+                    // 注册命令
+                    editor.addAction({
+                        id: "run",
+                        label: "Run",
+                        keybindings: [monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyR],
+                        contextMenuGroupId: "navigation",
+                        contextMenuOrder: 3,
+                        run() {
+                            that.showDialog((p) => {
+                                const { signal } = that.abortController = new AbortController()
+                                fetch("source", {
+                                    method: "EVAL",
+                                    body: that.compile(editor.getValue(), that.input.name),
+                                    signal,
+                                }).then(r => r.json()).then(({ data, message, }) => {
+                                    p(data?.logs || [[message]])
+                                })
+                            })
+                        },
+                    })
+                }
+
                 // 注册全局 resize 事件，当浏览器窗口大小发生改变时，编辑器自动调整大小
                 window.onresize = () => editor.layout()
 
                 // 注册 editor 快捷键
-                this.setEditorShortcutKeys(editor, this.input)
+                that.setEditorShortcutKeys(editor, that.input)
 
                 // 注册保存按钮的点击事件
-                this.setBtnClick(editor)
+                that.setBtnClick(editor)
 
                 return editor
             },
@@ -251,17 +299,7 @@
                         }
 
                         const src = editor.getValue(),
-                            jsSrc = editor.getModel().getLanguageId() !== "typescript" ? "" : ts.transpileModule(src, {
-                                compilerOptions: {
-                                    module: ts.ModuleKind.CommonJS,
-                                    inlineSourceMap: true, // 使源映射文件（即 *.js.map 文件）在生成的 js 文件中内联写入：源映射内容会以 `//#soureMappingURL=` 开头，按 base64 格式追加写入
-                                    inlineSources: true, // 指定进一步将 ts 文件的内容也包含到输出文件中
-                                    removeComments: true, // 移除注释
-                                    downlevelIteration: true, // 当 target 为 ES5 或 ES3 时，为 for-of、spread 和 destructuring 中的迭代器提供完全支持
-                                    target: ts.ScriptTarget.ES5, // 指定编译目标 ES5 版本（ES2015 及以上版本的部分语法 goja 不兼容）
-                                },
-                                fileName: `${input.name || "noname"}.ts`,
-                            })?.outputText
+                            jsSrc = editor.getModel().getLanguageId() !== "typescript" ? "" : that.compile(src, that.input.name)
 
                         const onSourceSaving = function (name) {
                             fetch("source", {
@@ -319,12 +357,42 @@
                 }
             },
 
-            // 弹框提示
+            // 编译
+            compile(src, name = "noname") {
+                return ts.transpileModule(src, {
+                    compilerOptions: {
+                        module: ts.ModuleKind.CommonJS,
+                        inlineSourceMap: true, // 使源映射文件（即 *.js.map 文件）在生成的 js 文件中内联写入：源映射内容会以 `//#soureMappingURL=` 开头，按 base64 格式追加写入
+                        inlineSources: true, // 指定进一步将 ts 文件的内容也包含到输出文件中
+                        removeComments: true, // 移除注释
+                        downlevelIteration: true, // 当 target 为 ES5 或 ES3 时，为 for-of、spread 和 destructuring 中的迭代器提供完全支持
+                        target: ts.ScriptTarget.ES5, // 指定编译目标 ES5 版本（ES2015 及以上版本的部分语法 goja 不兼容）
+                    },
+                    fileName: name + ".ts",
+                })?.outputText
+            },
+
+            // 提示
             alert(message, level = "warning") {
                 swal(message, "", level)
                 if (level === "error") { // 如果是 error 则抛出异常并停止当前程序运行
                     throw message
                 }
+            },
+
+            // 弹框提示
+            showDialog(fn) {
+                const e = document.querySelector("#dialog"),
+                    d = e.children[0],
+                    c = e.querySelector("div > div:nth-child(2)")
+                c.innerText = ""
+                c.scrollTo(0, 0) // 滚动条复位
+                e.style.visibility = "visible"
+                fn((rows) => {
+                    const content = rows.map(([level, time, ...data]) => "[" + time.split(/[T\+]/)[1].padEnd(12, "0") + "] " + data.join(" ")).join("\n") || ""
+                    c.innerText = content
+                    c.style.height = Math.min(19 * (content.split("\n").length + 1), e.clientHeight - 160 - 40) + "px"
+                })
             },
 
             // 初始化
@@ -335,7 +403,7 @@
                 }
 
                 // 根据 name 和 type 查询 source
-                const source = (await fetch(`source?name=${this.input.name}&type=${this.input.type}`, {
+                const source = (await fetch(`source?name=${this.input.name}&type=${this.input.type}&content`, {
                     method: "GET",
                 }).then(r => r.json()).then(r => r.data.sources) || []).pop()
                 if (!source) {

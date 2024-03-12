@@ -4,17 +4,16 @@
 //?name=node_modules/csv&type=module
 export class CSV {
     public static toJsonArray(content: string): object[] {
-        let options = {
-            separator: content.match(/(\t|,|;)/)?.pop() || ",",
-            linebreak: content.match(/(\n|\r\n)/)?.pop() || "\n"
+        const options = {
+            separator: content.match(/(\t|,|;)/)?.pop() || ",", // 默认使用 "," 分隔列
+            linebreak: content.match(/(\n|\r\n)/)?.pop() || "\n", // 默认使用 "\n" 分隔行
         };
 
-        content += options.linebreak; // 结尾补充一个换行符，用以兼容 "id,name\n1,zhang san" 场景
+        content += options.linebreak; // 结尾补充一个换行符，以兼容最后一行数据末尾没有换行的场景
 
-        let current = 0,
-            tokens: string[] = [];
+        const tokens: string[] = [];
 
-        while (current < content.length) {
+        for (let current = 0; current < content.length;) {
             if (content.substr(current, options.linebreak.length) === options.linebreak) { // 如果是换行符
                 tokens.push(options.linebreak);
                 current += options.linebreak.length;
@@ -26,10 +25,10 @@ export class CSV {
             }
 
             if (content[current] !== options.separator && content.substr(current, options.linebreak.length) !== options.linebreak) { // 如果当前字符既不是换行符，也不是分隔符
-                let value = "";
-
-                let escaped = content[current] === "\"",
+                const escaped = content[current] === "\"",
                     quotes = [];
+
+                let value = "";
 
                 while (
                     content[current] && (
@@ -53,34 +52,31 @@ export class CSV {
                 }
 
                 value = value.replace(/""/g, "\""); // 还原已转义的半角双引号 `""` 为 `"`
-
                 tokens.push(value);
-
                 continue;
             }
 
             current++;
         }
 
-        let rows: string[][] = [],
-            row_tokens: string[] = [];
-
-        for (let token of tokens) {
+        const row: string[] = [],
+            rows: string[][] = [];
+        for (const token of tokens) {
             if (token !== options.linebreak) {
-                row_tokens.push(token);
-            } else if (row_tokens.length != 0) {
-                rows.push(row_tokens);
-                row_tokens = [];
+                row.push(token);
+            } else if (row.length != 0) {
+                rows.push(row);
+                row = [];
             }
         }
 
-        let headers = rows.shift(); // 取第一列为列名
+        const headers = rows.shift(); // 取第一列为列名
 
-        return rows.map(ts => {
-            let columns = Math.max(headers.length, ts.length),
+        return rows.map(row => {
+            const columns = Math.max(headers.length, row.length),
                 obj = {};
             for (let i = 0; i < columns; i++) {
-                let value = i < ts.length ? ts[i] : null;
+                const value = i < row.length ? row[i] : null;
                 if (headers[i]) {
                     obj[headers[i]] = value;
                 } else {
@@ -95,15 +91,14 @@ export class CSV {
         options = {
             separator: ",", // 默认以逗号分隔
             linebreak: "\n",
-            ...options
+            ...options,
         };
 
-        let headers: { [name: string]: number; } = {},
-            column = 0,
-            header_tokens = [];
-
-        for (let obj of objs) {
-            for (let field in obj) {
+        const headers: { [name: string]: number } = {},
+            headerTokens = [];
+        let column = 0;
+        for (const obj of objs) {
+            for (const field in obj) {
                 if (headers[field] == null) {
                     headers[field] = column++;
                     if (field.indexOf("\"") != -1) {
@@ -112,15 +107,15 @@ export class CSV {
                     if (field.indexOf(options.separator) != -1) {
                         field = "\"" + field + "\"";
                     }
-                    header_tokens.push(field);
+                    headerTokens.push(field);
                 }
             }
         }
 
-        let content = header_tokens.join(options.separator) + "\n"; // 写入列名，即第一行
+        let content = headerTokens.join(options.separator) + "\n"; // 写入列名，即第一行
 
         for (let obj of objs) {
-            let row_tokens = new Array(header_tokens.length);
+            const rowTokens = new Array(headerTokens.length);
 
             for (let field in obj) {
                 let token: string = obj[field] + "";
@@ -130,10 +125,10 @@ export class CSV {
                 if (token.indexOf(options.separator) != -1) {
                     token = "\"" + token + "\"";
                 }
-                row_tokens[headers[field]] = token;
+                rowTokens[headers[field]] = token;
             }
 
-            content += row_tokens.join(options.separator) + "\n";
+            content += rowTokens.join(options.separator) + "\n";
         }
 
         return content;
@@ -172,6 +167,6 @@ export class CSV {
 import { CSV } from "csv"
 
 export default function (ctx) {
-    return CSV.toJsonArray(`id,name,age\n1,zhangsan,19\n2,"li,si",20`)
+    return CSV.toJsonArray(`id,name\n1,zhangsan\n2,"li,si"\n3,"wang, \n\"wu\""`)
 }
 ```

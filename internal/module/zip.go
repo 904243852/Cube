@@ -3,6 +3,7 @@ package module
 import (
 	"archive/zip"
 	"bytes"
+	"cube/internal/builtin"
 	"errors"
 	"io"
 )
@@ -15,7 +16,7 @@ func init() {
 
 type ZipClient struct{}
 
-func (z *ZipClient) Write(data map[string]interface{}) ([]byte, error) {
+func (z *ZipClient) Write(data map[string]interface{}) (builtin.Buffer, error) {
 	buf := new(bytes.Buffer)
 
 	w := zip.NewWriter(buf)
@@ -59,7 +60,7 @@ func (z *ZipFile) GetName() string {
 	return z.file.Name
 }
 
-func (z *ZipFile) GetData() ([]byte, error) {
+func (z *ZipFile) GetData() (builtin.Buffer, error) {
 	fd, err := z.file.Open()
 	if err != nil {
 		return nil, err

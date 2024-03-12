@@ -14,13 +14,13 @@ func HandleService(w http.ResponseWriter, r *http.Request) {
 	// 查询 controller
 	name, vars := internal.Cache.GetRoute(path)
 	if name == "" {
-		http.Error(w, "Not found", http.StatusNotFound)
+		Error(w, http.StatusNotFound)
 		return
 	}
 
 	source := internal.Cache.GetController(name)
 	if source.Method != "" && source.Method != r.Method { // 校验请求方法
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		Error(w, http.StatusMethodNotAllowed)
 		return
 	}
 
@@ -29,12 +29,15 @@ func HandleService(w http.ResponseWriter, r *http.Request) {
 	select {
 	case worker = <-internal.WorkerPool.Channels:
 	default:
-		http.Error(w, "Service unavailable", http.StatusServiceUnavailable)
+		Error(w, http.StatusServiceUnavailable) // 如果无可用实例，则返回 503
 		return
 	}
 	defer func() {
+		if x := recover(); x != nil { // 从内部异常（如执行 crypto module 的原生方法时出现的 panic 异常）中恢复执行，防止服务端因异常而导致接口 pending
+			Error(w, x)
+		}
 		worker.Reset()
-		internal.WorkerPool.Channels <- worker
+		internal.WorkerPool.Channels <- worker // 归还实例
 	}()
 
 	// 允许最大执行的时间为 60 秒
@@ -45,6 +48,7 @@ func HandleService(w http.ResponseWriter, r *http.Request) {
 
 	// 脚本执行完成标记
 	completed := false
+
 	// 监听客户端是否主动取消请求
 	go func() {
 		<-r.Context().Done() // 客户端主动取消
@@ -60,6 +64,7 @@ func HandleService(w http.ResponseWriter, r *http.Request) {
 		worker.Runtime().ToValue("./controller/"+source.Name),
 		worker.Runtime().ToValue(ctx),
 	)
+
 	// 标记脚本执行完成
 	completed = true
 
@@ -71,9 +76,9 @@ func HandleService(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
-		toError(w, err) // 如果 returnless 为 true，则可能已经执行了 response.Write，此时不能调用 toError 或 toSuccess（该方法会间接调用 WriteHeader），由于 Write 必须在 WriteHeader 之后调用，从而导致异常 http: superfluous response.WriteHeader call from ...
+		Error(w, err) // 如果 returnless 为 true，则可能已经执行了 response.Write，此时不能调用 toError 或 toSuccess（该方法会间接调用 WriteHeader），由于 Write 必须在 WriteHeader 之后调用，从而导致异常 http: superfluous response.WriteHeader call from ...
 		return
 	}
 
-	toSuccess(w, util.ExportGojaValue(value))
+	Success(w, util.ExportGojaValue(value))
 }

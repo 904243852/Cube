@@ -90,3 +90,12 @@ func UnmarshalWithIoReader(r io.Reader, v interface{}) error {
 
 	return nil
 }
+
+func StringWithIoReader(r io.Reader) (string, error) {
+	bytes, err := io.ReadAll(r)
+	if err != nil {
+		return "", err
+	}
+
+	return string(bytes), nil
+}

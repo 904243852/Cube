@@ -11,8 +11,8 @@ func HandleResource(w http.ResponseWriter, r *http.Request) {
 
 	var content string
 	if err := internal.Db.QueryRow("select content from source where url = ? and type = 'resource' and active = true", name).Scan(&content); err != nil {
-		toError(w, err)
+		Error(w, err)
 		return
 	}
-	toSuccess(w, content)
+	Success(w, content)
 }

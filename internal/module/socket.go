@@ -2,6 +2,7 @@ package module
 
 import (
 	"bufio"
+	"cube/internal/builtin"
 	"errors"
 	"fmt"
 	"io"
@@ -85,7 +86,7 @@ type TCPSocketConnection struct {
 	writer *bufio.Writer
 }
 
-func (s *TCPSocketConnection) ReadLine() ([]byte, error) {
+func (s *TCPSocketConnection) ReadLine() (builtin.Buffer, error) {
 	line, err := s.reader.ReadBytes('\n')
 
 	if err != nil && err != io.EOF {
@@ -211,7 +212,7 @@ type AbstractSocketConnection struct {
 	reader *bufio.Reader
 }
 
-func (c *AbstractSocketConnection) Read(size int) ([]byte, error) {
+func (c *AbstractSocketConnection) Read(size int) (builtin.Buffer, error) {
 	var (
 		buf []byte
 		n   int
