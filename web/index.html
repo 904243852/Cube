@@ -103,7 +103,7 @@
                     </el-table-column>
                     <el-table-column label="Operation">
                         <template #default="scope">
-                            <el-switch v-model="scope.row.active" @change="onTableRowActiveSwitch(scope.row)" style="margin-right: 12px;" :disabled='scope.row.status == "true"'>
+                            <el-switch v-model="scope.row.active" @change="onTableRowActiveSwitch(scope.row)" style="margin-right: 12px;" :disabled="scope.row.status === 'true'">
                             </el-switch>
                             <el-button link type="primary" @click="onTableRowCode(scope.row)" :icon="Edit" v-if="scope.row.status !== 'true'">
                             </el-button>

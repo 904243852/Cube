@@ -187,7 +187,7 @@ export default function (ctx) {
         .update({ name: "zhangsan@" + new Date().getTime() })
 
     return Dataset.from(user)
-        .where(u => input.name && u.name.like(input.name + "%") || u.name.notnull())
+        .where(u => input.name && u.name.like(input.name.replace(/(%|_)/g, "\\$1") + "%") || u.name.notnull())
         .select(u => { return { Id: u.id, Name: u.name, } })
 }
 ```

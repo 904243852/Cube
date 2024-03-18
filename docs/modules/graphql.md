@@ -57,7 +57,7 @@ type TableQueryDSL = {
 
 type ConditionQueryDSL = {
     field: string;
-    operator: "eq" | "gt" | "ge" | "lt" | "le" | "ne";
+    operator: "eq" | "gt" | "ge" | "lt" | "le" | "ne" | "like" | "contains";
     value: object;
 } | {
     field: string;
@@ -282,8 +282,13 @@ export abstract class GraphQL {
                 case "<":
                 case "<=":
                 case "<>":
+                case "like":
                     wheres.push(`${condition.field} ${operator} ?`);
                     params.push(condition.value);
+                    break;
+                case "contains":
+                    wheres.push(`${condition.field} like ?`);
+                    params.push("%" + condition.value.replace(/(%|_)/g, "\\$1") + "%"); // 对字符 "%" 、"_" 转义
                     break;
                 default:
                     throw new Error(`operator ${condition.operator} is not supported`);

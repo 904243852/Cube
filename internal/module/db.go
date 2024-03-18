@@ -69,17 +69,17 @@ type DatabaseClient struct {
 	db     Db
 }
 
-func (d *DatabaseClient) BeginTx() (*DatabaseTransaction, error) {
-	if tx, err := d.db.BeginTx(context.Background(), &sql.TxOptions{Isolation: sql.LevelReadCommitted}); err != nil { // 开启一个新事务，隔离级别为读已提交
+func (d *DatabaseClient) BeginTx(isolation sql.IsolationLevel) (*DatabaseTransaction, error) {
+	tx, err := d.db.BeginTx(context.Background(), &sql.TxOptions{Isolation: isolation})
+	if err != nil { // 开启一个新事务，隔离级别为读已提交
 		return nil, err
-	} else {
-		d.worker.AddDefer(func() {
-			tx.Rollback()
-		})
-		return &DatabaseTransaction{
-			Transaction: tx,
-		}, nil
 	}
+	d.worker.AddDefer(func() {
+		tx.Rollback()
+	})
+	return &DatabaseTransaction{
+		Transaction: tx,
+	}, nil
 }
 
 func (d *DatabaseClient) Query(stmt string, params ...interface{}) ([]interface{}, error) {

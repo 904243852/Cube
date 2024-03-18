@@ -20,19 +20,14 @@
             switch (s.substring(0, 4).replace(/[\r\n]*$/, "").toUpperCase()) {
                 case "HELO":
                 case "EHLO":
-                    connection.write("250 OK\n")
-                    break
                 case "MAIL":
-                    connection.write("250 OK\n")
-                    break
                 case "RCPT":
+                case "RSET":
+                case ".":
                     connection.write("250 OK\n")
                     break
                 case "DATA":
                     connection.write("354 OK\n")
-                    break
-                case ".":
-                    connection.write("250 OK\n")
                     break
                 case "QUIT":
                     connection.write("221 Bye\n")

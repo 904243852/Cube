@@ -89,7 +89,13 @@ declare function $native(name: "crypto"): {
 }
 
 declare function $native(name: "db"): {
-    beginTx(): {
+    /**
+     * begin a transaction
+     *
+     * @param isolation transaction isolation level: 0 = Default, 1 = Read Uncommitted, 2 = Read Committed, 3 = Write Committed, 4 = Repeatable Read, 5 = Snapshot, 6 = Serializable, 7 = Linearizable
+     * @return transaction
+     */
+    beginTx(isolation: number = 0): {
         query(stmt: string, ...params: any[]): any[];
         exec(stmt: string, ...params: any[]): number;
         commit(): void;
