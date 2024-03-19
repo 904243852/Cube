@@ -241,14 +241,14 @@
                         contextMenuGroupId: "navigation",
                         contextMenuOrder: 3,
                         run() {
-                            that.showDialog((p) => {
+                            that.dialog((p) => {
                                 const { signal } = that.abortController = new AbortController()
                                 fetch("source", {
                                     method: "EVAL",
                                     body: that.compile(editor.getValue(), that.input.name),
                                     signal,
                                 }).then(r => r.json()).then(({ data, message, }) => {
-                                    p(data?.logs || [[message]])
+                                    p(data?.logs || [["", new Date().toLocaleTimeString() + ".", message]])
                                 })
                             })
                         },
@@ -381,7 +381,7 @@
             },
 
             // 弹框提示
-            showDialog(fn) {
+            dialog(fn) {
                 const e = document.querySelector("#dialog"),
                     d = e.children[0],
                     c = e.querySelector("div > div:nth-child(2)")
@@ -389,7 +389,7 @@
                 c.scrollTo(0, 0) // 滚动条复位
                 e.style.visibility = "visible"
                 fn((rows) => {
-                    const content = rows.map(([level, time, ...data]) => "[" + time.split(/[T\+]/)[1].padEnd(12, "0") + "] " + data.join(" ")).join("\n") || ""
+                    const content = rows.map(([level, time, ...data]) => "[" + time.replace(/^.+T|\+.+$/g, "").padEnd(12, "0") + "] " + data.join(" ")).join("\n") || ""
                     c.innerText = content
                     c.style.height = Math.min(19 * (content.split("\n").length + 1), e.clientHeight - 160 - 40) + "px"
                 })
