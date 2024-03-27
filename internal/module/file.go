@@ -1,7 +1,6 @@
 package module
 
 import (
-	"cube/internal/builtin"
 	"errors"
 	"io"
 	"io/fs"
@@ -9,6 +8,8 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+
+	"cube/internal/builtin"
 )
 
 func init() {
@@ -64,7 +65,7 @@ func (f *FileClient) Write(name string, bytes []byte) error {
 
 	paths, _ := filepath.Split(fp)
 	os.MkdirAll(paths, os.ModePerm)
-	return os.WriteFile(fp, bytes, 0664)
+	return os.WriteFile(fp, bytes, 0o664)
 }
 
 func (f *FileClient) WriteRange(name string, offset int64, bytes []byte) error {
@@ -105,7 +106,7 @@ func (f *FileClient) List(name string) ([]string, error) {
 		return nil, err
 	}
 
-	var names = make([]string, 0)
+	names := make([]string, 0)
 	for _, entry := range entries {
 		names = append(names, entry.Name())
 	}

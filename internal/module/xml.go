@@ -1,9 +1,10 @@
 package module
 
 import (
+	"strings"
+
 	"github.com/antchfx/htmlquery"
 	"golang.org/x/net/html"
-	"strings"
 )
 
 func init() {

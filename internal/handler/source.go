@@ -1,18 +1,20 @@
 package handler
 
 import (
-	. "cube/internal"
-	"cube/internal/model"
-	"cube/internal/util"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/dop251/goja"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	. "cube/internal"
+	"cube/internal/model"
+	"cube/internal/util"
+
+	"github.com/dop251/goja"
 )
 
 func HandleSource(w http.ResponseWriter, r *http.Request) {
@@ -83,6 +85,12 @@ func handleSourcePost(r *http.Request) error {
 		}
 		if count > 0 {
 			return errors.New("url already existed")
+		}
+	}
+	// 校验 cron 表达式
+	if source.Type == "crontab" {
+		if _, err := ParseCron(source.Cron); err != nil {
+			return err
 		}
 	}
 	// 校验 name 和 type 不能重复
@@ -169,7 +177,7 @@ func handleSourcePut(r *http.Request) error {
 	}
 
 	// 校验类型和名称
-	name, stype, url, status := record["name"], record["type"], record["url"], record["status"]
+	name, stype, url, cron, status := record["name"], record["type"], record["url"], record["cron"], record["status"]
 	if name == nil {
 		return errors.New("name is required")
 	}
@@ -184,6 +192,12 @@ func handleSourcePut(r *http.Request) error {
 		}
 		if count > 0 {
 			return errors.New("url already existed")
+		}
+	}
+	// 校验 cron 表达式
+	if cron != nil && stype == "crontab" {
+		if _, err := ParseCron(cron.(string)); err != nil {
+			return err
 		}
 	}
 

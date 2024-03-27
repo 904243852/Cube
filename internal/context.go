@@ -2,12 +2,14 @@ package internal
 
 import (
 	"bufio"
-	"cube/internal/builtin"
 	"errors"
-	"github.com/gorilla/websocket"
 	"io"
 	"net/http"
 	"time"
+
+	"cube/internal/builtin"
+
+	"github.com/gorilla/websocket"
 )
 
 //#region service context
@@ -43,7 +45,7 @@ type ServiceContext struct {
 }
 
 func (s *ServiceContext) GetHeader() map[string]string {
-	var headers = make(map[string]string)
+	headers := make(map[string]string)
 	for name, values := range s.request.Header {
 		for _, value := range values {
 			headers[name] = value
@@ -55,7 +57,7 @@ func (s *ServiceContext) GetHeader() map[string]string {
 func (s *ServiceContext) GetURL() interface{} {
 	u := s.request.URL
 
-	var params = make(map[string][]string)
+	params := make(map[string][]string)
 	for name, values := range u.Query() {
 		params[name] = values
 	}
@@ -81,7 +83,7 @@ func (s *ServiceContext) GetMethod() string {
 func (s *ServiceContext) GetForm() interface{} {
 	s.request.ParseForm() // 需要转换后才能获取表单
 
-	var params = make(map[string][]string)
+	params := make(map[string][]string)
 	for name, values := range s.request.Form {
 		params[name] = values
 	}
@@ -114,6 +116,14 @@ func (s *ServiceContext) GetFile(name string) (interface{}, error) {
 
 func (s *ServiceContext) GetCerts() interface{} { // 获取客户端证书
 	return s.request.TLS.PeerCertificates
+}
+
+func (s *ServiceContext) GetCookie(name string) (*http.Cookie, error) {
+	cookie, err := s.request.Cookie(name)
+	if err == http.ErrNoCookie {
+		return nil, nil
+	}
+	return cookie, err
 }
 
 func (s *ServiceContext) UpgradeToWebSocket() (*ServiceWebSocket, error) {

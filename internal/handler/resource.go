@@ -1,9 +1,10 @@
 package handler
 
 import (
-	"cube/internal"
 	"net/http"
 	"strings"
+
+	"cube/internal"
 )
 
 func HandleResource(w http.ResponseWriter, r *http.Request) {

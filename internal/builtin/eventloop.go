@@ -2,8 +2,9 @@ package builtin
 
 import (
 	"errors"
-	"github.com/dop251/goja"
 	"time"
+
+	"github.com/dop251/goja"
 )
 
 func init() {

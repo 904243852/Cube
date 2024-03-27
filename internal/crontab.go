@@ -44,3 +44,7 @@ func RunCrontabs(name string) {
 		}
 	}
 }
+
+func ParseCron(c string) (cron.Schedule, error) {
+	return cron.ParseStandard(c)
+}

@@ -1,15 +1,17 @@
 package handler
 
 import (
-	"cube/internal/builtin"
-	"cube/internal/config"
-	"cube/internal/util"
 	"embed"
 	"encoding/json"
 	"fmt"
-	"github.com/dop251/goja"
 	"io/fs"
 	"net/http"
+
+	"cube/internal/builtin"
+	"cube/internal/config"
+	"cube/internal/util"
+
+	"github.com/dop251/goja"
 )
 
 func InitHandle(web *embed.FS) {

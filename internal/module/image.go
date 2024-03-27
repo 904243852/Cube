@@ -2,13 +2,15 @@ package module
 
 import (
 	"bytes"
-	"cube/internal/builtin"
-	"github.com/nfnt/resize"
 	"image"
 	"image/color"
 	_ "image/gif"
-	"image/jpeg" // 需要导入 "image/jpeg"、"image/gif"、"image/png" 去解码 jpg、gif、png 图片，否则当使用 image.Decode 处理图片文件时，会报 image: unknown format 错误
+	"image/jpeg"
 	_ "image/png"
+
+	"cube/internal/builtin"
+	"github.com/nfnt/resize"
+	// 需要导入 "image/jpeg"、"image/gif"、"image/png" 去解码 jpg、gif、png 图片，否则当使用 image.Decode 处理图片文件时，会报 image: unknown format 错误
 )
 
 func init() {

@@ -2,9 +2,10 @@ package internal
 
 import (
 	"fmt"
-	"github.com/shirou/gopsutil/process"
 	"os"
 	"time"
+
+	"github.com/shirou/gopsutil/process"
 )
 
 func RunMonitor() {

@@ -1,10 +1,11 @@
 package internal
 
 import (
+	"regexp"
+
 	"cube/internal/model"
 	"github.com/dop251/goja"
 	"github.com/robfig/cron/v3"
-	"regexp"
 )
 
 var Cache *CacheClient

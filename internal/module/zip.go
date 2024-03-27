@@ -3,9 +3,10 @@ package module
 import (
 	"archive/zip"
 	"bytes"
-	"cube/internal/builtin"
 	"errors"
 	"io"
+
+	"cube/internal/builtin"
 )
 
 func init() {

@@ -31,3 +31,7 @@
 - [Using DLNA to cast a video on device in LAN](examples/dlna.md)
 
 - [Create a webdav server](examples/webdav.md)
+
+- [Create a Single Sign On server based on CAS protocol](examples/cas.md)
+
+- [Pay online using Alipay](examples/alipay.md)

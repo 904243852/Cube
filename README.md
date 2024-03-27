@@ -325,7 +325,7 @@ Here are some built-in methods and modules.
         //proxy: "http://127.0.0.1:5566" // proxy server
     }).request("GET", "https://www.baidu.com")
     status // 200
-    header // {"Content-Length":["227"],"Content-Type":["text/html"]...]}
+    header // { "Content-Length": "227", "Content-Type": "text/html", ... }
     data.toString() // "<html>..."
 
     // image

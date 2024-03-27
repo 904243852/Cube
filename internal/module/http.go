@@ -3,15 +3,17 @@ package module
 import (
 	"crypto/tls"
 	"crypto/x509"
-	"cube/internal/builtin"
-	. "cube/internal/util"
 	"encoding/pem"
 	"errors"
-	"github.com/quic-go/quic-go/http3"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"cube/internal/builtin"
+	. "cube/internal/util"
+
+	"github.com/quic-go/quic-go/http3"
 )
 
 func init() {
@@ -97,8 +99,8 @@ func (h *HttpClient) Request(method string, url string, header map[string]string
 	if err != nil {
 		return
 	}
-	for key, value := range header {
-		req.Header.Set(key, value)
+	for k, v := range header {
+		req.Header.Set(k, v)
 	}
 
 	resp, err := h.client.Do(req)
@@ -112,9 +114,14 @@ func (h *HttpClient) Request(method string, url string, header map[string]string
 		return
 	}
 
+	headers := map[string]string{}
+	for k, v := range resp.Header {
+		headers[k] = v[0]
+	}
+
 	response = map[string]interface{}{
 		"status": resp.StatusCode,
-		"header": resp.Header,
+		"header": headers,
 		"data":   (*builtin.Buffer)(&data),
 	}
 	return

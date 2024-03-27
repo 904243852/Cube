@@ -3,14 +3,16 @@ package main
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"embed"
+	"fmt"
+	"net/http"
+	"os"
+
 	. "cube/internal"
 	"cube/internal/config"
 	"cube/internal/handler"
-	"embed"
-	"fmt"
+
 	"github.com/quic-go/quic-go/http3"
-	"net/http"
-	"os"
 )
 
 //go:embed web/*

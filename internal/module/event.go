@@ -1,8 +1,9 @@
 package module
 
 import (
-	"github.com/dop251/goja"
 	"sync"
+
+	"github.com/dop251/goja"
 )
 
 func init() {

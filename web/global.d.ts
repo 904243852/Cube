@@ -11,6 +11,7 @@ interface ServiceContext {
     getPathVariables(): { [name: string]: string; };
     getFile(name: string): { name: string; size: number; data: Buffer; };
     getCerts(): any[];
+    getCookie(name: string): { value: string; };
     upgradeToWebSocket(): ServiceWebSocket;
     getReader(): { readByte(): number; read(count: number): Buffer; };
     getPusher(): { push(target: string, options: any): void; };
@@ -31,8 +32,9 @@ interface ServiceWebSocket {
 declare class ServiceResponse {
     constructor(status: number, header: { [name: string]: string | number; }, data?: Uint8Array | Buffer | string);
     setStatus(status: number): void;
-    setHeader(header: { [name: string]: string; }): void;
+    setHeader(name: string, value: string): void;
     setData(data: Uint8Array | Buffer | string): void;
+    setCookie(name: string, value: string): void;
 }
 
 /**

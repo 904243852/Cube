@@ -1,13 +1,15 @@
 package internal
 
 import (
-	"cube/internal/builtin"
-	m "cube/internal/module"
 	"errors"
-	"github.com/dop251/goja"
-	"github.com/dop251/goja/parser"
 	"path"
 	"strings"
+
+	"cube/internal/builtin"
+	m "cube/internal/module"
+
+	"github.com/dop251/goja"
+	"github.com/dop251/goja/parser"
 )
 
 type Worker struct {

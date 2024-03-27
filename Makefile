@@ -68,7 +68,12 @@ wrk: # 性能压测
 	@wrk -t8 -c256 -R 20000 -d5s http://127.0.0.1:8090/service/greeting
 
 fmt: # 格式化 .go 文件代码
-	@find ./ -name "*.go" | xargs -I {} go fmt {}
+	@
+	if command -v gofumpt >/dev/null 2>&1; then
+		gofumpt -l -w . # 优先使用 gofumpt 格式化代码，安装：go install mvdan.cc/gofumpt@latest
+	else
+		find ./ -name "*.go" | xargs -I {} go fmt {}
+	fi
 
 vet: # 静态代码检查
 	@go vet ./...

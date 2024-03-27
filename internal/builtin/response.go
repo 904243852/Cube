@@ -1,9 +1,10 @@
 package builtin
 
 import (
+	"net/http"
+
 	"cube/internal/util"
 	"github.com/dop251/goja"
-	"net/http"
 )
 
 func init() {
@@ -50,28 +51,53 @@ func init() {
 }
 
 type ServiceResponse struct {
-	status int
-	header map[string]string
-	data   []byte
+	status  int
+	header  map[string]string
+	data    []byte
+	cookies []*http.Cookie
 }
 
 func (s *ServiceResponse) SetStatus(status int) { // 设置响应状态码
 	s.status = status
 }
 
-func (s *ServiceResponse) SetHeader(header map[string]string) { // 设置响应消息头
-	s.header = header
+func (s *ServiceResponse) SetHeader(name string, value string) { // 设置响应消息头
+	if s.header == nil {
+		s.header = map[string]string{}
+	}
+	s.header[name] = value
 }
 
 func (s *ServiceResponse) SetData(data []byte) { // 设置响应消息体
 	s.data = data
 }
 
-func ResponseWithServiceResponse(w http.ResponseWriter, v *ServiceResponse) {
-	h := w.Header()
-	for k, a := range v.header {
-		h.Set(k, a)
+func (s *ServiceResponse) SetCookie(name string, value string) { // 设置 Cookie
+	if s.cookies == nil {
+		s.cookies = make([]*http.Cookie, 0)
 	}
+	cookie := &http.Cookie{
+		Name:  name,
+		Value: value,
+	}
+	s.cookies = append(s.cookies, cookie)
+}
+
+func ResponseWithServiceResponse(w http.ResponseWriter, v *ServiceResponse) {
+	// header
+	h := w.Header()
+	for k, v := range v.header {
+		h.Set(k, v)
+	}
+
+	// cookie
+	for _, v := range v.cookies {
+		http.SetCookie(w, v)
+	}
+
+	// status code
 	w.WriteHeader(v.status) // WriteHeader 必须在 Set Header 之后调用，否则状态码将无法写入
-	w.Write(v.data)         // Write 必须在 WriteHeader 之后调用，否则将会抛出异常 http: superfluous response.WriteHeader call from ...
+
+	// data
+	w.Write(v.data) // Write 必须在 WriteHeader 之后调用，否则将会抛出异常 http: superfluous response.WriteHeader call from ...
 }

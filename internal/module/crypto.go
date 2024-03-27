@@ -10,10 +10,11 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
-	"cube/internal/builtin"
 	"encoding/pem"
 	"errors"
 	"strings"
+
+	"cube/internal/builtin"
 )
 
 func init() {
@@ -82,7 +83,6 @@ func (c *AesEcbCipherClient) Encrypt(input []byte) (builtin.Buffer, error) {
 		output = append(output, buffer...)
 	}
 	return output, nil
-
 }
 
 func (c *AesEcbCipherClient) Decrypt(input []byte) (builtin.Buffer, error) {

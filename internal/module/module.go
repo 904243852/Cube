@@ -2,8 +2,10 @@ package module
 
 import (
 	"context"
-	"cube/internal/builtin"
 	"database/sql"
+
+	"cube/internal/builtin"
+
 	"github.com/dop251/goja"
 )
 

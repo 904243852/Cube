@@ -2,11 +2,12 @@ package module
 
 import (
 	"bufio"
-	"cube/internal/builtin"
 	"errors"
 	"fmt"
 	"io"
 	"net"
+
+	"cube/internal/builtin"
 )
 
 func init() {
