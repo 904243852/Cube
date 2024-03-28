@@ -3,16 +3,16 @@ package module
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"fmt"
+
+	"github.com/dop251/goja"
 )
 
 func init() {
 	register("db", func(worker Worker, db Db) interface{} {
 		return &DatabaseClient{worker, db}
 	})
-}
-
-type DatabaseTransaction struct {
-	Transaction *sql.Tx
 }
 
 func ExportDatabaseRows(rows *sql.Rows) ([]interface{}, error) {
@@ -40,8 +40,12 @@ func ExportDatabaseRows(rows *sql.Rows) ([]interface{}, error) {
 	return records, rows.Err()
 }
 
+type DatabaseTransaction struct {
+	t *sql.Tx
+}
+
 func (d *DatabaseTransaction) Query(stmt string, params ...interface{}) ([]interface{}, error) {
-	rows, err := d.Transaction.Query(stmt, params...)
+	rows, err := d.t.Query(stmt, params...)
 	if err != nil {
 		return nil, err
 	}
@@ -49,7 +53,7 @@ func (d *DatabaseTransaction) Query(stmt string, params ...interface{}) ([]inter
 }
 
 func (d *DatabaseTransaction) Exec(stmt string, params ...interface{}) (int64, error) {
-	res, err := d.Transaction.Exec(stmt, params...)
+	res, err := d.t.Exec(stmt, params...)
 	if err != nil {
 		return 0, err
 	}
@@ -57,29 +61,16 @@ func (d *DatabaseTransaction) Exec(stmt string, params ...interface{}) (int64, e
 }
 
 func (d *DatabaseTransaction) Commit() error {
-	return d.Transaction.Commit()
+	return d.t.Commit()
 }
 
 func (d *DatabaseTransaction) Rollback() error {
-	return d.Transaction.Rollback()
+	return d.t.Rollback()
 }
 
 type DatabaseClient struct {
 	worker Worker
 	db     Db
-}
-
-func (d *DatabaseClient) BeginTx(isolation sql.IsolationLevel) (*DatabaseTransaction, error) {
-	tx, err := d.db.BeginTx(context.Background(), &sql.TxOptions{Isolation: isolation})
-	if err != nil { // 开启一个新事务，隔离级别为读已提交
-		return nil, err
-	}
-	d.worker.AddDefer(func() {
-		tx.Rollback()
-	})
-	return &DatabaseTransaction{
-		Transaction: tx,
-	}, nil
 }
 
 func (d *DatabaseClient) Query(stmt string, params ...interface{}) ([]interface{}, error) {
@@ -96,4 +87,33 @@ func (d *DatabaseClient) Exec(stmt string, params ...interface{}) (int64, error)
 		return 0, err
 	}
 	return res.RowsAffected()
+}
+
+func (d *DatabaseClient) Transaction(fn goja.Callable, isolation sql.IsolationLevel) (err error) { // 此处提前声明了返回值 err，否则 defer 函数将无法对 err 重新赋值
+	if fn == nil {
+		err = errors.New("function required")
+		return
+	}
+
+	// 开启一个新事务
+	tx, err := d.db.BeginTx(context.Background(), &sql.TxOptions{Isolation: isolation})
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+			return
+		}
+		if x := recover(); x != nil {
+			err = errors.New(fmt.Sprint(x)) // 从 panic 中恢复错误，并重新赋值给 err
+			tx.Rollback()
+			return
+		}
+		tx.Commit()
+	}()
+
+	_, err = fn(nil, d.worker.Runtime().ToValue(&DatabaseTransaction{tx}))
+
+	return
 }

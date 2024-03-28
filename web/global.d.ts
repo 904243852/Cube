@@ -90,22 +90,22 @@ declare function $native(name: "crypto"): {
     };
 }
 
+type DatabaseTransaction = {
+    query(stmt: string, ...params: any[]): any[];
+    exec(stmt: string, ...params: any[]): number;
+    commit(): void;
+    rollback(): void;
+}
 declare function $native(name: "db"): {
     /**
      * begin a transaction
      *
+     * @param func function in this transaction
      * @param isolation transaction isolation level: 0 = Default, 1 = Read Uncommitted, 2 = Read Committed, 3 = Write Committed, 4 = Repeatable Read, 5 = Snapshot, 6 = Serializable, 7 = Linearizable
      * @return transaction
      */
-    beginTx(isolation: number = 0): {
-        query(stmt: string, ...params: any[]): any[];
-        exec(stmt: string, ...params: any[]): number;
-        commit(): void;
-        rollback(): void;
-    };
-    query(stmt: string, ...params: any[]): any[];
-    exec(stmt: string, ...params: any[]): number;
-}
+    transaction(func: (tx: DatabaseTransaction) => void, isolation: number = 0): void;
+} & Pick<DatabaseTransaction, "query" | "exec">
 
 type Decimal = {
     add(value: Decimal): Decimal;
@@ -144,7 +144,13 @@ declare function $native(name: "file"): {
     list(name: string): string[];
 }
 
-declare function $native(name: "http"): (options?: { caCert?: string; cert?: string; key?: string; insecureSkipVerify?: boolean; isHttp3?: boolean; proxy?: string; }) => {
+type HttpOptions = Partial<{
+    caCert: string;
+    insecureSkipVerify: boolean;
+    isHttp3: boolean;
+    proxy: string;
+}> | { cert: string; key: string; }
+declare function $native(name: "http"): (options?: HttpOptions) => {
     request(method: string, url: string, header?: { [name: string]: string; }, body?: string | Uint8Array | Buffer): { status: number; header: { [name: string]: string; }; data: Buffer; };
 }
 

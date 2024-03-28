@@ -115,7 +115,7 @@
             </el-row>
         </el-card>
         <el-dialog v-model="dialog.visible" :title="dialog.record.rowid ? this['dialog.editable'] ? 'Edit' : 'View' : 'New'">
-            <el-form ref="FormRef" :model="dialog.record" label-position="right" label-width="80px" :rules="constants.rules">
+            <el-form ref="FormRef" :model="dialog.record" label-position="right" label-width="80px" :rules="constants.rules" :hide-required-asterisk="!this['dialog.editable']">
                 <el-form-item label="Type" prop="type">
                     <el-select v-model="dialog.record.type" :disabled="dialog.record.rowid" @change="dialog.record.lang = ''" placeholder="Select a type">
                         <el-option v-for="type in Object.keys(constants.type)" :key="type" :label="type" :value="type">
@@ -136,7 +136,7 @@
                             </el-checkbox-group>
                         </template>
                     </el-input>
-                    <el-input v-model="dialog.record.name" placeholder="Please input a name" minlength="2" maxlength="32" show-word-limit :disabled="dialog.record.rowid" v-else>
+                    <el-input v-model="dialog.record.name" placeholder="Please input a name" minlength="2" maxlength="32" show-word-limit :disabled="dialog.record.rowid" @change="!!~['controller', 'resource'].indexOf(dialog.record.type) && (dialog.record.url = dialog.record.name.replace(/([a-z])([A-Z]\w)/g, '$1/$2').toLowerCase())" v-else>
                     </el-input>
                 </el-form-item>
                 <el-form-item label="Method" v-if="dialog.record.type == 'controller'">
