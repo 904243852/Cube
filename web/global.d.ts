@@ -1,6 +1,5 @@
-/**
- * Service context
- */
+type GenericByteArray = string | Uint8Array | Array<number> | Buffer
+
 interface ServiceContext {
     "Native Go Implementation"; /* it is not allowed to create it by yourself */
     getHeader(): { [name: string]: string; };
@@ -15,37 +14,31 @@ interface ServiceContext {
     upgradeToWebSocket(): ServiceWebSocket;
     getReader(): { readByte(): number; read(count: number): Buffer; };
     getPusher(): { push(target: string, options: any): void; };
-    write(data: Uint8Array | Buffer | string): number;
+    write(data: GenericByteArray): number;
     flush(): void;
     resetTimeout(timeout: number): void;
 }
 
-/**
- * Service websocket
- */
 interface ServiceWebSocket {
     read(): { messageType: number; data: Buffer; };
-    send(data: Uint8Array | Buffer | string);
+    send(data: GenericByteArray);
     close();
 }
 
 declare class ServiceResponse {
-    constructor(status: number, header: { [name: string]: string | number; }, data?: Uint8Array | Buffer | string);
+    constructor(status: number, header: { [name: string]: string | number; }, data?: GenericByteArray);
     setStatus(status: number): void;
     setHeader(name: string, value: string): void;
-    setData(data: Uint8Array | Buffer | string): void;
+    setData(data: GenericByteArray): void;
     setCookie(name: string, value: string): void;
 }
 
-/**
- * Buffer
- */
 declare interface Buffer extends Array<number> {
     toString(encoding?: "utf8" | "hex" | "base64" | "base64url"): string;
     toJson(): any;
 }
 declare interface BufferConstructor {
-    from(input: string | Uint8Array | Array<number>, encoding?: "utf8" | "hex" | "base64" | "base64url"): Buffer;
+    from(input: GenericByteArray, encoding?: "utf8" | "hex" | "base64" | "base64url"): Buffer;
 }
 declare var Buffer: BufferConstructor;
 
@@ -70,23 +63,24 @@ declare function $native(name: "cache"): {
     get(key: any): any;
 }
 
+type HashAlgorithm = "md5" | "sha1" | "sha256" | "sha512"
 declare function $native(name: "crypto"): {
-    createCipher(algorithm: "aes-ecb", key: string | Uint8Array | Buffer, options: { padding: "none" | "pkcs5" | "pkcs7"; }): {
-        encrypt(input: string | Uint8Array | Buffer): Buffer;
-        decrypt(input: string | Uint8Array | Buffer): Buffer;
+    createCipher(algorithm: "aes-ecb", key: GenericByteArray, options: { padding: "none" | "pkcs5" | "pkcs7"; }): {
+        encrypt(input: GenericByteArray): Buffer;
+        decrypt(input: GenericByteArray): Buffer;
     };
-    createHash(algorithm: "md5" | "sha1" | "sha256" | "sha512"): {
-        sum(input: string | Uint8Array | Buffer): Buffer;
+    createHash(algorithm: HashAlgorithm): {
+        sum(input: GenericByteArray): Buffer;
     };
-    createHmac(algorithm: "md5" | "sha1" | "sha256" | "sha512"): {
-        sum(input: string | Uint8Array | Buffer, key: string | Uint8Array | Buffer): Buffer;
+    createHmac(algorithm: HashAlgorithm): {
+        sum(input: GenericByteArray, key: GenericByteArray): Buffer;
     };
     createRsa(): {
         generateKey(): { privateKey: Buffer; publicKey: Buffer; };
-        encrypt(input: string | Uint8Array | Buffer, publicKey: string | Uint8Array | Buffer, padding: "pkcs1" | "oaep" = "pkcs1"): Buffer;
-        decrypt(input: string | Uint8Array | Buffer, privateKey: string | Uint8Array | Buffer, padding: "pkcs1" | "oaep" = "pkcs1"): Buffer;
-        sign(input: string | Uint8Array | Buffer, key: string | Uint8Array | Buffer, algorithm: "md5" | "sha1" | "sha256" | "sha512", padding: "pkcs1" | "pss" = "pkcs1"): Buffer;
-        verify(input: string | Uint8Array | Buffer, sign: string | Uint8Array | Buffer, key: string | Uint8Array | Buffer, algorithm: "md5" | "sha1" | "sha256" | "sha512", padding: "pkcs1" | "pss" = "pkcs1"): boolean;
+        encrypt(input: GenericByteArray, publicKey: GenericByteArray, padding: "pkcs1" | "oaep" = "pkcs1"): Buffer;
+        decrypt(input: GenericByteArray, privateKey: GenericByteArray, padding: "pkcs1" | "oaep" = "pkcs1"): Buffer;
+        sign(input: GenericByteArray, key: GenericByteArray, algorithm: HashAlgorithm, padding: "pkcs1" | "pss" = "pkcs1"): Buffer;
+        verify(input: GenericByteArray, sign: GenericByteArray, key: GenericByteArray, algorithm: HashAlgorithm, padding: "pkcs1" | "pss" = "pkcs1"): boolean;
     };
 }
 
@@ -100,9 +94,8 @@ declare function $native(name: "db"): {
     /**
      * begin a transaction
      *
-     * @param func function in this transaction
+     * @param func function during this transaction
      * @param isolation transaction isolation level: 0 = Default, 1 = Read Uncommitted, 2 = Read Committed, 3 = Write Committed, 4 = Repeatable Read, 5 = Snapshot, 6 = Serializable, 7 = Linearizable
-     * @return transaction
      */
     transaction(func: (tx: DatabaseTransaction) => void, isolation: number = 0): void;
 } & Pick<DatabaseTransaction, "query" | "exec">
@@ -132,8 +125,8 @@ declare function $native(name: "event"): {
 declare function $native(name: "file"): {
     read(name: string): Buffer;
     readRange(name: string, offset: number, length: number): Buffer;
-    write(name: string, content: string | Uint8Array | Buffer): void;
-    writeRange(name: string, offset: number, content: string | Uint8Array | Buffer): void;
+    write(name: string, content: GenericByteArray): void;
+    writeRange(name: string, offset: number, content: GenericByteArray): void;
     stat(name: string): {
         name(): string;
         size(): number;
@@ -149,9 +142,12 @@ type HttpOptions = Partial<{
     insecureSkipVerify: boolean;
     isHttp3: boolean;
     proxy: string;
-}> | { cert: string; key: string; }
+}> | {
+    cert: string;
+    key: string;
+}
 declare function $native(name: "http"): (options?: HttpOptions) => {
-    request(method: string, url: string, header?: { [name: string]: string; }, body?: string | Uint8Array | Buffer): { status: number; header: { [name: string]: string; }; data: Buffer; };
+    request(method: string, url: string, header?: { [name: string]: string; }, body?: GenericByteArray): { status: number; header: { [name: string]: string; }; data: Buffer; };
 }
 
 type Image = {
@@ -164,7 +160,7 @@ type Image = {
 }
 declare function $native(name: "image"): {
     create(width: number, height: number): Image;
-    parse(input: Uint8Array | Buffer): Image;
+    parse(input: GenericByteArray): Image;
 }
 
 declare function $native(name: "lock"): (name: string) => {
@@ -177,12 +173,12 @@ declare function $native(name: "pipe"): (name: string) => BlockingQueue;
 type TCPSocketConnection = {
     read(size?: number): Buffer;
     readLine(): Buffer;
-    write(data: string | Uint8Array | Buffer): number;
+    write(data: GenericByteArray): number;
     close(): void;
 }
 type UDPSocketConnection = {
     read(size?: number): Buffer;
-    write(data: string | Uint8Array | Buffer, host?: string, port?: number): number;
+    write(data: GenericByteArray, host?: string, port?: number): number;
     close(): void;
 }
 declare function $native(name: "socket"): {
@@ -213,7 +209,7 @@ declare function $native(name: "xml"): (content: string) => XmlNode;
 
 declare function $native(name: "zip"): {
     write(data: { [name: string]: string | Buffer; }): Buffer;
-    read(data: Uint8Array | Buffer): {
+    read(data: GenericByteArray): {
         getFiles(): {
             getName(): string;
             getData(): Buffer;
