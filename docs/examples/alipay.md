@@ -2,7 +2,7 @@
 
 1. Create a controller with url `/service/alipay`.
     ```typescript
-    export default ctx => (app => app.run(ctx))(new class Alipay {
+    export default (app => app.run.bind(app))(new class Alipay {
         public static readonly URL = "https://openapi-sandbox.dl.alipaydev.com/gateway.do" // 支付宝网关地址
 
         public static readonly APP_ID = "账号的 APPID"

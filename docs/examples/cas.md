@@ -154,7 +154,7 @@
 
     const cache = $native("cache")
 
-    export default ctx => (app => app.run(ctx))(new class {
+    export default (app => app.run.bind(app))(new class {
         public run(ctx: ServiceContext) {
             const { path, params } = ctx.getURL(),
                 input: Input = {

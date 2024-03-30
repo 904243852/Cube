@@ -77,6 +77,7 @@
             // 示例模板代码
             examples: {
                 controller: `export default function (ctx: ServiceContext): ServiceResponse | Uint8Array | any {\n    return "hello, world"\n}`,
+                controller2: `export default (app => app.run.bind(app))(new class {\n    public run(ctx: ServiceContext) {\n        return "hello, world"\n    }\n})`,
                 typescript: `export default function () {\n    \n}`,
                 html: `<!DOCTYPE html>\n<html>\n\n<head>\n    <meta charset="utf-8" />\n    <title></title>\n</head>\n\n<body>\n    hello, {{ .name }}\n</body>\n\n</html>`,
                 vue: `<template>\n    <p>hello, {{ name }}</p>\n</template>\n\n\x3Cscript>\n    module.exports = {\n        data: function() {\n            return {\n                name: "world"\n            }\n        }\n    }\n\x3C/script>\n\n<style scoped>\n\n</style>`,
@@ -156,7 +157,7 @@
                                     ...(that.input.type === "controller" && [
                                         {
                                             label: "main",
-                                            insertText: that.examples.controller,
+                                            insertText: that.examples.controller2,
                                         },
                                     ] || []),
                                 ],
