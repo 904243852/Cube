@@ -10,7 +10,7 @@ import (
 )
 
 func init() {
-	Builtins["Buffer"] = func(worker Worker) interface{} {
+	Builtins = append(Builtins, func(worker Worker) {
 		runtime := worker.Runtime()
 
 		o := runtime.ToValue(func(call goja.ConstructorCall) *goja.Object {
@@ -22,8 +22,8 @@ func init() {
 			return (*Buffer)(&dat), err
 		})
 
-		return o
-	}
+		runtime.Set("Buffer", o)
+	})
 }
 
 type Buffer []byte

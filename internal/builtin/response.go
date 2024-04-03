@@ -8,10 +8,10 @@ import (
 )
 
 func init() {
-	Builtins["ServiceResponse"] = func(worker Worker) interface{} {
-		return func(call goja.ConstructorCall) *goja.Object { // 内置构造器不能同时返回 error 类型，否则将会失效
-			runtime := worker.Runtime()
+	Builtins = append(Builtins, func(worker Worker) {
+		runtime := worker.Runtime()
 
+		runtime.Set("ServiceResponse", func(call goja.ConstructorCall) *goja.Object { // 内置构造器不能同时返回 error 类型，否则将会失效
 			output := &ServiceResponse{}
 
 			if v, ok := call.Argument(0).Export().(int64); ok {
@@ -46,8 +46,8 @@ func init() {
 			iv := runtime.ToValue(output).(*goja.Object)
 			iv.SetPrototype(call.This.Prototype())
 			return iv
-		}
-	}
+		})
+	})
 }
 
 type ServiceResponse struct {

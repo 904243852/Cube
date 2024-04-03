@@ -51,6 +51,27 @@ interface Console {
 }
 declare var console: Console;
 
+interface Date {
+    toString(layout?: string): string
+}
+interface DateConstructor {
+    toDate(value: string, layout: string): Date
+}
+
+declare class Decimal {
+    constructor(value: string);
+    add(value: Decimal): Decimal;
+    sub(value: Decimal): Decimal;
+    mul(value: Decimal): Decimal;
+    div(value: Decimal): Decimal;
+    pow(value: Decimal): Decimal;
+    mod(value: Decimal): Decimal;
+    compare(value: Decimal): -1 | 0 | 1;
+    abs(): Decimal;
+    string(): string;
+    stringFixed(places: number): string;
+}
+
 type BlockingQueue = {
     put(input: any, timeout: number): void;
     poll(timeout: number): any;
@@ -99,14 +120,6 @@ declare function $native(name: "db"): {
      */
     transaction(func: (tx: DatabaseTransaction) => void, isolation: number = 0): void;
 } & Pick<DatabaseTransaction, "query" | "exec">
-
-type Decimal = {
-    add(value: Decimal): Decimal;
-    sub(value: Decimal): Decimal;
-    mul(value: Decimal): Decimal;
-    div(value: Decimal): Decimal;
-}
-declare function $native(name: "decimal"): (value: string) => Decimal;
 
 declare function $native(name: "email"): (host: string, port: number, username: string, password: string) => {
     send(receivers: string[], subject: string, content: string, attachments: { Name: string; ContentType: string; Base64: string; }[]): void;

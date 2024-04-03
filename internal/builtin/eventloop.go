@@ -8,36 +8,35 @@ import (
 )
 
 func init() {
-	Builtins["setTimeout"] = func(worker Worker) interface{} {
-		return func(call goja.FunctionCall) goja.Value { // 此处必须返回单个 goja.Value 类型，否则将会出现异常：TypeError: 'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them at ...
+	Builtins = append(Builtins, func(worker Worker) {
+		runtime := worker.Runtime()
+
+		runtime.Set("setTimeout", func(call goja.FunctionCall) goja.Value { // 此处必须返回单个 goja.Value 类型，否则将会出现异常：TypeError: 'caller', 'callee', and 'arguments' properties may not be accessed on strict mode functions or the arguments objects for calls to them at ...
 			val, _ := NewTimeoutOrInterval(call, false, worker.EventLoop())
-			return worker.Runtime().ToValue(val)
-		}
-	}
-	Builtins["setInterval"] = func(worker Worker) interface{} {
-		return func(call goja.FunctionCall) goja.Value {
+			return runtime.ToValue(val)
+		})
+
+		runtime.Set("setInterval", func(call goja.FunctionCall) goja.Value {
 			val, _ := NewTimeoutOrInterval(call, true, worker.EventLoop())
 			return worker.Runtime().ToValue(val)
-		}
-	}
-	Builtins["clearTimeout"] = func(worker Worker) interface{} {
-		return func(t *Timeout) {
+		})
+
+		runtime.Set("clearTimeout", func(t *Timeout) {
 			if t != nil && !t.cancelled {
 				t.timer.Stop()
 				t.cancelled = true
 				worker.EventLoop().count--
 			}
-		}
-	}
-	Builtins["clearInterval"] = func(worker Worker) interface{} {
-		return func(i *Interval) {
+		})
+
+		runtime.Set("clearInterval", func(i *Interval) {
 			if i != nil && !i.cancelled {
 				i.cancelled = true
 				close(i.stop)
 				worker.EventLoop().count--
 			}
-		}
-	}
+		})
+	})
 }
 
 //#region 事件循环

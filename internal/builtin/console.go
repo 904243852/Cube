@@ -6,9 +6,9 @@ import (
 )
 
 func init() {
-	Builtins["console"] = func(worker Worker) interface{} {
-		return &ConsoleClient{worker}
-	}
+	Builtins = append(Builtins, func(worker Worker) {
+		worker.Runtime().Set("console", &ConsoleClient{worker})
+	})
 }
 
 type ConsoleClient struct {

@@ -13,7 +13,7 @@ A simple web server that can be developed online using typescript/javascript.
 
 3. Start the server.
     ```bash
-    ./cube -n 8
+    ./cube -n 256
     ```
     Or you can start directly from the source code:
     ```bash
@@ -107,7 +107,6 @@ You can create a controller as a http/https service.
 
 - A simple controller.
     ```typescript
-    // http://127.0.0.1:8090/editor.html?name=foo
     export default function (ctx: ServiceContext): ServiceResponse | Uint8Array | any {
         return `hello, world`
     }
@@ -147,7 +146,6 @@ You can create a controller as a http/https service.
 
 - Websocket server.
     ```typescript
-    // http://127.0.0.1:8090/editor.html?name=foo
     export default function (ctx: ServiceContext) {
         const ws = ctx.upgradeToWebSocket() // upgrade http and get a websocket
         console.info(ws.read()) // read a message
@@ -159,7 +157,6 @@ You can create a controller as a http/https service.
 - Http chunk.
     1. Create a controller with name `foo`, type `controller` and url `/service/foo`.
         ```typescript
-        // http://127.0.0.1:8090/editor.html?name=foo
         export default function (ctx: ServiceContext) {
             ctx.write("hello, chunk 0")
             ctx.flush()
@@ -199,7 +196,6 @@ A module can be imported in the controller.
 
 - A custom module.
     ```typescript
-    // http://127.0.0.1:8090/editor.html?name=user&type=module
     export const user = {
         name: "zhangsan"
     }
@@ -213,7 +209,7 @@ A module can be imported in the controller.
     }
     ```
 
-- [A custom module extends Date.](docs/modules/date.md)
+- [A custom module extends Number.](docs/modules/number.md)
 
 ### Daemon
 
@@ -221,7 +217,6 @@ The daemon is a backend running service with no timeout limit.
 
 - Create a daemon.
     ```typescript
-    // http://127.0.0.1:8090/editor.html?name=foo&type=daemon
     export default function () {
         const b = $native("pipe")("default")
         while (true) {
@@ -260,7 +255,7 @@ Here are some built-in methods and modules.
     String.fromCharCode(...buf) // hello
     ```
 
-- Using native module.
+- Using builtin and native module.
     ```typescript
     // bqueue or pipe
     const b = $native("pipe")("default")
@@ -272,10 +267,13 @@ Here are some built-in methods and modules.
     // db
     $native("db").query("select name from script") // [{"name":"foo"}, {"name":"user"}]
 
+    // date
+    Date.toDate("2006-01-02 15:04:05.012", "yyyy-MM-dd HH:mm:ss.SSS")
+        .toString("yyyyMMddHHmmssSSS") // "20060102150405012"
+
     // decimal
-    const Decimal = $native("decimal"),
-        d1 = Decimal("0.1"),
-        d2 = Decimal("0.2")
+    const d1 = new Decimal("0.1"),
+        d2 = new Decimal("0.2")
     d2.add(d1) // 0.3
     d2.sub(d1) // 0.1
     d2.mul(d1) // 0.02
@@ -362,7 +360,6 @@ Here are some built-in methods and modules.
 - Upload file.
     1. Create a resource with lang `html` and url `/resource/foo.html`.
         ```html
-        <!-- http://127.0.0.1:8090/editor.html?name=foo&type=resource&lang=html -->
         <!DOCTYPE html>
         <html>
         <head>
@@ -388,7 +385,6 @@ Here are some built-in methods and modules.
         ```
     2. Create a controller with url `/service/foo`.
         ```typescript
-        // http://127.0.0.1:8090/editor.html?name=foo
         export default function (ctx: ServiceContext) {
             const file = ctx.getFile("file"),
                 hash = $native("crypto").md5(file.data).toString("hex")

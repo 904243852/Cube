@@ -59,8 +59,8 @@ export class CSV {
             current++;
         }
 
-        const row: string[] = [],
-            rows: string[][] = [];
+        const rows: string[][] = [];
+        let row: string[] = [];
         for (const token of tokens) {
             if (token !== options.linebreak) {
                 row.push(token);
@@ -102,7 +102,7 @@ export class CSV {
                 if (headers[field] == null) {
                     headers[field] = column++;
                     if (field.indexOf("\"") != -1) {
-                        field = field.replace("\"", "\"\"");
+                        field = field.replaceAll("\"", "\"\"");
                     }
                     if (field.indexOf(options.separator) != -1) {
                         field = "\"" + field + "\"";
@@ -120,9 +120,9 @@ export class CSV {
             for (let field in obj) {
                 let token: string = obj[field] + "";
                 if (token.indexOf("\"") != -1) {
-                    token = token.replace("\"", "\"\"");
+                    token = token.replaceAll("\"", "\"\"");
                 }
-                if (token.indexOf(options.separator) != -1) {
+                if (token.indexOf(options.separator) != -1 || token.indexOf(options.linebreak) != -1) {
                     token = "\"" + token + "\"";
                 }
                 rowTokens[headers[field]] = token;

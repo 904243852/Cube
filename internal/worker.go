@@ -185,8 +185,8 @@ func CreateWorker(program *goja.Program, id int) *Worker {
 		return nil, errors.New("module is not found: " + name)
 	})
 
-	for name, factory := range builtin.Builtins {
-		runtime.Set(name, factory(&worker))
+	for _, factory := range builtin.Builtins {
+		factory(&worker)
 	}
 
 	runtime.SetMaxCallStackSize(2048)

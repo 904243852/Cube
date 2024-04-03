@@ -2,7 +2,7 @@ package builtin
 
 import "github.com/dop251/goja"
 
-var Builtins = make(map[string]func(worker Worker) interface{})
+var Builtins = make([]func(worker Worker), 0)
 
 type Worker interface {
 	AddDefer(d func())
