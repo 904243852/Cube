@@ -2,8 +2,6 @@
 
 ```typescript
 //?name=node_modules/validator&type=module
-import "date";
-
 type GeneralSchema = {
     /**
      * 字段名称
