@@ -17,6 +17,9 @@ export class CSV {
             if (content.substr(current, options.linebreak.length) === options.linebreak) { // 如果是换行符
                 tokens.push(options.linebreak);
                 current += options.linebreak.length;
+                if (content[current] === options.separator) { // 如果下一个字符是分隔符，需要补充一个空值
+                    tokens.push(<string><unknown>null);
+                }
                 continue;
             }
 
@@ -167,6 +170,6 @@ export class CSV {
 import { CSV } from "csv"
 
 export default function (ctx) {
-    return CSV.toJsonArray(`id,name\n1,zhangsan\n2,"li,si"\n3,"wang, \n\"wu\""`)
+    return CSV.toJsonArray(`id,name,age\n1,zhangsan,19\n2,"li,\"si\"",20\n,wanhwu,`)
 }
 ```
