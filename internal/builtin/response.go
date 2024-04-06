@@ -38,7 +38,11 @@ func init() {
 			if v := util.ExportGojaValue(call.Argument(2)); v != nil {
 				if s, ok := v.(string); ok {
 					output.data = []byte(s)
-				} else if output.data, ok = v.([]byte); !ok {
+				} else if b, ok := v.(Buffer); ok {
+					output.data = []byte(b)
+				} else if t, ok := v.([]byte); ok {
+					output.data = t
+				} else {
 					panic(runtime.NewTypeError("data should be a string or a byte array"))
 				}
 			}
