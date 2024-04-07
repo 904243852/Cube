@@ -1,7 +1,9 @@
 type GenericByteArray = string | Uint8Array | Array<number> | Buffer
 
+//#region service
+
 interface ServiceContext {
-    "Native Go Implementation"; /* it is not allowed to create it by yourself */
+    "Native Service Context"; /* it is not allowed to create it by yourself */
     getHeader(): { [name: string]: string; };
     getURL(): { path: string; params: { [name: string]: string[]; }; };
     getBody(): Buffer;
@@ -25,13 +27,9 @@ interface ServiceWebSocket {
     close();
 }
 
-declare class ServiceResponse {
-    constructor(status: number, header: { [name: string]: string | number; }, data?: GenericByteArray);
-    setStatus(status: number): void;
-    setHeader(name: string, value: string): void;
-    setData(data: GenericByteArray): void;
-    setCookie(name: string, value: string): void;
-}
+//#endregion
+
+//#region builtin
 
 declare interface Buffer extends Array<number> {
     toString(encoding?: "utf8" | "hex" | "base64" | "base64url"): string;
@@ -71,6 +69,18 @@ declare class Decimal {
     string(): string;
     stringFixed(places: number): string;
 }
+
+declare class ServiceResponse {
+    constructor(status: number, header: { [name: string]: string | number; }, data?: GenericByteArray);
+    setStatus(status: number): void;
+    setHeader(name: string, value: string): void;
+    setData(data: GenericByteArray): void;
+    setCookie(name: string, value: string): void;
+}
+
+//#endregion
+
+//#region native module
 
 type BlockingQueue = {
     put(input: any, timeout: number): void;
@@ -159,8 +169,12 @@ type HttpOptions = Partial<{
     cert: string;
     key: string;
 }
+type FormData = {
+    "Native Form Data"
+}
 declare function $native(name: "http"): (options?: HttpOptions) => {
-    request(method: string, url: string, header?: { [name: string]: string; }, body?: GenericByteArray): { status: number; header: { [name: string]: string; }; data: Buffer; };
+    request(method: string, url: string, header?: { [name: string]: string; }, body?: GenericByteArray | FormData): { status: number; header: { [name: string]: string; }; data: Buffer; };
+    toFormData(data: { [name: string]: string | { filename: string; data: GenericByteArray; }; }): FormData;
 }
 
 type Image = {
@@ -229,3 +243,5 @@ declare function $native(name: "zip"): {
         }[];
     };
 }
+
+//#endregion

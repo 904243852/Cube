@@ -36,7 +36,7 @@ A simple web server that can be developed online using typescript/javascript.
 2. Start the server:
     ```bash
     ./cube \
-        -n 8 \ # using 8 virtual machines
+        -n 256 \ # using 256 virtual machines
         -p 8443 \ # server with port 8443
         -s \ # enable SSL/TLS
         -v # enable client cert verification
@@ -105,14 +105,14 @@ A simple web server that can be developed online using typescript/javascript.
 
 You can create a controller as a http/https service.
 
-- A simple controller.
+- A simple controller
     ```typescript
     export default function (ctx: ServiceContext): ServiceResponse | Uint8Array | any {
         return `hello, world`
     }
     ```
 
-- Get request parameters.
+- Get request parameters
     1. Create a controller with name `greeting`, type `controller` and url `/service/{name}/greeting/{words}`.
         ```typescript
         export default function (ctx: ServiceContext) {
@@ -134,7 +134,7 @@ You can create a controller as a http/https service.
         curl -XPOST -H "Content-Type: application/x-www-form-urlencoded" "http://127.0.0.1:8090/service/zhangsan/greeting/hello?a=1&b=2&c&a=3" -d "d=4&e=5&f&d=6"
         ```
 
-- Return a custom response.
+- Return a custom response
     ```typescript
     export default function (ctx: ServiceContext): ServiceResponse {
         // return new Uint8Array([104, 101, 108, 108, 111]) // response with body "hello"
@@ -144,7 +144,7 @@ You can create a controller as a http/https service.
     }
     ```
 
-- Websocket server.
+- Websocket server
     ```typescript
     export default function (ctx: ServiceContext) {
         const ws = ctx.upgradeToWebSocket() // upgrade http and get a websocket
@@ -154,7 +154,7 @@ You can create a controller as a http/https service.
     }
     ```
 
-- Http chunk.
+- Http chunk
     1. Create a controller with name `foo`, type `controller` and url `/service/foo`.
         ```typescript
         export default function (ctx: ServiceContext) {
@@ -171,7 +171,7 @@ You can create a controller as a http/https service.
         { echo "GET /service/foo HTTP/1.1"; echo "Host: 127.0.0.1"; echo ""; sleep 1; echo exit; } | telnet 127.0.0.1 8090
         ```
 
-- Read byte(s) from request body. It also can be used as read chunks from a chunked request.
+- Read byte(s) from request body or read chunks from a chunked request
     ```typescript
     export default function (ctx: ServiceContext) {
         const reader = ctx.getReader()
@@ -194,7 +194,7 @@ You can create a controller as a http/https service.
 
 A module can be imported in the controller.
 
-- A custom module.
+- A custom module
     ```typescript
     export const user = {
         name: "zhangsan"
@@ -209,13 +209,13 @@ A module can be imported in the controller.
     }
     ```
 
-- [A custom module extends Number.](docs/modules/number.md)
+- [A custom module extends Number](docs/modules/number.md)
 
 ### Daemon
 
 The daemon is a backend running service with no timeout limit.
 
-- Create a daemon.
+- Create a daemon
     ```typescript
     export default function () {
         const b = $native("pipe")("default")
@@ -229,13 +229,37 @@ The daemon is a backend running service with no timeout limit.
 
 Here are some built-in methods and modules.
 
-- Using console.
+- Buffer
+    ```typescript
+    const buf = Buffer.from("hello", "utf8")
+    buf // [104, 101, 108, 108, 111]
+    buf.toString("base64") // aGVsbG8=
+    String.fromCharCode(...buf) // hello
+    ```
+
+- Console
     ```typescript
     // ...
     console.error("this is a error message")
     ```
 
-- Using error.
+- Date
+    ```typescript
+    Date.toDate("2006-01-02 15:04:05.012", "yyyy-MM-dd HH:mm:ss.SSS")
+        .toString("yyyyMMddHHmmssSSS") // "20060102150405012"
+    ```
+
+- Decimal
+    ```typescript
+    const d1 = new Decimal("0.1"),
+        d2 = new Decimal("0.2")
+    d2.add(d1) // 0.3
+    d2.sub(d1) // 0.1
+    d2.mul(d1) // 0.02
+    d2.div(d1) // 2
+    ```
+
+- Error
     ```typescript
     // ...
     throw new Error("error message")
@@ -247,39 +271,24 @@ Here are some built-in methods and modules.
     }
     ```
 
-- Using buffer.
-    ```typescript
-    const buf = Buffer.from("hello", "utf8")
-    buf // [104, 101, 108, 108, 111]
-    buf.toString("base64") // aGVsbG8=
-    String.fromCharCode(...buf) // hello
-    ```
+### Native modules
 
-- Using builtin and native module.
+- Bqueue & Pipe
     ```typescript
-    // bqueue or pipe
     const b = $native("pipe")("default")
     //const b = $native("bqueue")(99)
     b.put(1)
     b.put(2)
     b.drain(4, 2000) // [1, 2]
+    ```
 
-    // db
+- Db
+    ```typescript
     $native("db").query("select name from script") // [{"name":"foo"}, {"name":"user"}]
+    ```
 
-    // date
-    Date.toDate("2006-01-02 15:04:05.012", "yyyy-MM-dd HH:mm:ss.SSS")
-        .toString("yyyyMMddHHmmssSSS") // "20060102150405012"
-
-    // decimal
-    const d1 = new Decimal("0.1"),
-        d2 = new Decimal("0.2")
-    d2.add(d1) // 0.3
-    d2.sub(d1) // 0.1
-    d2.mul(d1) // 0.02
-    d2.div(d1) // 2
-
-    // email
+- Email
+    ```typescript
     const emailc = $native("email")("smtp.163.com", 465, username, password)
     emailc.send(["zhangsan@abc.com"], "greeting", "hello, world")
     emailc.send(["zhangsan@abc.com"], "greeting", "hello, world", [{
@@ -287,8 +296,10 @@ Here are some built-in methods and modules.
         contentType: "text/plain",
         base64: "aGVsbG8=",
     }])
+    ```
 
-    // crypto
+- Crypto
+    ```typescript
     const cryptoc = $native("crypto")
     // hash
     cryptoc.createHash("md5").sum("hello, world").map(c => c.toString(16).padStart(2, "0")).join("") // "e4d7f1b4ed2e42d15898f4b27b019da4"
@@ -309,13 +320,17 @@ Here are some built-in methods and modules.
         "sha256",
         "pss",
     ) // true
+    ```
 
-    // file
+- File
+    ```typescript
     const filec = $native("file")
     filec.write("greeting.txt", "hello, world")
     String.fromCharCode(...filec.read("greeting.txt")) // "hello, world"
+    ```
 
-    // http
+- Http
+    ```typescript
     const { status, header, data } = $native("http")({
         //caCert: "", // ca certificates for http client
         //cert: "", key: "", // private key and certificate/public key for http client auth
@@ -325,19 +340,26 @@ Here are some built-in methods and modules.
     status // 200
     header // { "Content-Length": "227", "Content-Type": "text/html", ... }
     data.toString() // "<html>..."
+    ```
 
-    // image
+- Image
+    ```typescript
     const imagec = $native("image")
     const img0 = imagec.create(100, 200), // create a picture with width 100 and height 200
         img1 = imagec.parse($native("http")().request("GET", "https://www.baidu.com/img/flexible/logo/plus_logo_web_2.png").data) // read a picture from network
     img0.toBytes() // convert this picture to a byte array
+    ```
 
-    // template
+- Template
+    ```typescript
     const content = $native("template")("greeting", { // read template greeting.tpl and render with input
         name: "this is name",
     })
+    ```
 
-    // xml, see https://github.com/antchfx/xpath for syntax
+- Xml
+    ```typescript
+    // see https://github.com/antchfx/xpath for syntax
     const doc = $native("xml")(`
         <Users>
             <User>
@@ -357,7 +379,7 @@ Here are some built-in methods and modules.
 
 ### Advance
 
-- Upload file.
+- Upload file
     1. Create a resource with lang `html` and url `/resource/foo.html`.
         ```html
         <!DOCTYPE html>
@@ -397,4 +419,4 @@ Here are some built-in methods and modules.
         curl -F "file=@./abc.txt; filename=abc.txt;" http://127.0.0.1:8090/service/foo
         ```
 
-### For more examples, please refer to the [document](docs/summary.md)
+### More examples can be found in [document](docs/summary.md)
