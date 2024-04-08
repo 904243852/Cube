@@ -115,7 +115,6 @@ func handleSourceBulkPost(r *http.Request) error {
 	if err := util.UnmarshalWithIoReader(r.Body, &sources); err != nil {
 		return err
 	}
-
 	if len(sources) == 0 {
 		return errors.New("nothing added or modified")
 	}

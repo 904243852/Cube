@@ -297,9 +297,7 @@
                         that.table.pagination.index = 1
                     }
                     that.table.loading = true
-                    fetch(`source?name=%25${that.table.search.keyword}%25&type=${that.table.search.type}&from=${(that.table.pagination.index - 1) * that.table.pagination.size}&size=${that.table.pagination.size}&sort=${that.table.sort.prop} ${that.table.sort.order}&basic`, {
-                        method: "GET",
-                    }).then(r => {
+                    fetch(`source?name=%25${that.table.search.keyword}%25&type=${that.table.search.type}&from=${(that.table.pagination.index - 1) * that.table.pagination.size}&size=${that.table.pagination.size}&sort=${that.table.sort.prop} ${that.table.sort.order}&basic`).then(r => {
                         if (r.status != 200) {
                             throw new Error(r.statusText)
                         }
@@ -326,16 +324,36 @@
                     const that = this
                     const reader = new FileReader()
                     reader.onload = function () {
-                        fetch("source?bulk", {
-                            method: "POST",
-                            body: this.result,
-                        }).then(r => r.json()).then(r => {
-                            if (r.code === "0") {
-                                ElMessage.success("Import succeeded")
-                                that.onTableFetch()
-                            } else {
-                                ElMessage.error(r.message)
+                        const inputs = this.result
+                        const uploader = function () {
+                            fetch("source?bulk", {
+                                method: "POST",
+                                body: inputs,
+                            }).then(r => r.json()).then(r => {
+                                if (r.code === "0") {
+                                    ElMessage.success("Import succeeded")
+                                    that.onTableFetch()
+                                } else {
+                                    ElMessage.error(r.message)
+                                }
+                            })
+                        }
+                        fetch("source?size=999&basic").then(r => r.json()).then(r => {
+                            const outputs = r.data.sources.reduce((p, c) => {
+                                p[c.rowid] = c.last_modified_date
+                                return p
+                            }, {})
+                            if (!JSON.parse(inputs).some(i => i.last_modified_date < (outputs[i.rowid] || ""))) {
+                                uploader()
+                                return
                             }
+                            ElMessageBox.confirm("Newer versions will be overwritten, are you sure ?", "Warning", {
+                                confirmButtonText: "Confirm",
+                                cancelButtonText: "Cancel",
+                                type: "warning",
+                            }).then(() => {
+                                uploader()
+                            })
                         })
                     }
                     reader.readAsText(file.raw, "utf-8")
