@@ -60,7 +60,7 @@
                     <el-button ref="UploadRef"></el-button>
                 </el-upload>
                 <el-button-group style="padding-left: 5px;">
-                    <el-button :icon="Upload" @click="UploadClick">Import</el-button>
+                    <el-button :icon="Upload" :loading="button.upload.loading" @click="UploadClick">Import</el-button>
                     <el-button :icon="Download" @click="onTableExport">Export</el-button>
                 </el-button-group>
                 <div style="margin-left: auto; display: inline-flex;">
@@ -266,6 +266,11 @@
                             }],
                         },
                     },
+                    button: {
+                        upload: {
+                            loading: false,
+                        },
+                    },
                     table: {
                         records: [],
                         pagination: {
@@ -321,38 +326,46 @@
                     this.onTableFetch()
                 },
                 onTableImport(file) {
-                    const that = this
-                    const reader = new FileReader()
+                    const that = this,
+                        reader = new FileReader()
+                    that.button.upload.loading = true
                     reader.onload = function () {
-                        const inputs = this.result
-                        const uploader = function () {
-                            fetch("source?bulk", {
-                                method: "POST",
-                                body: inputs,
-                            }).then(r => r.json()).then(r => {
-                                if (r.code === "0") {
-                                    ElMessage.success("Import succeeded")
-                                    that.onTableFetch()
-                                } else {
-                                    ElMessage.error(r.message)
-                                }
-                            })
-                        }
+                        const inputs = JSON.parse(this.result),
+                            upload = function (inputs) {
+                                fetch("source?bulk", {
+                                    method: "POST",
+                                    body: JSON.stringify(inputs),
+                                }).then(r => r.json()).then(r => {
+                                    if (r.code === "0") {
+                                        ElMessage.success("Import succeeded")
+                                        that.onTableFetch()
+                                    } else {
+                                        ElMessage.error(r.message)
+                                    }
+                                }).finally(() => {
+                                    that.button.upload.loading = false
+                                })
+                            }
                         fetch("source?size=999&basic").then(r => r.json()).then(r => {
-                            const outputs = r.data.sources.reduce((p, c) => {
-                                p[c.rowid] = c.last_modified_date
-                                return p
-                            }, {})
-                            if (!JSON.parse(inputs).some(i => i.last_modified_date < (outputs[i.rowid] || ""))) {
-                                uploader()
+                            const outputs = r.data.sources.reduce((map, e) => map.set(e.rowid, e.last_modified_date), new Map()),
+                                outdated = inputs.filter(e => e.last_modified_date < outputs.get(e.rowid)).map(e => e.rowid)
+                            if (outdated.length === 0) {
+                                upload(inputs)
                                 return
                             }
-                            ElMessageBox.confirm("Newer versions will be overwritten, are you sure ?", "Warning", {
-                                confirmButtonText: "Confirm",
-                                cancelButtonText: "Cancel",
+                            ElMessageBox.confirm(`${outdated.length} sources are out of version. How ?`, "Warning", {
+                                distinguishCancelAndClose: true,
+                                confirmButtonText: "Skip",
+                                cancelButtonText: "Overwrite",
                                 type: "warning",
                             }).then(() => {
-                                uploader()
+                                upload(inputs.filter(e => !~outdated.indexOf(e.rowid))) // 跳过冲突的记录
+                            }).catch(action => {
+                                if (action === "close") { // 取消导入操作
+                                    that.button.upload.loading = false
+                                    return
+                                }
+                                upload(inputs) // 全部覆盖导入
                             })
                         })
                     }
@@ -384,9 +397,8 @@
                 },
                 onTableRowDelete(record) {
                     const that = this
-                    ElMessageBox.confirm("This operation will permanently delete the record. Do you want to continue ?", "Tips", {
+                    ElMessageBox.confirm(`${record.name} will be deleted permanently. Continue ?`, "Warning", {
                         confirmButtonText: "Confirm",
-                        cancelButtonText: "Cancel",
                         type: "warning",
                         beforeClose: (action, instance, done) => {
                             if (action === "confirm") {
