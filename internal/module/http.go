@@ -1,11 +1,13 @@
 package module
 
 import (
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
 	"errors"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/url"
 	"strings"
@@ -14,15 +16,6 @@ import (
 
 	"github.com/quic-go/quic-go/http3"
 )
-
-type HttpOptions struct {
-	CaCert             string
-	Cert               string
-	Key                string
-	InsecureSkipVerify bool
-	IsHttp3            bool
-	Proxy              string
-}
 
 func init() {
 	register("http", func(worker Worker, db Db) interface{} {
@@ -100,17 +93,53 @@ func init() {
 	})
 }
 
+type HttpOptions struct {
+	CaCert             string
+	Cert               string
+	Key                string
+	InsecureSkipVerify bool
+	IsHttp3            bool
+	Proxy              string
+}
+
+type FormData struct {
+	buf         *bytes.Buffer
+	contentType string
+}
+
 type HttpClient struct {
 	c *http.Client
 }
 
-func (h *HttpClient) Request(method string, url string, header map[string]string, body string) (response interface{}, err error) {
-	req, err := http.NewRequest(strings.ToUpper(method), url, strings.NewReader(body))
+func (h *HttpClient) Request(method string, url string, header map[string]string, input interface{}) (response interface{}, err error) {
+	var (
+		body        io.Reader
+		contentType string
+	)
+
+	switch d := input.(type) {
+	case nil:
+		body = strings.NewReader("")
+	case string:
+		body = strings.NewReader(d)
+	case *FormData:
+		body = d.buf
+		contentType = d.contentType
+	case *builtin.Buffer:
+		body = bytes.NewReader(*d)
+	default:
+		return nil, errors.New("not implemented")
+	}
+
+	req, err := http.NewRequest(strings.ToUpper(method), url, body)
 	if err != nil {
 		return
 	}
 	for k, v := range header {
 		req.Header.Set(k, v)
+	}
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
 	}
 
 	resp, err := h.c.Do(req)
@@ -119,7 +148,7 @@ func (h *HttpClient) Request(method string, url string, header map[string]string
 	}
 	defer resp.Body.Close()
 
-	data, err := io.ReadAll(resp.Body)
+	output, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return
 	}
@@ -132,7 +161,28 @@ func (h *HttpClient) Request(method string, url string, header map[string]string
 	response = map[string]interface{}{
 		"status": resp.StatusCode,
 		"header": headers,
-		"data":   (*builtin.Buffer)(&data),
+		"data":   (*builtin.Buffer)(&output),
 	}
 	return
+}
+
+func (h *HttpClient) ToFormData(data *map[string]interface{}) (*FormData, error) {
+	b := bytes.Buffer{}
+	w := multipart.NewWriter(&b)
+	for k, v := range *data {
+		if s, ok := v.(string); ok {
+			w.WriteField(k, s)
+			continue
+		}
+		f := v.(map[string]interface{})
+		p, _ := w.CreateFormFile(k, f["filename"].(string))
+		p.Write(*(f["data"].(*builtin.Buffer)))
+	}
+	if err := w.Close(); err != nil {
+		return nil, err
+	}
+	return &FormData{
+		buf:         &b,
+		contentType: w.FormDataContentType(),
+	}, nil
 }
