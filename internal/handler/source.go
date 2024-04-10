@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -312,10 +313,13 @@ func handleSourceGet(w http.ResponseWriter, r *http.Request) (interface{}, bool,
 	}
 
 	if p.Has("bulk") { // 导出为文件
-		w.Header().Set("Content-Disposition", "attachment;filename=\"sources-"+strconv.FormatInt(time.Now().UnixMilli(), 10)+".json\"")
-		enc := json.NewEncoder(w)
+		buf := &bytes.Buffer{}
+		enc := json.NewEncoder(buf)
 		enc.SetEscapeHTML(false)
 		enc.Encode(data.Sources)
+		w.Header().Set("Content-Disposition", "attachment; filename=\"sources-"+strconv.FormatInt(time.Now().UnixMilli(), 10)+".json\"")
+		w.Header().Set("Content-Length", fmt.Sprint(buf.Len())) // 部分浏览器在下载文件时依赖响应头 Content-Length，如果不返回该属性字段，则下载的文件内容为空
+		w.Write(buf.Bytes())
 		return nil, true, nil
 	}
 
