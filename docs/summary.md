@@ -20,7 +20,7 @@
 
 - [Return a view with asynchronous vues](examples/vue.md)
 
-- [Download a mp4 using HTTP Range](examples/httprange.md)
+- [File reader, such as jpg/png/gif(resize), mp4(HTTP-Range), zip](examples/file.md)
 
 - [Play a video online using HTTP-FLV](examples/httpflv.md)
 

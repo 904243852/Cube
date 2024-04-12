@@ -95,8 +95,8 @@
             0x00, 0x00, 0x00, 0x09, // FLV Header 的字节长度
             // Previous Tag Size 0
             0x00, 0x00, 0x00, 0x00,
-        ]), -1)
-        cache.set("FLV_META_TAG", FLVTag.encode(0x12, metaData, 0), -1) // Script Tag
+        ]), 3600_000)
+        cache.set("FLV_META_TAG", FLVTag.encode(0x12, metaData, 0), 3600_000) // Script Tag
 
         while (true) {
             // 4.4 客户端向服务器推送媒体数据
@@ -119,7 +119,7 @@
                 const soundFormat = (data[0] >> 4) & 0x0f
                 if ((soundFormat == 10 || soundFormat == 13) && data[1] == 0) {
                     // AAC Sequence Header
-                    cache.set("FLV_AACHEADER_TAG", FLVTag.encode(header.messageTypeId, data, 0), -1)
+                    cache.set("FLV_AACHEADER_TAG", FLVTag.encode(header.messageTypeId, data, 0), 3600_000)
                 }
             }
             if (header.messageTypeId === 0x09) { // Video
@@ -131,7 +131,7 @@
                 }
                 if ((videoCodec == 7 || videoCodec == 12 || videoCodec == 13) && frameType == 1 && data[1] == 0) {
                     // AVC Sequence Header
-                    cache.set("FLV_AVCHEADER_TAG", FLVTag.encode(header.messageTypeId, data, 0), -1)
+                    cache.set("FLV_AVCHEADER_TAG", FLVTag.encode(header.messageTypeId, data, 0), 3600_000)
                 }
             }
 

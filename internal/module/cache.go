@@ -4,7 +4,7 @@ import (
 	"cube/internal/util"
 )
 
-var cache = util.MemoryCache{}
+var cache = util.NewMemoryCache()
 
 func init() {
 	register("cache", func(worker Worker, db Db) interface{} {

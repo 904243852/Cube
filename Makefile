@@ -12,6 +12,12 @@ watch: # 监听当前目录下的相关文件变动，实时编译、运行
 kill:
 	@ps -ef | grep -P "/cube|/gowatch" | grep -v "grep" | awk '{print $$2}' | xargs kill -9
 
+test: # 执行（非基准）单元测试用例
+	@go test -v ./... | grep -v 'no test files'
+
+bench: # 执行（基准）单元测试用例
+	@go test -v -run=^$ -benchmem -bench=. ./... | grep -v 'no test files'
+
 # 编译
 build: clean # 默认使用 CDN 资源并且不使用 UPX 压缩，即 make build ENABLE_CDN=1 ENABLE_UPX=0
 	@

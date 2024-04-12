@@ -92,6 +92,8 @@ declare function $native(name: "bqueue"): (size: number) => BlockingQueue;
 declare function $native(name: "cache"): {
     set(key: any, value: any, timeout: number): void;
     get(key: any): any;
+    has(key: any): boolean;
+    expire(key: any, timeout: number): void;
 }
 
 type HashAlgorithm = "md5" | "sha1" | "sha256" | "sha512"
