@@ -180,12 +180,21 @@ declare function $native(name: "http"): (options?: HttpOptions) => {
 }
 
 type Image = {
-    width: number;
-    height: number;
+    width(): number;
+    height(): number;
     get(x: number, y: number): number;
     set(x: number, y: number, p: number): void;
-    toBytes(): Buffer;
-    resize(width: number, height: number): Image;
+    /** set rotate for next drawings */
+    setDrawRotate(degrees: number): void;
+    /** set font face for next drawings */
+    setDrawFontFace(fontSize?: number, ttf?: GenericByteArray): void;
+    /** set RGBA color for next drawings */
+    setDrawColor(color: string | [red: number, green: number, blue: number, alpha?: number]): void;
+    drawImage(image: Image, x: number, y: number): void;
+    drawString(s: string, x: number, y: number, ax?: number, ay?: number, width?: number, lineSpacing?: number): void;
+    resize(width: number, height?: number): Image;
+    toJPG(quality?: number): Buffer;
+    toPNG(): Buffer;
 }
 declare function $native(name: "image"): {
     create(width: number, height: number): Image;
@@ -236,13 +245,18 @@ type XmlNode = {
 }
 declare function $native(name: "xml"): (content: string) => XmlNode;
 
+type ZipEntry = {
+    name: string;
+    compressedSize64: number;
+    uncompressedSize64: number;
+    comment: string;
+    getData(): Buffer;
+}
 declare function $native(name: "zip"): {
     write(data: { [name: string]: string | Buffer; }): Buffer;
     read(data: GenericByteArray): {
-        getFiles(): {
-            getName(): string;
-            getData(): Buffer;
-        }[];
+        getEntries(): ZipEntry[];
+        getData(name: string): Buffer;
     };
 }
 

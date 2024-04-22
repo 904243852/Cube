@@ -53,19 +53,16 @@ func (z *ZipClient) Read(data []byte) (*ZipReader, error) {
 	return &ZipReader{reader: r}, nil
 }
 
-type ZipFile struct {
-	file *zip.File
+type ZipEntry struct {
+	*zip.File
 }
 
-func (z *ZipFile) GetName() string {
-	return z.file.Name
-}
-
-func (z *ZipFile) GetData() (builtin.Buffer, error) {
-	fd, err := z.file.Open()
+func (z *ZipEntry) GetData() (builtin.Buffer, error) {
+	fd, err := z.Open()
 	if err != nil {
 		return nil, err
 	}
+	defer fd.Close()
 	return io.ReadAll(fd)
 }
 
@@ -73,9 +70,18 @@ type ZipReader struct {
 	reader *zip.Reader
 }
 
-func (z *ZipReader) GetFiles() (files []*ZipFile) {
+func (z *ZipReader) GetEntries() (files []*ZipEntry) {
 	for _, f := range z.reader.File {
-		files = append(files, &ZipFile{f})
+		files = append(files, &ZipEntry{f})
 	}
 	return
+}
+
+func (z *ZipReader) GetData(name string) (builtin.Buffer, error) {
+	fd, err := z.reader.Open(name)
+	if err != nil {
+		return nil, err
+	}
+	defer fd.Close()
+	return io.ReadAll(fd)
 }

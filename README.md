@@ -344,10 +344,25 @@ Here are some built-in methods and modules.
 
 - Image
     ```typescript
-    const imagec = $native("image")
-    const img0 = imagec.create(100, 200), // create a picture with width 100 and height 200
-        img1 = imagec.parse($native("http")().request("GET", "https://www.baidu.com/img/flexible/logo/plus_logo_web_2.png").data) // read a picture from network
-    img0.toBytes() // convert this picture to a byte array
+    const imagec = $native("image"),
+        filec = $native("file")
+
+    const img = imagec.parse(filec.read("input.jpg")),
+        text = "hello, world",
+        textHeight = 28,
+        textWidth = text.length * textHeight
+
+    img.setDrawFontFace(textHeight)
+    img.setDrawColor([255, 255, 255, 80])
+    img.setDrawRotate(-30)
+
+    for (let i = 0, di = textWidth, ic = img.width() / di; i < ic; i++) {
+        for (let j = 0, dj = di, jc = img.height() / dj; j < jc; j++) {
+            img.drawString(text, i * di + 20, j * dj + (i % 2 || dj / 2))
+        }
+    }
+
+    filec.write("output.jpg", img.resize(1280).toJPG())
     ```
 
 - Template

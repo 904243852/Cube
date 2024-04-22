@@ -1,4 +1,4 @@
-# File reader, such as jpg/png/gif(resize), mp4(HTTP-Range), zip
+# File reader, such as jpg/png(resize), mp4(HTTP-Range), zip
 
 1. Create a controller.
     ```typescript
@@ -6,8 +6,6 @@
     const filec = $native("file"),
         imagec = $native("image"),
         zipc = $native("zip")
-
-    type ZipFile = { getName(): string; getData(): Buffer; }
 
     export default (app => app.run.bind(app))(new class FileReader {
         private static readonly FileTypes = {
@@ -22,11 +20,11 @@
             return this.read(ctx.getPathVariables().name.split("!/"), ctx, undefined)
         }
 
-        private read([name, ...subnames]: string[], ctx: ServiceContext, zipFiles: ZipFile[]) {
+        private read([name, ...subnames]: string[], ctx: ServiceContext, zipFiles: ZipEntry[]) {
             if (name === "" || name[name.length - 1] === "/") {
                 return this.toDir(name, zipFiles)
             }
-
+    
             // 根据文件的前 8 个字节来判断文件的类型
             const headers = this.getHeaderBytes(name, 8, zipFiles),
                 magic = headers.map(i => i.toString(16).padStart(2, '0')).join("").toUpperCase(),
@@ -36,12 +34,12 @@
                         .pop()
                 ]
 
-            if (!!~["jpeg", "png", "gif"].indexOf(fileType)) {
+            if (!!~["jpeg", "png"].indexOf(fileType)) {
                 return this.toImage(name, ctx, zipFiles) // 读取并缩放图片
             }
 
             if (fileType === "zip" && subnames.length) {
-                return this.read(subnames, ctx, zipc.read(filec.read(name)).getFiles()) // 读取 zip 子文件
+                return this.read(subnames, ctx, zipc.read(filec.read(name)).getEntries()) // 读取 zip 子文件
             }
 
             if (!subnames.length) { // zip 的子文件无需范围请求
@@ -54,29 +52,29 @@
             return this.toFile(name, zipFiles)
         }
 
-        private getHeaderBytes(name: string, size: number, zipFiles?: ZipFile[]) {
-            if (zipFiles === undefined) {
+        private getHeaderBytes(name: string, size: number, zipEntries?: ZipEntry[]) {
+            if (zipEntries === undefined) {
                 return filec.readRange(name, 0, size)
             }
-            return zipFiles.filter(i => i.getName() === name).pop()?.getData()?.slice(0, size)
+            return zipEntries.filter(i => i.name === name).pop()?.getData()?.slice(0, size)
         }
 
-        private toDir(name: string, zipFiles: ZipFile[]) {
+        private toDir(name: string, zipFiles: ZipEntry[]) {
             if (zipFiles === undefined) {
                 return filec.list(name)
             }
-            return zipFiles.map(i => i.getName())
+            return zipFiles.map(i => i.name)
         }
 
-        private toImage(name: string, ctx: ServiceContext, zipFiles: ZipFile[]) {
+        private toImage(name: string, ctx: ServiceContext, zipFiles: ZipEntry[]) {
             const width = Number(ctx.getURL().params.width?.pop() || 1280)
-            return imagec.parse(zipFiles === undefined ? filec.read(name) : zipFiles.filter(i => i.getName() === name).pop()?.getData())
-                .resize(width, 0)
-                .toBytes()
+            return imagec.parse(zipFiles === undefined ? filec.read(name) : zipFiles.filter(i => i.name === name).pop()?.getData())
+                .resize(width)
+                .toJPG()
         }
 
-        private toFile(name: string, zipFiles: ZipFile[]) {
-            return zipFiles === undefined ? filec.read(name) : zipFiles.filter(i => i.getName() === name).pop()?.getData()
+        private toFile(name: string, zipFiles: ZipEntry[]) {
+            return zipFiles === undefined ? filec.read(name) : zipFiles.filter(i => i.name === name).pop()?.getData()
         }
 
         private toFileWithHttpRange(name: string, ctx: ServiceContext, fileSize: number, contentType: string) {
@@ -94,7 +92,7 @@
             const ranges = range.substring(6).split("-"),
                 start = Number(ranges[0]),
                 end = Math.min(Number(ranges[1]) || (start + FileReader.HttpRangeSliceSize - 1), fileSize - 1)
-    
+
             return new ServiceResponse(206, {
                 "Content-Range": `bytes ${start}-${end}/${fileSize}`,
                 "Content-Length": end - start + 1 + "",

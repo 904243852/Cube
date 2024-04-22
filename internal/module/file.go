@@ -43,16 +43,16 @@ func (f *FileClient) ReadRange(name string, offset int64, length int64) (builtin
 		return nil, err
 	}
 
-	file, err := os.Open(fp)
+	fd, err := os.Open(fp)
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer fd.Close()
 
-	file.Seek(offset, io.SeekStart) // 设置光标的位置：距离文件开头，offset 个字节处
+	fd.Seek(offset, io.SeekStart) // 设置光标的位置：距离文件开头，offset 个字节处
 
 	data := make([]byte, length)
-	file.Read(data)
+	fd.Read(data)
 
 	return data, nil
 }
@@ -74,15 +74,15 @@ func (f *FileClient) WriteRange(name string, offset int64, bytes []byte) error {
 		return err
 	}
 
-	file, err := os.Open(fp)
+	fd, err := os.Open(fp)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer fd.Close()
 
-	file.Seek(offset, io.SeekStart)
+	fd.Seek(offset, io.SeekStart)
 
-	file.Write(bytes)
+	fd.Write(bytes)
 	return nil
 }
 
