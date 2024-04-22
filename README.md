@@ -350,15 +350,16 @@ Here are some built-in methods and modules.
     const img = imagec.parse(filec.read("input.jpg")),
         text = "hello, world",
         textHeight = 28,
-        textWidth = text.length * textHeight
+        textWidth = text.length * textHeight * 0.46,
+        rotation = -30
 
     img.setDrawFontFace(textHeight)
     img.setDrawColor([255, 255, 255, 80])
-    img.setDrawRotate(-30)
+    img.setDrawRotate(rotation)
 
-    for (let i = 0, di = textWidth, ic = img.width() / di; i < ic; i++) {
-        for (let j = 0, dj = di, jc = img.height() / dj; j < jc; j++) {
-            img.drawString(text, i * di + 20, j * dj + (i % 2 || dj / 2))
+    for (let i = 0, di = textWidth / Math.tan(Math.PI / 180 * rotation * -1), ic = img.width() / di; i < ic; i++) {
+        for (let j = 0, dj = textWidth, jc = img.height() / dj; j < jc; j++) {
+            img.drawString(text, i * di + 20, j * dj)
         }
     }
 
