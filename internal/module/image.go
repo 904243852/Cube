@@ -104,6 +104,14 @@ func (i *Image) SetDrawColor(c interface{}) error {
 	return nil
 }
 
+func (i *Image) GetStringWidthAndHeight(s string) *map[string]float64 {
+	w, h := i.c.MeasureString(s)
+	return &map[string]float64{
+		"width":  w,
+		"height": h,
+	}
+}
+
 func (i *Image) relocate(x, y float64) (float64, float64) {
 	if i.rotation == 0 {
 		return x, y

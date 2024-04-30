@@ -100,12 +100,16 @@
                 </div>
                 <input type="submit" value="Submit" />
             </form>
+            {{ if gt (len .delegates) 0 }}
             <div class="others">
                 <span>Others</span>
             </div>
             <div class="providers">
-                <a href="/service/cas/clientredirect?client_name=s3000&service={{ .service }}">s3000</a>
+                {{ range $key, $value := .delegates }}
+                <a href="/service/cas/clientredirect?client_name={{ $key }}&service={{ $.service }}">{{ $key }}</a>
+                {{ end }}
             </div>
+            {{ end }}
         </div>
     </body>
 
@@ -303,6 +307,7 @@
                 return $native("template")("CASLogin", {
                     service: encodeURIComponent(service),
                     error,
+                    delegates,
                 })
             }
             if (template === "error") {

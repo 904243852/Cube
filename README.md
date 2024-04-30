@@ -43,6 +43,10 @@ A simple web server that can be developed online using typescript/javascript.
     ```
 
 3. If you are using a self-signed certificate, you can install the `ca.crt` to the local root certificate library.
+    ```cmd
+    rem Ensure that ca.crt is installed into the Trusted Root Certification Authorities certificate store
+    certutil -addstore root ca.crt
+    ```
 
 4. Open `https://127.0.0.1:8443/` in browser.
 
@@ -76,7 +80,7 @@ A simple web server that can be developed online using typescript/javascript.
 2. Start the server:
     ```bash
     ./cube \
-        -n 8 \ # using 8 virtual machines
+        -n 256 \ # using 256 virtual machines
         -p 8443 \ # server with port 8443
         -s \ # enable SSL/TLS
         -3 # enable HTTP/3
@@ -88,10 +92,6 @@ A simple web server that can be developed online using typescript/javascript.
     ```
     Or you can access it in chrome with quic enabled:
     ```cmd
-    rem Ensure that ca.crt is installed into the Trusted Root Certification Authorities certificate store
-    rem Please use "certmgr.exe" instead of "certmgr.msc"
-    certmgr.exe /c /add ca.crt /s root
-
     rem Ensure that all running chrome processes are terminated
     taskkill /f /t /im chrome.exe
 
@@ -108,7 +108,7 @@ You can create a controller as a http/https service.
 - A simple controller
     ```typescript
     export default function (ctx: ServiceContext): ServiceResponse | Uint8Array | any {
-        return `hello, world`
+        return "hello, world"
     }
     ```
 
@@ -201,7 +201,6 @@ A module can be imported in the controller.
     }
     ```
     ```typescript
-    // http://127.0.0.1:8090/editor.html?name=foo
     import { user } from "./user"
 
     export default function (ctx: ServiceContext) {
@@ -275,8 +274,8 @@ Here are some built-in methods and modules.
 
 - Bqueue & Pipe
     ```typescript
-    const b = $native("pipe")("default")
-    //const b = $native("bqueue")(99)
+    const b = $native("pipe")("mypipe")
+    // const b = $native("bqueue")(99)
     b.put(1)
     b.put(2)
     b.drain(4, 2000) // [1, 2]
@@ -331,12 +330,13 @@ Here are some built-in methods and modules.
 
 - Http
     ```typescript
-    const { status, header, data } = $native("http")({
-        //caCert: "", // ca certificates for http client
-        //cert: "", key: "", // private key and certificate/public key for http client auth
-        //insecureSkipVerify: true // disable verify server certificate
-        //proxy: "http://127.0.0.1:5566" // proxy server
-    }).request("GET", "https://www.baidu.com")
+    const httpc = $native("http")({
+        // caCert: "",                     // ca certificates for http client
+        // cert: "", key: "",              // private key and certificate/public key for http client auth
+        // insecureSkipVerify: true,       // disable verify server certificate
+        // proxy: "http://127.0.0.1:5566", // proxy server
+    })
+    const { status, header, data } = httpc.request("GET", "https://www.baidu.com")
     status // 200
     header // { "Content-Length": "227", "Content-Type": "text/html", ... }
     data.toString() // "<html>..."
@@ -362,6 +362,8 @@ Here are some built-in methods and modules.
             img.drawString(text, i * di + 20, j * dj)
         }
     }
+
+    img.drawString(text, img.width(), img.height() - textHeight, 1, 1) // write text in the bottom right corner of the image
 
     filec.write("output.jpg", img.resize(1280).toJPG())
     ```

@@ -190,6 +190,7 @@ type Image = {
     setDrawFontFace(fontSize?: number, ttf?: GenericByteArray): void;
     /** set RGBA color for next drawings */
     setDrawColor(color: string | [red: number, green: number, blue: number, alpha?: number]): void;
+    getStringWidthAndHeight(s: string): { width: number; height: number; };
     drawImage(image: Image, x: number, y: number): void;
     drawString(s: string, x: number, y: number, ax?: number, ay?: number, width?: number, lineSpacing?: number): void;
     resize(width: number, height?: number): Image;
@@ -232,6 +233,11 @@ declare function $native(name: "socket"): {
         listenMulticast(host: string, port: number): UDPSocketConnection;
     };
 }
+
+declare function $native(name: "process"): {
+    exec(command: string, ...params: string[]): Buffer;
+    pexec(command: string, ...params: string[]): Promise<Buffer>;
+};
 
 declare function $native(name: "template"): (name: string, input: { [name: string]: any; }) => string;
 

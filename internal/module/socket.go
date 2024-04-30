@@ -14,14 +14,10 @@ func init() {
 	register("socket", func(worker Worker, db Db) interface{} {
 		return func(protocol string) (interface{}, error) {
 			if protocol == "tcp" {
-				return &TCPSocket{
-					worker,
-				}, nil
+				return &TCPSocket{worker}, nil
 			}
 			if protocol == "udp" {
-				return &UDPSocket{
-					worker,
-				}, nil
+				return &UDPSocket{worker}, nil
 			}
 			return nil, errors.New("unsupported protocol: must be tcp or udp")
 		}

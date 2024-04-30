@@ -46,32 +46,45 @@ func main() {
 	RunCrontabs("")
 
 	// 启动服务
-	if !config.Secure { // 启用 HTTP
+	serve()
+}
+
+func serve() {
+	if !config.Secure {
+		// 启用 HTTP
 		fmt.Println("Server has started on http://127.0.0.1:" + config.Port + " 🚀")
 		http.ListenAndServe(":"+config.Port, nil)
-	} else {
-		fmt.Println("Server has started on https://127.0.0.1:" + config.Port + " 🚀")
-		c := &tls.Config{
-			ClientAuth: tls.RequestClientCert, // 可通过 request.TLS.PeerCertificates 获取客户端证书
-		}
-		if config.ClientCertVerify { // 设置对服务端证书校验
-			c.ClientAuth = tls.RequireAndVerifyClientCert
-			b, _ := os.ReadFile("./ca.crt")
-			c.ClientCAs = x509.NewCertPool()
-			c.ClientCAs.AppendCertsFromPEM(b)
-		}
-		if config.Http3 { // 启用 HTTP/3
-			server := &http3.Server{
-				Addr:      ":" + config.Port,
-				TLSConfig: c,
-			}
-			server.ListenAndServeTLS(config.ServerCert, config.ServerKey)
-		} else { // 启用 HTTPS
-			server := &http.Server{
-				Addr:      ":" + config.Port,
-				TLSConfig: c,
-			}
-			server.ListenAndServeTLS(config.ServerCert, config.ServerKey)
-		}
+		return
 	}
+
+	c := &tls.Config{
+		ClientAuth: tls.RequestClientCert, // 可通过 request.TLS.PeerCertificates 获取客户端证书
+	}
+
+	if config.ClientCertVerify {
+		// 设置对服务端证书校验
+		c.ClientAuth = tls.RequireAndVerifyClientCert
+		b, _ := os.ReadFile("./ca.crt")
+		c.ClientCAs = x509.NewCertPool()
+		c.ClientCAs.AppendCertsFromPEM(b)
+	}
+
+	fmt.Println("Server has started on https://127.0.0.1:" + config.Port + " 🚀")
+
+	if !config.Http3 {
+		// 启用 HTTPS 或 HTTP/2
+		server := &http.Server{
+			Addr:      ":" + config.Port,
+			TLSConfig: c,
+		}
+		server.ListenAndServeTLS(config.ServerCert, config.ServerKey)
+		return
+	}
+
+	// 启用 HTTP/3
+	server := &http3.Server{
+		Addr:      ":" + config.Port,
+		TLSConfig: c,
+	}
+	server.ListenAndServeTLS(config.ServerCert, config.ServerKey)
 }

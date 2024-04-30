@@ -3,6 +3,8 @@ package module
 import (
 	"sync"
 
+	"cube/internal/builtin"
+
 	"github.com/dop251/goja"
 )
 
@@ -15,10 +17,9 @@ func init() {
 //#region 事件订阅者
 
 type EventSubscriber struct {
-	data     chan interface{} // 用于接收生产者（即 EventBus）发送的数据
-	stop     chan struct{}    // 用于向生产者（即 EventBus）发送关闭通知
-	closed   bool             // 订阅者是否已关闭，如果已关闭，EventBus 将不会再推送数据
-	loopstop func()           // 缓存 EventLoop Put 方法中的 stop 方法，用于主动取消订阅事件
+	trigger *builtin.EventTaskTrigger
+	data    chan interface{} // 用于接收生产者（即 EventBus）发送的数据
+	stop    chan struct{}    // 用于向生产者（即 EventBus）发送关闭通知
 }
 
 func (s *EventSubscriber) Next() interface{} {
@@ -26,12 +27,9 @@ func (s *EventSubscriber) Next() interface{} {
 }
 
 func (s *EventSubscriber) Cancel() {
-	if !s.closed {
-		s.closed = true
-		if s.loopstop != nil {
-			s.loopstop() // 执行 EventLoop 的 stop 回调方法，表示终止事件循环中的该任务，任务队列计数器减一
-		}
+	if s.trigger.Cancel() {
 		close(s.stop) // 广播通知 EventBus，不再推送数据
+		close(s.data)
 	}
 }
 
@@ -68,7 +66,7 @@ func (b *EventBus) emit(topic string, data interface{}) {
 		// 虽然 go func() 可以避免阻塞发布者，但这里不使用该方式，如果需要同时发送大量的事件，这里会出现丢失
 		i := 0
 		for _, s := range subscribers {
-			if !s.closed {
+			if !s.trigger.IsCancelled() {
 				select {
 				case <-s.stop: // 这里不能简单的直接发送数据，消费者和生产者可能位于不同的线程，closed 不是线程安全的，因此这里优先监听 stop 通道的关闭事件，如果已关闭则不发送数据
 				case s.data <- data: // 发送数据
@@ -94,29 +92,28 @@ func (c *EventClient) Emit(topic string, data interface{}) {
 }
 
 func (c *EventClient) CreateSubscriber(topics ...string) *EventSubscriber {
-	s := &EventSubscriber{
-		data: make(chan interface{}),
-		stop: make(chan struct{}),
-	}
-	c.worker.AddDefer(func() {
-		if !s.closed {
-			s.closed = true
-			close(s.stop)
-			close(s.data)
-		}
-	})
+	worker := c.worker
+
+	s := &EventSubscriber{worker.EventLoop().NewEventTaskTrigger(), make(chan interface{}), make(chan struct{}, 1)}
+
+	worker.AddDefer(s.Cancel)
+
 	for _, topic := range topics {
 		MyEventBus.subscribe(topic, s)
 	}
+
 	return s
 }
 
 func (c *EventClient) On(call goja.FunctionCall) goja.Value { // 见 goja.Runtime.ToValue 函数，这里需要传递 func(FunctionCall) Value 类型的方法
+	// 主题
 	topic, ok := call.Argument(0).Export().(string)
 	if !ok {
 		c.worker.Interrupt("invalid argument topic, not a string")
 		return nil
 	}
+
+	// 回调方法
 	fn, ok := goja.AssertFunction(call.Argument(1))
 	if !ok {
 		c.worker.Interrupt("invalid argument callback, not a function")
@@ -125,32 +122,25 @@ func (c *EventClient) On(call goja.FunctionCall) goja.Value { // 见 goja.Runtim
 
 	runtime := c.worker.Runtime()
 
-	val, _ := c.worker.EventLoop().Put(func(add func(task func()), stop func()) (interface{}, error) {
-		s := c.CreateSubscriber(topic)
-		s.loopstop = stop
-		go func() {
-		L:
-			for {
-				select {
-				case <-s.stop:
-					if !s.closed {
-						s.closed = true
-						stop()
-					}
+	s := c.CreateSubscriber(topic)
+
+	go func() {
+	L:
+		for {
+			select {
+			case <-s.stop:
+				break L
+			case data, received := <-s.data:
+				if !received {
+					s.Cancel()
 					break L
-				case data, received := <-s.data:
-					if !received {
-						s.closed = true
-						stop()
-						break L
-					}
-					add(func() {
-						fn(nil, runtime.ToValue(data))
-					})
 				}
+				s.trigger.AddTask(func() {
+					fn(nil, runtime.ToValue(data))
+				})
 			}
-		}()
-		return s, nil
-	})
-	return runtime.ToValue(val)
+		}
+	}()
+
+	return runtime.ToValue(s)
 }

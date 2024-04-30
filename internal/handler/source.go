@@ -366,14 +366,20 @@ func handleSourceEval(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	// 执行
-	value, err := worker.Runtime().RunString(strings.Join([]string{
+	// 编译
+	entry, _ := worker.Runtime().RunString(strings.Join([]string{
 		"(function () {",
 		"const console = { __logs__: [], log: function(...args) { this.__logs__.push(['log', new Date(), ...args]) }, };",
 		script,
 		";return { logs: console.__logs__, };",
-		"})()",
+		"})",
 	}, "\n"))
+	function, _ := goja.AssertFunction(entry)
+
+	// 执行
+	value, err := worker.EventLoop().Run(func() (goja.Value, error) {
+		return function(nil)
+	})
 
 	// 标记脚本执行完成
 	completed = true
