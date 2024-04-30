@@ -70,6 +70,13 @@ declare class Decimal {
     stringFixed(places: number): string;
 }
 
+interface IntervalId { "Native Interval Id"; }
+declare function setInterval(handler: Function, timeout?: number, ...arguments: any[]): IntervalId;
+declare function clearInterval(id: IntervalId): void;
+interface TimeoutId { "Native Interval Id"; }
+declare function setTimeout(handler: Function, timeout?: number, ...arguments: any[]): TimeoutId;
+declare function clearTimeout(id: TimeoutId): void;
+
 declare class ServiceResponse {
     constructor(status: number, header: { [name: string]: string | number; }, data?: GenericByteArray);
     setStatus(status: number): void;
