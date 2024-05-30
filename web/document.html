@@ -70,7 +70,7 @@
                 marked.use({
                     renderer: {
                         link(href, title, text) {
-                            if (/^[\w\/]+\.md/i.test(href)) {
+                            if (/^[\w\/\-]+\.md/i.test(href)) {
                                 href = "/document.html?" + href // 兼容 markdown 文件的相对路径跳转
                             }
                             return this.__proto__.link(href, title, text)
