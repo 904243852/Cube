@@ -36,4 +36,4 @@
 
 - [Pay online using Alipay](examples/alipay.md)
 
-- [Dynamic table](examples/dynamic-table.md)
+- [Dynamic views](examples/dynamic-views.md)
