@@ -77,6 +77,8 @@ interface TimeoutId { "Native Interval Id"; }
 declare function setTimeout(handler: Function, timeout?: number, ...arguments: any[]): TimeoutId;
 declare function clearTimeout(id: TimeoutId): void;
 
+declare function fetch(url: string, options?: { method?: "GET" | "POST" | "PUT" | "DELETE"; header?: { [name: string]: string }; body?: string; }): Promise<{ status: number; headers: { [name: string]: string }; buffer(): Buffer; json(): any; text(): string; }>;
+
 declare class ServiceResponse {
     constructor(status: number, header: { [name: string]: string | number; }, data?: GenericByteArray);
     setStatus(status: number): void;

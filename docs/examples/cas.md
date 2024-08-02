@@ -1,5 +1,44 @@
 # Create a Single Sign On server based on CAS protocol
 
+## Sequence diagram
+
+```mermaid
+sequenceDiagram
+    participant B as Browser
+    participant W as Web Server
+    participant C as CAS Server
+    participant D as Delegated Authorization Server
+    B -) W: http://WEB_SERVER/
+    alt CAS
+        W --) B: 302
+        B -) C: http://CAS_SERVER/cas/login?service=http%3A%2F%2FWEB_SERVER%2F
+        C --) B: Login page
+        B -) C: Submit username and password
+        C ->> C: Login success
+        C --) B: 302, Set TGC
+    else Delegate
+        W --) B: 302
+        B -) C: http://CAS_SERVER/cas/clientredirect?client_name=DELEGATE_NAME&service=http%3A%2F%2FWEB_SERVER%2F
+        C --) B: 302
+        B -) D: http://DELEGATE_SERVER/?service=http%3A%2F%2FCAS_SERVER%2Fcas%2Flogin%3Fdelegatedclientid%3DDELEGATED_CLIENT_ID%26service%3Dhttp%253A%252F%252FWEB_SERVER%252F
+        D --) B: Login page
+        B -) D: Submit username and password
+        D ->> D: Login success
+        D --) B: 302
+        B -) C: http://CAS_SERVER/cas/login?delegatedclientid=DELEGATED_CLIENT_ID&service=http%3A%2F%2FWEB_SERVER%2F&ticket=TICKET
+        C ->> D: Validate ticket
+        D -->> C: User information
+        C ->> C: Login success
+        C --) B: 302, Set TGC
+    end
+    B -) W: http://WEB_SERVER/?ticket=TICKET
+    W ->> C: http://CAS_SERVER/cas/serviceValidate?service=http%3A%2F%2FWEB_SERVER%2F&ticket=TICKET
+    C -->> W: User information
+    W --) B: Login success, Set session
+```
+
+## Code
+
 1. Create a template name `CASLogin`.
     ```html
     //?name=CASLogin&type=template&lang=html
@@ -121,11 +160,6 @@
     //?name=CASServer&type=controller&url=cas/{path}
     const MyHost = "http://127.0.0.1:8090/service/cas/"
 
-    const Timeout = {
-        ST: 300_000,
-        TGT: 7200_000,
-    }
-
     const services: string[] = [
         "http://127.0.0.1/",
     ]
@@ -154,6 +188,11 @@
                 }
             },
         }
+    }
+
+    const Timeout = {
+        ST: 300_000,
+        TGT: 7200_000,
     }
 
     const cache = $native("cache")
