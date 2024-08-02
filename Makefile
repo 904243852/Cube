@@ -31,7 +31,7 @@ build: clean # 默认使用 CDN 资源并且不使用 UPX 压缩，即 make buil
 				continue
 			fi
 			mkdir -p "web/$$(dirname $$name)"
-			curl -sk "https://cdn.bootcdn.net/ajax/$$name" -o "web/$$name"
+			curl -sk --compressed "https://cdn.bootcdn.net/ajax/$$name" -o "web/$$name"
 		done
 		# 下载 monaco-editor 资源文件
 		export LANG=C.UTF-8
