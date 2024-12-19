@@ -21,7 +21,7 @@ func init() {
 			if err != nil {
 				return nil, err
 			}
-			for k, v := range options.Header {
+			for k, v := range options.Headers {
 				req.Header.Set(k, v)
 			}
 
@@ -73,7 +73,7 @@ func init() {
 
 type FetchOptions struct {
 	Method string
-	Header map[string]string
+	Headers map[string]string
 	Body   string
 }
 
