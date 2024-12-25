@@ -3,35 +3,34 @@
 ## Table
 
 ```typescript
-//?name=DynamicTable&type=controller&url=dynamic/table
-enum E {
-    List = 0x1 << 0,
-    Detail = 0x1 << 1,
-    Add = 0x1 << 2,
-    Update = 0x1 << 3,
-    Searchable = 0x1 << 4,
-}
-
-type Field = {
+//?name=DynamicTable&type=controller&url=dynamic/table/{name}
+type Property = {
     name: string;
     label?: string;
-    type: "string" | "number" | "enum" | "bool" | "date" | "datetime";
+    type: "string" | "integer" | "number" | "enum" | "boolean" | "date" | "datetime" | "code";
     mode: number;
 }
 
-type Options = {
-    [name: string]: Function | object;
+enum PropertyMode {
+    LIST = 0x1 << 0,
+    DETAIL = 0x1 << 1,
+    ADD = 0x1 << 2,
+    UPDATE = 0x1 << 3,
+    SEARCH = 0x1 << 4,
 }
 
-export abstract class DynamicElement {
-    private static readonly Template = `<!DOCTYPE html>
+export abstract class DynamicTable {
+    private static readonly TEMPLATE = `<!DOCTYPE html>
 <html>
+
 <head>
     <meta charset="UTF-8">
     <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/element-plus/2.4.3/theme-chalk/index.min.css" />
     <script src="https://cdn.bootcdn.net/ajax/libs/vue/3.3.4/vue.global.prod.min.js"></script>
     <script src="https://cdn.bootcdn.net/ajax/libs/element-plus/2.4.3/index.full.min.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/element-plus-icons-vue/2.3.1/index.iife.min.js"></script>
     <title></title>
+    <base target="_blank" /><!-- 网页中所有的超链接的目标地址都在新建窗口中打开 -->
     <style>
         html, body {
             height: 100%;
@@ -50,60 +49,50 @@ export abstract class DynamicElement {
         }
     </style>
 </head>
+
 <body>
     <div id="app" v-cloak style="height: 100%; padding: 32px; position: relative;">
         <el-card>
             <el-row style="padding-bottom: 10px;">
-                <el-button @click="onDialogNew">New</el-button>
-                <el-button-group style="padding-left: 5px;">
-                    <el-button @click="onTableExport">Export</el-button>
-                </el-button-group>
+                <el-button :icon="Plus" @click="onDialogNew">New</el-button>
                 <div style="margin-left: auto; display: inline-flex;">
-                    <el-input v-model="table.search.keyword" placeholder="Enter keyword here" clearable @change="onTableFetch(true)">
+                    <el-input v-model="table.search.keyword" placeholder="Enter keyword here" clearable @change="onTableFetch(true)" :suffix-icon="Search">
                     </el-input>
                 </div>
             </el-row>
             <el-row>
-                <el-table v-loading="table.loading" :data="table.records" stripe table-layout="fixed">
-<%
-    for (const field of fields) {
-        if (!(field.mode & E.List)) {
-            continue
-        }
-%>
-                    <el-table-column label="<%=field.label%>">
-                        <template #default="scope">
-                            {{ scope.row.<%=field.name%> }}
-                        </template>
-                    </el-table-column>
-<%
-    }
-%>
+                <el-table v-loading="table.loading" :data="table.records" stripe show-overflow-tooltip @sort-change="onTableSortChange" table-layout="fixed">
+                    <template v-for="property in schema.properties">
+                        <el-table-column :label="property.label" v-if="property.mode & E.LIST">
+                            <template #default="scope">
+                                {{ scope.row[property.name] }}
+                            </template>
+                        </el-table-column>
+                    </template>
                     <el-table-column label="Operation">
                         <template #default="scope">
-                            <el-button link type="primary" @click="onTableRowEdit(scope.row.id)">Edit</el-button>
-                            <el-button link type="danger" @click="onTableRowDelete(scope.row.id)">Delete</el-button>
+                            <el-button link type="primary" @click="onTableRowEdit(scope.row)" :icon="Edit">
+                            </el-button>
+                            <el-button link type="danger" @click="onTableRowDelete(scope.row)" :icon="Delete">
+                            </el-button>
                         </template>
                     </el-table-column>
                 </el-table>
-                <el-pagination @size-change="onTablePageSizeChange" @current-change="onTablePageCurrentChange" :current-page="table.pagination.index" :page-sizes="[5, 10, 20, 50]" :page-size="table.pagination.size" layout="total, sizes, prev, pager, next, jumper" :total="table.pagination.count">
+                <el-pagination @size-change="onTablePageSizeChange" @current-change="onTablePageCurrentChange" :current-page="table.pagination.index" :page-sizes="[10, 20, 50]" :page-size="table.pagination.size" layout="total, sizes, prev, pager, next, jumper" :total="table.pagination.count">
                 </el-pagination>
             </el-row>
         </el-card>
-        <el-dialog v-model="dialog.visible">
+        <el-dialog v-model="dialog.visible" :title="dialog.record.id ? 'Edit' : 'New'">
             <el-form ref="FormRef" :model="dialog.record" label-position="right" label-width="80px">
-<%
-    for (const field of fields) {
-        if (!(field.mode & E.Detail)) {
-            continue
-        }
-%>
-                <el-form-item label="<%=field.label%>" prop="<%=field.name%>">
-                    <el-input v-model="dialog.record.<%=field.name%>" :disabled="!(dialog.record.id ? <%=field.mode & E.Update%> : <%=field.mode & E.Add%>)"></el-input>
-                </el-form-item>
-<%
-    }
-%>
+                <template v-for="property in schema.properties">
+                    <el-form-item :label="property.label" :prop="property.name" v-if="property.mode & (E.DETAIL | (dialog.record.id ? E.UPDATE : E.ADD))">
+                        <el-input-number v-model="dialog.record[property.name]" :disabled="!(property.mode & (dialog.record.id ? E.UPDATE : E.ADD))" v-if="property.type === 'integer'"></el-input-number>
+                        <el-switch v-model="dialog.record[property.name]" :disabled="!(property.mode & (dialog.record.id ? E.UPDATE : E.ADD))" v-else-if="property.type === 'boolean'"></el-switch>
+                        <el-date-picker v-model="dialog.record[property.name]" :type="property.type" :disabled="!(property.mode & (dialog.record.id ? E.UPDATE : E.ADD))" v-else-if="property.type === 'date' || property.type === 'datetime'"></el-date-picker>
+                        <monaco-editor v-model="dialog.record[property.name]" :readonly="!(property.mode & (dialog.record.id ? E.UPDATE : E.ADD))" v-else-if="property.type === 'code'" language="json" height="200px" style="border: 1px solid #e5e7eb;"></monaco-editor>
+                        <el-input v-model="dialog.record[property.name]" :disabled="!(property.mode & (dialog.record.id ? E.UPDATE : E.ADD))" v-else></el-input>
+                    </el-form-item>
+                </template>
                 <el-form-item>
                     <el-button type="primary" :loading="dialog.loading" @click="onDialogSubmit(FormRef)">Submit</el-button>
                     <el-button @click="onDialogCancel(FormRef)">Cancel</el-button>
@@ -113,54 +102,74 @@ export abstract class DynamicElement {
     </div>
     <script>
         const { ElMessage, ElMessageBox, } = ElementPlus
+
         Vue.createApp({
             setup() {
+                const { ref } = Vue
+                const { Delete, Edit, Search, Plus } = ElementPlusIconsVue
                 return {
-                    FormRef: Vue.ref(),
+                    Delete,
+                    Edit,
+                    Search,
+                    Plus,
+                    FormRef: ref(),
                 }
             },
             data() {
                 return {
+                    E: ${JSON.stringify(PropertyMode)},
+                    button: {
+                        upload: {
+                            loading: false,
+                        },
+                    },
                     table: {
                         records: [],
                         pagination: {
                             index: 1,
-                            size: 5,
+                            size: 10,
                             count: 0,
                         },
                         search: {
                             keyword: "",
                         },
+                        sort: {
+                            prop: "id",
+                            order: "desc",
+                        },
                         loading: false,
                     },
                     dialog: {
                         record: {},
+                        visiable: false,
                         loading: false,
+                    },
+                    schema: {
+                        properties: <%=properties%>,
                     },
                 }
             },
             methods: {
                 onTableFetch(reset) {
-                    const that = this
                     if (reset) {
-                        that.table.pagination.index = 1
+                        this.table.pagination.index = 1
                     }
-                    that.table.loading = true
-                    fetch("?keyword=" + that.table.search.keyword + "&from=" + ((that.table.pagination.index - 1) * that.table.pagination.size) + "&size=" + that.table.pagination.size, {
+                    this.table.loading = true
+                    fetch("?keyword=%25" + this.table.search.keyword + "%25" + "&from=" + (this.table.pagination.index - 1) * this.table.pagination.size + "&size=" + this.table.pagination.size + "&sort=" + this.table.sort.prop + " " + this.table.sort.order, {
                         method: "GET",
                     }).then(r => {
                         if (r.status != 200) {
                             throw new Error(r.statusText)
                         }
                         return r.json()
-                    }).then(r => {
-                        that.table.pagination.count = r.data.total
-                        that.table.pagination.index = Math.min(that.table.pagination.index, Math.ceil(that.table.pagination.count / that.table.pagination.size))
-                        that.table.records = r.data.records
+                    }).then(data => {
+                        this.table.pagination.count = data.data.total
+                        this.table.pagination.index = Math.min(this.table.pagination.index, Math.ceil(data.data.total / this.table.pagination.size))
+                        this.table.records = data.data.records
                     }).catch(e => {
                         ElMessage.error(e.message)
                     }).finally(() => {
-                        that.table.loading = false
+                        this.table.loading = false
                     })
                 },
                 onTablePageSizeChange(value) {
@@ -171,29 +180,48 @@ export abstract class DynamicElement {
                     this.table.pagination.index = value
                     this.onTableFetch()
                 },
-                onTableRowEdit(id) {
-                    const that = this
-                    fetch("?id=" + id).then(r => r.json()).then(r => {
-                        that.dialog.record = r.data
-                        that.dialog.visible = true
+                onTableSortChange({ prop, order }) {
+                    if (!order) {
+                        this.table.sort.prop = "id"
+                        this.table.sort.order = "desc"
+                    } else {
+                        this.table.sort.prop = prop
+                        this.table.sort.order = { ascending: "asc", descending: "desc" }[order]
+                    }
+                    this.onTableFetch()
+                },
+                onTableRowEdit(record) {
+                    this.dialog.loading = true
+                    fetch("?id=" + record.id, {
+                        method: "GET",
+                    }).then(r => {
+                        if (r.status != 200) {
+                            throw new Error(r.statusText)
+                        }
+                        return r.json()
+                    }).then(data => {
+                        this.dialog.record = { ...data.data, }
+                        this.dialog.visible = true
+                    }).catch(e => {
+                        ElMessage.error(e.message)
+                    }).finally(() => {
+                        this.dialog.loading = false
                     })
                 },
-                onTableRowDelete(id) {
-                    const that = this
-                    ElMessageBox.confirm("This operation will permanently delete the record. Do you want to continue ?", "Tips", {
+                onTableRowDelete(record) {
+                    ElMessageBox.confirm("It will be deleted permanently. Continue ?", "Warning", {
                         confirmButtonText: "Confirm",
-                        cancelButtonText: "Cancel",
                         type: "warning",
                         beforeClose: (action, instance, done) => {
                             if (action === "confirm") {
                                 instance.confirmButtonLoading = true
                                 instance.confirmButtonText = "Delete..."
-                                fetch("?id=" + id, {
+                                fetch("?id=" + record.id, {
                                     method: "DELETE",
                                 }).then(r => r.json()).then(r => {
                                     if (r.code === "0") {
                                         ElMessage.success("Delete succeeded")
-                                        that.onTableFetch()
+                                        this.onTableFetch()
                                     } else {
                                         ElMessage.error(r.message)
                                     }
@@ -209,19 +237,21 @@ export abstract class DynamicElement {
                     this.dialog.visible = true
                 },
                 onDialogSubmit(FormRef) {
-                    const that = this
                     FormRef.validate(valid => {
                         if (!valid) {
                             return false
                         }
-                        fetch(that.dialog.record.id ? "?id=" + that.dialog.record.id : "", {
-                            method: that.dialog.record.id ? "POST" : "PUT",
-                            body: JSON.stringify(that.dialog.record),
+                        fetch(this.dialog.record.id ? "?id=" + this.dialog.record.id : "", {
+                            method: this.dialog.record.id ? "POST" : "PUT",
+                            headers: {
+                                "Content-Type": "application/json",
+                            },
+                            body: JSON.stringify(this.dialog.record),
                         }).then(r => r.json()).then(r => {
                             if (r.code === "0") {
                                 ElMessage.success("Submit succeeded")
-                                that.dialog.visible = false
-                                that.onTableFetch()
+                                this.dialog.visible = false
+                                this.onTableFetch()
                             } else {
                                 ElMessage.error(r.message)
                             }
@@ -236,80 +266,97 @@ export abstract class DynamicElement {
             mounted: function () {
                 this.onTableFetch()
             },
+        }).component("monaco-editor", {
+            name: "MonacoEditor", // https://devpress.csdn.net/vue/66cd457d1338f221f9243439.html
+            template: "<div ref='container' :style='{ width: this.width, height: this.height }'></div>",
+            props: {
+                modelValue: { type: String, default: "" },
+                width: { type: String, default: "100%" },
+                height: { type: String, default: "160px" },
+                language: { type: String, default: "typescript" },
+                readonly: { type: Boolean, default: false },
+            },
+            emits: ["update:modelValue"],
+            data() {
+                return {
+                    editor: undefined,
+                }
+            },
+            setup(props, { emit }) {
+                const container = Vue.ref(),
+                    loadjs = (() => {
+                        const jsmap = new Map()
+                        return (src) => {
+                            if (jsmap.has(src)) {
+                                return jsmap.get(src)
+                            }
+                            jsmap.set(src, new Promise((resolve, reject) => {
+                                const s = document.createElement("script")
+                                s.src = src
+                                document.body.append(s)
+                                s.addEventListener("load", () => resolve(true))
+                                s.onerror = () => {
+                                    document.body.removeChild(s)
+                                    reject()
+                                }
+                            }))
+                            return jsmap.get(src)
+                        }
+                    })()
+                Vue.onMounted(() => {
+                    loadjs("https://g.alicdn.com/code/lib/monaco-editor/0.34.1/min/vs/loader.js")
+                        .then(() => {
+                            window.require.config({ paths: { vs: "https://g.alicdn.com/code/lib/monaco-editor/0.34.1/min/vs" } })
+                        })
+                        .then(() => {
+                            window.require(["vs/editor/editor.main"], () => {
+                                this.editor = window.monaco.editor.create(container.value, {
+                                    language: props.language,
+                                    value: props.modelValue,
+                                })
+                                this.editor.onDidChangeModelContent(() => {
+                                    emit("update:modelValue", this.editor.getValue())
+                                })
+                                this.editor.updateOptions({ readOnly: props.readonly ?? false })
+                            })
+                        })
+                })
+                Vue.watch(() => props.modelValue, newValue => {
+                    if (this.editor) {
+                        if (this.editor.getValue() !== newValue) {
+                            this.editor.setValue(newValue)
+                        }
+                    }
+                })
+                Vue.watch(() => props.language, newValue => {
+                    window.monaco.editor.setModelLanguage(this.editor.getModel(), newValue)
+                })
+                Vue.watch(() => props.readonly, newValue => {
+                    this.editor.updateOptions({ readOnly: newValue })
+                })
+                return { container }
+            },
         }).use(ElementPlus).mount("#app")
     </script>
 </body>
+
 </html>`
 
     protected name: string
 
-    protected fields: Field[]
+    protected properties: Property[]
 
-    protected options: Options
-
-    constructor(name: string, fields: Field[], options?: Options) {
+    constructor(name: string, properties: Property[]) {
         this.name = name
-        this.fields = fields
-        this.options = options || {}
-        this.init()
+        this.properties = properties
     }
 
     public render() {
-        const pattern = /<%([\s\S]*?)%>/g // 匹配模板中 "<%...%>" 片段代码
-
-        const codes = [`with(data) { let __tpl__ = "";`] // 需要动态执行的函数代码集合
-
-        let match: RegExpExecArray = null, // 当前匹配的结果
-            index = 0 // 当前匹配到的索引
-        while (match = pattern.exec(DynamicElement.Template)) {
-            // 保存当前匹配项之前的普通文本/占位
-            codes.push(`__tpl__ += "${DynamicElement.Template.substring(index, match.index).replace(/\r?\n/g, "\\n").replace(/"/g, '\\"')}";`)
-
-            // 保存当前匹配项
-            if (match[1].substr(0, 1) == "=") { // 占位符
-                codes.push(`__tpl__ += ${match[1].substr(1)};`)
-            } else { // 逻辑代码
-                codes.push(match[1])
-            }
-
-            // 更新当前匹配索引
-            index = match.index + match[0].length
-        }
-        // 保存文本尾部
-        codes.push(`__tpl__ += "${DynamicElement.Template.substring(index).replace(/\r?\n/g, "\\n").replace(/"/g, '\\"')}";`)
-        codes.push("return __tpl__; }")
-
-        const data = {
-            E,
-            fields: this.fields.map(e => {
-                return {
-                    label: e.name,
-                    ...e,
-                }
-            }),
-        }
-        return new Function("data", codes.join("\n"))(data) // 渲染模板中 "<%...%>" 片段代码
-            .replace(/{{(.+?)}}/g, function ($0: string, $1: string) { // 渲染模板中 "{{ ... }}" 片段代码
-                return data[$1.trim()] || $0
-            })
+        return DynamicTable.TEMPLATE.replace("<%=properties%>", JSON.stringify(this.properties.map(p => {
+            p.label = p.label ?? p.name
+            return p
+        })))
     }
-
-    public invoke(name: string, ...params: any[]) {
-        const option = this.options[name]
-        if (!option) {
-            throw new Error("no such option")
-        }
-        if (option instanceof Function) {
-            return {
-                output: option.apply(this.options, params),
-            }
-        }
-        return {
-            output: option,
-        }
-    }
-
-    public abstract init(): void
 
     public abstract get(id: string, keyword: string, from: number, size: number): any;
 
@@ -320,17 +367,17 @@ export abstract class DynamicElement {
     public abstract delete(id: string): void
 }
 
-const d = new class extends DynamicElement {
+export class MyDynamicTable extends DynamicTable {
     private dbc = $native("db")
 
-    public init() {
-        this.dbc = $native("db")
+    constructor(name: string, properties: Property[]) {
+        super(name, properties)
         this.dbc.exec(`
             --drop table if exists ${this.name};
             create table if not exists ${this.name} (
                 id integer primary key autoincrement,
-                ${this.fields.map(f => {
-            const type = { number: "integer" }[f.type] || "text"
+                ${this.properties.map(f => {
+            const type = { integer: "integer", number: "real", boolean: "boolean", date: "date", datetime: "datetime" }[f.type] || "text"
             return `${f.name} ${type}`
         }).join(",\n")}
             );
@@ -339,15 +386,15 @@ const d = new class extends DynamicElement {
 
     public get(id: string, keyword: string, from: number, size: number): any {
         if (id) {
-            const columns = ["id", ...this.fields.filter(f => f.mode & E.Detail).map(f => f.name)]
+            const columns = ["id", ...this.properties.filter(f => f.mode & PropertyMode.DETAIL).map(f => f.name)]
             return this.dbc.query(`select ${columns.join(", ")} from ${this.name} where id = ?`, id).pop()
         }
-        const columns = ["id", ...this.fields.filter(f => f.mode & E.List).map(f => f.name)]
+        const columns = ["id", ...this.properties.filter(f => f.mode & PropertyMode.LIST).map(f => f.name)]
         let wheres = "",
             params = []
         if (keyword) {
             keyword = keyword.replaceAll("%", "\%").replaceAll("_", "\_")
-            const conditions = this.fields.filter(f => f.mode & E.Searchable).map(f => f.name + " like ?")
+            const conditions = this.properties.filter(f => f.mode & PropertyMode.SEARCH).map(f => f.name + " like ?")
             if (conditions.length) {
                 wheres = " where " + conditions.join(" or ")
                 params.push(...conditions.map(_ => "%" + keyword + "%"))
@@ -360,82 +407,83 @@ const d = new class extends DynamicElement {
     }
 
     public put(record: any): string {
-        const columns = this.fields.filter(f => f.mode & E.Add).map(f => f.name)
+        const columns = this.properties.filter(f => f.mode & PropertyMode.ADD).map(f => f.name)
         this.dbc.exec(`insert into ${this.name}(${columns.join(", ")}) values(${columns.map(f => "?").join(", ")})`, ...columns.map(c => record[c]))
         return this.dbc.query("select LAST_INSERT_ROWID() rowID").pop().rowID
     }
 
     public post(id: string, record: any): void {
-        const columns = this.fields.filter(f => f.mode & E.Update && f.name in record).map(f => f.name)
+        const columns = this.properties.filter(f => f.mode & PropertyMode.UPDATE && f.name in record).map(f => f.name)
         this.dbc.exec(`update ${this.name} set ${columns.map(c => c + " = ?").join(", ")} where id = ?`, ...columns.map(c => record[c]), id)
     }
 
     public delete(id: string): void {
         this.dbc.exec(`delete from ${this.name} where id = ?`, id)
     }
-}(
-    "user",
-    [
+}
+
+export default function (ctx: ServiceContext): ServiceResponse | Uint8Array | any {
+    const { name } = ctx.getPathVariables()
+    if (!Schemas[name]) {
+        return new ServiceResponse(404, undefined)
+    }
+    
+    const dyntab = new MyDynamicTable(name, Schemas[name]),
+        params = new Proxy(ctx.getURL().params, {
+            get(target: any, property: string) {
+                return target[property]?.[0]
+            }
+        })
+    switch (ctx.getMethod()) {
+        case "GET":
+            if (params.id || params.keyword || params.from || params.size) {
+                return dyntab.get(params.id, params.keyword, params.from, params.size)
+            }
+            return new ServiceResponse(200, { "Content-Type": "text/html" }, dyntab.render())
+        case "PUT":
+            return dyntab.put(ctx.getBody().toJson())
+        case "POST":
+            return dyntab.post(params.id, ctx.getBody().toJson())
+        case "DELETE":
+            return dyntab.delete(params.id)
+        default:
+            return new ServiceResponse(405, undefined)
+    }
+}
+
+const Schemas: { [name: string]: Property[] } = {
+    "user": [
         {
             name: "name",
             type: "string",
-            mode: E.List | E.Detail | E.Add | E.Searchable,
+            mode: PropertyMode.LIST | PropertyMode.DETAIL | PropertyMode.ADD | PropertyMode.SEARCH,
         },
         {
             name: "age",
-            type: "number",
-            mode: E.Detail | E.Add | E.Update,
+            type: "integer",
+            mode: PropertyMode.DETAIL | PropertyMode.ADD | PropertyMode.UPDATE,
         },
         {
             name: "gender",
             type: "enum",
-            mode: E.Detail | E.Add | E.List,
+            mode: PropertyMode.DETAIL | PropertyMode.ADD,
         },
         {
             name: "active",
-            type: "bool",
-            mode: E.Add | E.Detail | E.Update | E.List,
+            type: "boolean",
+            mode: PropertyMode.ADD | PropertyMode.DETAIL | PropertyMode.UPDATE | PropertyMode.LIST,
         },
         {
             name: "birthday",
             type: "date",
-            mode: E.Add | E.Detail | E.List,
+            mode: PropertyMode.ADD | PropertyMode.DETAIL,
         },
         {
-            name: "last_modify_time",
-            type: "datetime",
-            mode: E.Add | E.Detail,
-        },
-    ],
-)
-
-export default function (ctx: ServiceContext): ServiceResponse | Uint8Array | any {
-    const params = new Proxy(ctx.getURL().params, {
-        get(target: any, property: string) {
-            return target[property]?.[0]
+            name: "remark",
+            type: "code",
+            mode: PropertyMode.ADD | PropertyMode.DETAIL,
         }
-    })
-    switch (ctx.getMethod()) {
-        case "GET":
-            if (params.id || params.keyword || params.from || params.size) {
-                return d.get(params.id, params.keyword, params.from, params.size)
-            }
-            return new ServiceResponse(
-                200,
-                {
-                    "Content-Type": "text/html"
-                },
-                d.render(),
-            )
-        case "PUT":
-            return d.put(ctx.getBody().toJson())
-        case "POST":
-            return d.post(params.id, ctx.getBody().toJson())
-        case "DELETE":
-            return d.delete(params.id)
-        default:
-            throw new Error("not implemented")
-    }
+    ],
 }
 ```
 
@@ -443,7 +491,7 @@ export default function (ctx: ServiceContext): ServiceResponse | Uint8Array | an
 
 ```typescript
 //?name=DynamicForm&type=controller&url=dynamic/form
-const readonly View = `<!DOCTYPE html>
+const TEMPLATE = `<!DOCTYPE html>
 <html>
 
 <head>
@@ -457,13 +505,15 @@ const readonly View = `<!DOCTYPE html>
 <body style="margin: 40px;">
     <div id="app" v-cloak>
         <el-tabs tab-position="left">
-            <el-tab-pane :label="e.name" v-for="(e) in menus">
-                <el-form label-width="80px" style="max-width: 600px;">
-                    <el-form-item :label="p" v-for="(p, i) in e.params">
-                        <el-input v-model="params[i]"></el-input>
+            <el-tab-pane :label="func.name" v-for="(func) in funcs">
+                <el-form label-width="120px" style="max-width: 600px;">
+                    <el-form-item :label="param.name" v-for="(param) in func.params">
+                        <el-date-picker v-model="param.value" type="date" v-if="param.type === 'date'"></el-date-picker>
+                        <el-switch v-model="param.value" v-else-if="param.type === 'boolean'"></el-switch>
+                        <el-input v-model="param.value" style="width: 240px" v-else></el-input>
                     </el-form-item>
                     <el-form-item>
-                        <el-button type="primary" :loading="loading" @click="onSubmit(e.name)">Submit</el-button>
+                        <el-button type="primary" :loading="loading" @click="onSubmit(func)">Submit</el-button>
                     </el-form-item>
                 </el-form>
             </el-tab-pane>
@@ -474,41 +524,59 @@ const readonly View = `<!DOCTYPE html>
         Vue.createApp({
             data() {
                 return {
-                    menus: [
-                        { name: "greeting", params: ["name"], },
+                    funcs: [
+                        {
+                            name: "greeting",
+                            params: [{
+                                "name": "name"
+                            }]
+                        },
                     ],
                     loading: false,
-                    params: [...new Array(9)],
                 }
             },
             methods: {
-                onSubmit(name) {
-                    const that = this
-                    that.loading = true
-                    fetch("/service/dynamic/form?name=" + name, {
+                onSubmit({ name, params }) {
+                    this.loading = true
+                    fetch("?name=" + encodeURIComponent(name), {
                         method: "POST",
-                        body: JSON.stringify(that.params),
-                    }).then(e => e.json()).then(e => {
+                        headers: {
+                            "Content-Type": "application/json",
+                        },
+                        body: JSON.stringify({
+                            params: params.map(i => i.value),
+                        }),
+                    }).then(e => {
+                        if (!e.ok) {
+                            return e.json().then(i => new Error(i.message))
+                        }
+                        if (/^application\\/json/.test(e.headers.get("Content-Type"))) {
+                            return e.json()
+                        }
+                        return e.text()
+                    }).then(e => {
+                        if (e instanceof Error) {
+                            throw e
+                        }
                         if (/^javascript:/.test(e)) {
                             return new Function(e.substring(11))()
                         }
                         ElNotification.success({
                             title: name,
-                            message: Object.keys(e).map(i => i + ": " + (typeof e[i] !== "object" ? e[i] : JSON.stringify(e[i]))).join("<br/>"),
+                            message: JSON.stringify(e),
                             dangerouslyUseHTMLString: true,
                             duration: 0,
                         })
                     }).catch(e => {
                         ElMessage.error(e.message)
                     }).finally(() => {
-                        that.loading = false
+                        this.loading = false
                     })
                 },
             },
             mounted() {
-                const that = this
-                fetch("/service/dynamic/form?menus").then(e => e.json()).then(e => {
-                    that.menus = e.data
+                fetch("/service/dynamic/form?funcs").then(e => e.json()).then(e => {
+                    this.funcs = e.data
                 })
             },
         }).use(ElementPlus).mount("#app")
@@ -517,39 +585,74 @@ const readonly View = `<!DOCTYPE html>
 
 </html>`
 
-export default function (ctx: ServiceContext) {
-    switch (ctx.getMethod()) {
-        case "GET":
-            if ("menus" in ctx.getURL().params) {
-                return Object.keys(app).map(name => {
-                    return {
-                        name,
-                        params: app[name].toString().match(/^function \(([^)]+)\)/)[1].split(", "),
-                    }
-                })
-            }
-            return new ServiceResponse(
-                200,
-                {
-                    "Content-Type": "text/html"
-                },
-                View,
-            )
-        case "POST":
-            const name = ctx.getURL().params.name?.[0]
-            if (!(name in app)) {
-                break
-            }
-            if (typeof app[name] === "function") {
-                return JSON.stringify(app[name](...ctx.getBody().toJson()))
-            }
-            return JSON.stringify(app[name])
+export default (app => app.run.bind(app))(new class {
+    public run(ctx: ServiceContext) {
+        switch (ctx.getMethod()) {
+            case "GET":
+                if ("funcs" in ctx.getURL().params) {
+                    return this.toFuncs()
+                }
+                return new ServiceResponse(200, { "Content-Type": "text/html; charset=utf-8" }, TEMPLATE)
+            case "POST":
+                const name = ctx.getURL().params.name?.[0]
+                if (!(name in MyFuncs)) {
+                    break
+                }
+                if (typeof MyFuncs[name] === "function") {
+                    return MyFuncs[name](...ctx.getBody().toJson())
+                }
+                return MyFuncs[name]
+        }
+
+        return new ServiceResponse(405, undefined)
     }
 
-    throw new Error("not implemented")
-}
+    private toFuncs() {
+        return Object.keys(MyFuncs).map(name => {
+            const params = MyFuncs[name].toString().match(/^function \(([^)]+)\)/)[1].split(", ").map(i => {
+                const value = eval(MyFuncs[name].toString().match(new RegExp(`if \\\(${i} === void 0\\\) \\\{ ${i} = (.*); \\\}`))?.[1])
+                switch (i.substring(0, 3)) {
+                    case "_B_":
+                        return {
+                            name: i.substring(3),
+                            type: "boolean",
+                            value: value ?? false,
+                        }
+                    case "_N_":
+                        return {
+                            name: i.substring(3),
+                            type: "number",
+                            value: value ?? 0,
+                        }
+                    case "_D_":
+                        return {
+                            name: i.substring(3),
+                            type: "date",
+                            value: value ?? new Date(),
+                        }
+                    case "_D_":
+                        return {
+                            name: i.substring(3),
+                            type: "datetime",
+                            value: value ?? new Date(),
+                        }
+                    default:
+                        return {
+                            name: i.substring(0),
+                            type: "string",
+                            value: value ?? "",
+                        }
+                }
+            })
+            return {
+                name,
+                params,
+            }
+        })
+    }
+})
 
-const app = {
+const MyFuncs: { [name: string]: Function } = {
     修改账号密码(账号名, 密码) {
         return {
             账号名,
