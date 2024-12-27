@@ -67,7 +67,7 @@
                     <el-input v-model="table.search.keyword" placeholder="Enter keyword here" clearable @change="onTableFetch(true)" :suffix-icon="Search">
                         <template #prepend>
                             <el-select v-model="table.search.type" placeholder="Select a type" clearable @change="onTableFetch(true)" style="width: 160px; background-color: var(--el-fill-color-blank);">
-                                <el-option v-for="type in Object.keys(constants.type)" :key="type" :label="type" :value="type">
+                                <el-option v-for="type in Object.keys(constants.type)" :key="type" :label="capitalize(type)" :value="type">
                                 </el-option>
                             </el-select>
                         </template>
@@ -85,12 +85,12 @@
                     </el-table-column>
                     <el-table-column label="Type">
                         <template #default="scope">
-                            {{ scope.row.type }}
+                            {{ capitalize(scope.row.type) }}
                         </template>
                     </el-table-column>
                     <el-table-column label="Language">
                         <template #default="scope">
-                            {{ scope.row.lang }}
+                            {{ capitalize(scope.row.lang) }}
                         </template>
                     </el-table-column>
                     <el-table-column label="Last Modified Date" prop="last_modified_date" :formatter="(row, column, value) => value?.replace(/T/, ' ')?.replace(/Z/, '')" sortable>
@@ -119,13 +119,13 @@
             <el-form ref="FormRef" :model="dialog.record" label-position="right" label-width="80px" :rules="constants.rules" :hide-required-asterisk="!this['dialog.editable']">
                 <el-form-item label="Type" prop="type">
                     <el-select v-model="dialog.record.type" :disabled="dialog.record.rowid" @change="dialog.record.lang = constants.type[dialog.record.type][0]" placeholder="Select a type">
-                        <el-option v-for="type in Object.keys(constants.type)" :key="type" :label="type" :value="type">
+                        <el-option v-for="type in Object.keys(constants.type)" :key="type" :label="capitalize(type)" :value="type">
                         </el-option>
                     </el-select>
                 </el-form-item>
                 <el-form-item label="Language" prop="lang">
                     <el-select v-model="dialog.record.lang" :disabled="dialog.record.rowid" placeholder="Select a language">
-                        <el-option v-for="lang in constants.type[dialog.record.type]" :key="lang" :label="lang" :value="lang">
+                        <el-option v-for="lang in constants.type[dialog.record.type]" :key="lang" :label="capitalize(lang)" :value="lang">
                         </el-option>
                     </el-select>
                 </el-form-item>
@@ -488,6 +488,9 @@
                 onDialogCancel(FormRef) {
                     FormRef.resetFields()
                     this.dialog.visible = false
+                },
+                capitalize(text) {
+                    return text.slice(0, 1).toUpperCase() + text.slice(1)
                 },
             },
             mounted: function () {
