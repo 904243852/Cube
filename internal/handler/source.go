@@ -103,7 +103,7 @@ func handleSourcePost(r *http.Request) error {
 	}
 
 	// 新增
-	if _, err := Db.Exec("insert into source (name, type, lang, content, compiled, active, method, url, cron, last_modified_date) values(?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))", source.Name, source.Type, source.Lang, source.Content, source.Compiled, source.Active, source.Method, source.Url, source.Cron); err != nil {
+	if _, err := Db.Exec("insert into source (name, type, lang, content, compiled, active, method, url, cron, tag, last_modified_date) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', 'localtime'))", source.Name, source.Type, source.Lang, source.Content, source.Compiled, source.Active, source.Method, source.Url, source.Cron, source.Tag); err != nil {
 		return err
 	}
 
@@ -121,13 +121,16 @@ func handleSourceBulkPost(r *http.Request) error {
 	}
 
 	// 批量新增或修改
-	stmt, err := Db.Prepare("insert or replace into source (rowid, name, type, lang, content, compiled, active, method, url, cron, last_modified_date) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+	stmt, err := Db.Prepare("insert or replace into source (rowid, name, type, lang, content, compiled, active, method, url, cron, tag, last_modified_date) values(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 	if err != nil {
 		return err
 	}
 	defer stmt.Close()
 	for _, source := range sources {
-		if _, err = stmt.Exec(source.Id, source.Name, source.Type, source.Lang, source.Content, source.Compiled, source.Active, source.Method, source.Url, source.Cron, source.LastModifiedDate.String()); err != nil {
+		if source.Name == "" || source.Type == "" {
+			continue
+		}
+		if _, err = stmt.Exec(source.Id, source.Name, source.Type, source.Lang, source.Content, source.Compiled, source.Active, source.Method, source.Url, source.Cron, source.Tag, source.LastModifiedDate.String()); err != nil {
 			return err
 		}
 	}
@@ -203,7 +206,7 @@ func handleSourcePut(r *http.Request) error {
 
 	// 修改
 	setsen, params := "", []interface{}{}
-	for _, c := range []string{"content", "compiled", "active", "method", "url", "cron"} {
+	for _, c := range []string{"content", "compiled", "active", "method", "url", "cron", "tag"} {
 		if v, ok := record[c]; ok {
 			setsen += ", " + c + " = ?"
 			params = append(params, v)
@@ -219,7 +222,7 @@ func handleSourcePut(r *http.Request) error {
 
 	// 查询更新后的记录
 	var source model.Source
-	if err := Db.QueryRow("select name, type, lang, active, method, url, cron from source where name = ? and type = ?", name, stype).Scan(&source.Name, &source.Type, &source.Lang, &source.Active, &source.Method, &source.Url, &source.Cron); err != nil {
+	if err := Db.QueryRow("select name, type, lang, active, method, url, cron, tag from source where name = ? and type = ?", name, stype).Scan(&source.Name, &source.Type, &source.Lang, &source.Active, &source.Method, &source.Url, &source.Cron, &source.Tag); err != nil {
 		return err
 	}
 
@@ -268,6 +271,7 @@ func handleSourceGet(w http.ResponseWriter, r *http.Request) (interface{}, bool,
 	// 解析 URL 入参
 	p := &util.QueryParams{Values: r.URL.Query()}
 	name, stype := p.GetOrDefault("name", "%"), p.GetOrDefault("type", "%")
+	tag := p.GetOrDefault("tag", "")
 	from, size := p.GetIntOrDefault("from", 0), p.GetIntOrDefault("size", 10)
 	sort := p.Get("sort")
 
@@ -275,6 +279,19 @@ func handleSourceGet(w http.ResponseWriter, r *http.Request) (interface{}, bool,
 	orders := "rowid desc"
 	if ok, _ := regexp.MatchString("^(rowid|name|last_modified_date) (asc|desc)$", sort); ok {
 		orders = sort
+	}
+
+	// 初始化查询条件
+	condition, params := "name like ? and type like ?", []interface{}{name, stype}
+
+	// 构造标签查询条件
+	if tag != "" {
+		condition += " and (1 != 1"
+		for _, v := range strings.Split(tag, ",") {
+			condition += " or tag like ?"
+			params = append(params, "%"+v+"%")
+		}
+		condition += " )"
 	}
 
 	// 初始化返回对象
@@ -285,12 +302,12 @@ func handleSourceGet(w http.ResponseWriter, r *http.Request) (interface{}, bool,
 	data.Sources = make([]model.Source, 0, size)
 
 	// 查询总数
-	if err := Db.QueryRow("select count(1) from source where name like ? and type like ?", name, stype).Scan(&data.Total); err != nil { // 调用 QueryRow 方法后，须调用 Scan 方法，否则连接将不会被释放
+	if err := Db.QueryRow("select count(1) from source where "+condition, params...).Scan(&data.Total); err != nil { // 调用 QueryRow 方法后，须调用 Scan 方法，否则连接将不会被释放
 		return data, false, err
 	}
 
 	// 分页查询，默认查询所有字段
-	columns := "rowid, name, type, lang, content, compiled, active, method, url, cron, last_modified_date"
+	columns := "rowid, name, type, lang, content, compiled, active, method, url, cron, tag, last_modified_date"
 	if p.Has("content") { // 不返回 compiled 字段，用于编辑器查询源码
 		columns = strings.Replace(columns, ", compiled", ", '' compiled", 1)
 	}
@@ -298,14 +315,14 @@ func handleSourceGet(w http.ResponseWriter, r *http.Request) (interface{}, bool,
 		columns = strings.Replace(columns, ", content", ", '' content", 1)
 		columns = strings.Replace(columns, ", compiled", ", '' compiled", 1)
 	}
-	rows, err := Db.Query("select "+columns+" from source where name like ? and type like ? order by "+orders+" limit ?, ?", name, stype, from, size)
+	rows, err := Db.Query("select "+columns+" from source where "+condition+" order by "+orders+" limit ?, ?", append(params, []interface{}{from, size}...)...)
 	if err != nil {
 		return data, false, err
 	}
 	defer rows.Close()
 	for rows.Next() {
 		source := model.Source{}
-		rows.Scan(&source.Id, &source.Name, &source.Type, &source.Lang, &source.Content, &source.Compiled, &source.Active, &source.Method, &source.Url, &source.Cron, &source.LastModifiedDate)
+		rows.Scan(&source.Id, &source.Name, &source.Type, &source.Lang, &source.Content, &source.Compiled, &source.Active, &source.Method, &source.Url, &source.Cron, &source.Tag, &source.LastModifiedDate)
 		if source.Type == "daemon" { // 如果是 daemon，写入状态
 			source.Status = fmt.Sprintf("%v", Cache.Daemons[source.Name] != nil)
 		}

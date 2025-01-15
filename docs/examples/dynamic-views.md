@@ -25,10 +25,10 @@ export abstract class DynamicTable {
 
 <head>
     <meta charset="UTF-8">
-    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/element-plus/2.4.3/theme-chalk/index.min.css" />
-    <script src="https://cdn.bootcdn.net/ajax/libs/vue/3.3.4/vue.global.prod.min.js"></script>
-    <script src="https://cdn.bootcdn.net/ajax/libs/element-plus/2.4.3/index.full.min.js"></script>
-    <script src="https://cdn.bootcdn.net/ajax/libs/element-plus-icons-vue/2.3.1/index.iife.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/element-plus/2.4.3/theme-chalk/index.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.prod.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/element-plus/2.4.3/index.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/element-plus-icons-vue/2.3.1/index.iife.min.js"></script>
     <title></title>
     <base target="_blank" /><!-- 网页中所有的超链接的目标地址都在新建窗口中打开 -->
     <style>
@@ -497,9 +497,9 @@ const TEMPLATE = `<!DOCTYPE html>
 <head>
     <meta charset="utf-8" />
     <title></title>
-    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/element-plus/2.4.3/theme-chalk/index.min.css" />
-    <script src="https://cdn.bootcdn.net/ajax/libs/vue/3.3.4/vue.global.prod.min.js"></script>
-    <script src="https://cdn.bootcdn.net/ajax/libs/element-plus/2.4.3/index.full.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/element-plus/2.4.3/theme-chalk/index.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.prod.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/element-plus/2.4.3/index.full.min.js"></script>
 </head>
 
 <body style="margin: 40px;">
@@ -609,7 +609,7 @@ export default (app => app.run.bind(app))(new class {
 
     private toFuncs() {
         return Object.keys(MyFuncs).map(name => {
-            const params = MyFuncs[name].toString().match(/^function \(([^)]+)\)/)[1].split(", ").map(i => {
+            const params = MyFuncs[name].toString().match(/^function \(([^)]+)\)/)?.[1].split(", ").map(i => {
                 const value = eval(MyFuncs[name].toString().match(new RegExp(`if \\\(${i} === void 0\\\) \\\{ ${i} = (.*); \\\}`))?.[1])
                 switch (i.substring(0, 3)) {
                     case "_B_":
@@ -643,7 +643,7 @@ export default (app => app.run.bind(app))(new class {
                             value: value ?? "",
                         }
                 }
-            })
+            }) || []
             return {
                 name,
                 params,

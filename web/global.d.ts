@@ -1,34 +1,5 @@
 type GenericByteArray = string | Uint8Array | Array<number> | Buffer
 
-//#region service
-
-interface ServiceContext {
-    "Native Service Context"; /* it is not allowed to create it by yourself */
-    getHeader(): { [name: string]: string; };
-    getURL(): { path: string; params: { [name: string]: string[]; }; };
-    getBody(): Buffer;
-    getMethod(): "GET" | "POST" | "PUT" | "DELETE";
-    getForm(): { [name: string]: string[]; };
-    getPathVariables(): { [name: string]: string; };
-    getFile(name: string): { name: string; size: number; data: Buffer; };
-    getCerts(): any[];
-    getCookie(name: string): { value: string; };
-    upgradeToWebSocket(): ServiceWebSocket;
-    getReader(): { readByte(): number; read(count: number): Buffer; };
-    getPusher(): { push(target: string, options: any): void; };
-    write(data: GenericByteArray): number;
-    flush(): void;
-    resetTimeout(timeout: number): void;
-}
-
-interface ServiceWebSocket {
-    read(): { messageType: number; data: Buffer; };
-    send(data: GenericByteArray);
-    close();
-}
-
-//#endregion
-
 //#region builtin
 
 declare interface Buffer extends Array<number> {
@@ -78,14 +49,6 @@ declare function setTimeout(handler: Function, timeout?: number, ...arguments: a
 declare function clearTimeout(id: TimeoutId): void;
 
 declare function fetch(url: string, options?: { method?: "GET" | "POST" | "PUT" | "DELETE"; headers?: { [name: string]: string }; body?: string; }): Promise<{ status: number; headers: { [name: string]: string }; buffer(): Buffer; json(): any; text(): string; }>;
-
-declare class ServiceResponse {
-    constructor(status: number, header: { [name: string]: string | number; }, data?: GenericByteArray);
-    setStatus(status: number): void;
-    setHeader(name: string, value: string): void;
-    setData(data: GenericByteArray): void;
-    setCookie(name: string, value: string): void;
-}
 
 //#endregion
 

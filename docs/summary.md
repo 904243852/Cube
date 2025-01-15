@@ -16,6 +16,8 @@
 
 - [CSV](modules/csv.md)
 
+- [Permission](modules/permission.md)
+
 ### Examples
 
 - [Return a view with asynchronous vues](examples/vue.md)

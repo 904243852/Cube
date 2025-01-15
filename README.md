@@ -416,7 +416,7 @@ Here are some built-in methods and modules.
                 </el-upload>
             </div>
         </body>
-        <script src="//cdn.bootcdn.net/ajax/libs/vue/2.7.14/vue.js"></script>
+        <script src="//cdnjs.cloudflare.com/ajax/libs/vue/2.7.14/vue.js"></script>
         <script src="//unpkg.com/element-ui"></script>
         <script>
             new Vue({ el: "#app" })

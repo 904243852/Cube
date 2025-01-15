@@ -27,6 +27,7 @@ func InitDb() {
 			method varchar(8) not null default '',
 			url varchar(64) not null default '',
 			cron varchar(16) not null default '',
+			tag text not null default '',
 			last_modified_date datetime default (datetime('now', 'localtime')),
 			primary key(name, type)
 		);

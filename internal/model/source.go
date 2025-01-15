@@ -13,6 +13,7 @@ type Source struct {
 	Method           string    `json:"method"`
 	Url              string    `json:"url"`
 	Cron             string    `json:"cron"`
+	Tag              string    `json:"tag"`
 	LastModifiedDate util.Time `json:"last_modified_date"`
 	Status           string    `json:"status"`
 }

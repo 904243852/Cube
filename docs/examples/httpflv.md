@@ -41,7 +41,7 @@
 
 3. Create a resource with lang `html` and url `/resource/foo.html`.
     ```html
-    <script src="https://cdn.bootcdn.net/ajax/libs/flv.js/1.6.2/flv.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/flv.js/1.6.2/flv.min.js"></script>
     <video id="videoElement"></video>
     <script>
         if (flvjs.isSupported()) {

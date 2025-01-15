@@ -475,7 +475,7 @@
 
 3. Create a resource with lang `html` and url `/resource/httpflv`.
     ```html
-    <script src="https://cdn.bootcdn.net/ajax/libs/flv.js/1.6.2/flv.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/flv.js/1.6.2/flv.min.js"></script>
     <video id="videoElement" onclick="player.play()" style="width: 100%; height: 100%;"></video>
     <script>
         if (flvjs.isSupported()) {

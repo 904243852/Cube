@@ -3,10 +3,10 @@
 
 <head>
     <meta charset="UTF-8">
-    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/element-plus/2.4.3/theme-chalk/index.min.css" />
-    <script src="https://cdn.bootcdn.net/ajax/libs/vue/3.5.13/vue.global.prod.min.js"></script>
-    <script src="https://cdn.bootcdn.net/ajax/libs/element-plus/2.4.3/index.full.min.js"></script>
-    <script src="https://cdn.bootcdn.net/ajax/libs/element-plus-icons-vue/2.3.1/index.iife.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/element-plus/2.9.1/theme-chalk/index.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.5.13/vue.global.prod.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/element-plus/2.9.1/index.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/element-plus-icons-vue/2.3.1/index.iife.min.js"></script>
     <title>Cube</title>
     <base target="_blank" /><!-- 网页中所有的超链接的目标地址都在新建窗口中打开 -->
     <style>
@@ -44,11 +44,18 @@
             text-decoration: none;
             color: white;
         }
+        .el-tag {
+            max-width: 160px;
+        }
+        .el-tag .el-tag__content {            
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
     </style>
 </head>
 
 <body>
-    <div id="app" v-cloak style="height: 100%; padding: 32px; position: relative;">
+    <div id="app" v-cloak style="padding: 32px; position: relative;">
         <el-link type="primary" :underline="false" style="font-weight: 200; font-size: 1.6rem; padding: 8px 0; margin-bottom: 20px; text-shadow: 1px 1px 1px #79bbff;" href="/document.html">
             <el-icon><svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 32 32"><path d="M28.504 8.136l-12-7a1 1 0 0 0-1.008 0l-12 7A1 1 0 0 0 3 9v14a1 1 0 0 0 .496.864l12 7a1 1 0 0 0 1.008 0l12-7A1 1 0 0 0 29 23V9a1 1 0 0 0-.496-.864zM16 3.158L26.016 9L16 14.842L5.984 9zM5 10.74l10 5.833V28.26L5 22.426zM17 28.26V16.574l10-5.833v11.685z" fill="currentColor"></path></svg></el-icon>
             Cube
@@ -64,14 +71,17 @@
                     <el-button :icon="Download" @click="onTableExport">Export</el-button>
                 </el-button-group>
                 <div style="margin-left: auto; display: inline-flex;">
-                    <el-input v-model="table.search.keyword" placeholder="Enter keyword here" clearable @change="onTableFetch(true)" :suffix-icon="Search">
+                    <el-autocomplete v-model="table.search.keyword" placeholder="Enter keyword here" clearable @blur="onTableFetch(true)" :suffix-icon="Search" @select="onTableSearchSelect" :fetch-suggestions="onTableSearchSuggest" :trigger-on-focus="false">
                         <template #prepend>
                             <el-select v-model="table.search.type" placeholder="Select a type" clearable @change="onTableFetch(true)" style="width: 160px; background-color: var(--el-fill-color-blank);">
                                 <el-option v-for="type in Object.keys(constants.type)" :key="type" :label="capitalize(type)" :value="type">
                                 </el-option>
                             </el-select>
                         </template>
-                    </el-input>
+                        <template #prefix>
+                            <my-tags count="1" v-model="table.search.tag" closable></my-tags>
+                        </template>
+                    </el-autocomplete>
                 </div>
             </el-row>
             <el-row>
@@ -93,7 +103,12 @@
                             {{ capitalize(scope.row.lang) }}
                         </template>
                     </el-table-column>
-                    <el-table-column label="Last Modified Date" prop="last_modified_date" :formatter="(row, column, value) => value?.replace(/T/, ' ')?.replace(/Z/, '')" sortable>
+                    <el-table-column label="Tag" show-overflow-tooltip>
+                        <template #default="scope">
+                            <my-tags count="1" v-model="scope.row.tag"></my-tags>
+                        </template>
+                    </el-table-column>
+                    <el-table-column label="Last Modified Date" prop="last_modified_date" :formatter="(row, column, value) => value?.replace(/T/, ' ')?.replace(/Z/, '')" sortable min-width="96px">
                     </el-table-column>
                     <el-table-column label="Operation">
                         <template #default="scope">
@@ -111,12 +126,12 @@
                         </template>
                     </el-table-column>
                 </el-table>
-                <el-pagination @size-change="onTablePageSizeChange" @current-change="onTablePageCurrentChange" :current-page="table.pagination.index" :page-sizes="[5, 10, 20, 50]" :page-size="table.pagination.size" layout="total, sizes, prev, pager, next, jumper" :total="table.pagination.count">
+                <el-pagination @size-change="onTablePageSizeChange" @current-change="onTablePageCurrentChange" :current-page="table.pagination.index" :page-sizes="table.pagination.sizes" :page-size="table.pagination.size" layout="total, sizes, prev, pager, next, jumper" :total="table.pagination.count">
                 </el-pagination>
             </el-row>
         </el-card>
-        <el-dialog v-model="dialog.visible" :title="dialog.record.rowid ? this['dialog.editable'] ? 'Edit' : 'View' : 'New'">
-            <el-form ref="FormRef" :model="dialog.record" label-position="right" label-width="80px" :rules="constants.rules" :hide-required-asterisk="!this['dialog.editable']">
+        <el-dialog v-model="dialog.visible" :title="dialog.record.rowid ? dialog.record.active ? 'View' : 'Edit' : 'New'">
+            <el-form ref="FormRef" :model="dialog.record" label-position="right" label-width="96px" :rules="constants.rules" :hide-required-asterisk="dialog.record.active">
                 <el-form-item label="Type" prop="type">
                     <el-select v-model="dialog.record.type" :disabled="dialog.record.rowid" @change="dialog.record.lang = constants.type[dialog.record.type][0]" placeholder="Select a type">
                         <el-option v-for="type in Object.keys(constants.type)" :key="type" :label="capitalize(type)" :value="type">
@@ -141,7 +156,7 @@
                     </el-input>
                 </el-form-item>
                 <el-form-item label="Method" v-if="dialog.record.type == 'controller'">
-                    <el-select v-model="dialog.record.method" placeholder="Please select a method" :disabled="dialog.record.active">
+                    <el-select v-model="dialog.record.method" placeholder="Any" :disabled="dialog.record.active">
                         <el-option label="Any" value=""></el-option>
                         <el-option label="Get" value="GET"></el-option>
                         <el-option label="Post" value="POST"></el-option>
@@ -154,7 +169,7 @@
                         <template #prepend>
                             {{ this["dialog.url.prepend"] }}
                         </template>
-                        <template #append v-if="!this['dialog.editable']">
+                        <template #append v-if="dialog.record.active">
                             <el-link type="primary" :underline="false" :icon="Position" :href="this['dialog.url.prepend'] + dialog.record.url"></el-link>
                         </template>
                     </el-input>
@@ -162,7 +177,10 @@
                 <el-form-item label="Cron" prop="cron" v-if="dialog.record.type == 'crontab'">
                     <el-input v-model="dialog.record.cron" placeholder="For example: */5 * * * *" :disabled="dialog.record.active"></el-input>
                 </el-form-item>
-                <el-form-item v-if="this['dialog.editable']">
+                <el-form-item label="Tag">
+                    <my-tags v-model="dialog.record.tag" :closable="!dialog.record.active" :newable="!dialog.record.active"></my-tags>
+                </el-form-item>
+                <el-form-item v-if="!dialog.record.active">
                     <el-button type="primary" :loading="dialog.loading" @click="onDialogSubmit(FormRef)">Submit</el-button>
                     <el-button @click="onDialogCancel(FormRef)">Cancel</el-button>
                 </el-form-item>
@@ -194,12 +212,6 @@
                 }
             },
             computed: {
-                "dialog.editable"() {
-                    if (["daemon", "module", "template"].indexOf(this.dialog.record.type) !== -1) { // 这三种无字段可修改
-                        return !this.dialog.record.rowid
-                    }
-                    return !this.dialog.record.active
-                },
                 "dialog.url.prepend"() {
                     return { controller: "/service/", resource: "/resource/", }[this.dialog.record.type]
                 },
@@ -219,6 +231,14 @@
                         this.dialog.record.name = (this["proxy.dialog.record.name.prefix"][0] || "") + v
                     },
                 },
+                "proxy.table.search.tag": {
+                    get() {
+                        return this.table.search.tag.split(",").filter(i => i)
+                    },
+                    set(v) {
+                        this.table.search.tag = v.join(",")
+                    },
+                }
             },
             data() {
                 return {
@@ -274,13 +294,15 @@
                     table: {
                         records: [],
                         pagination: {
+                            sizes: [[10, 8].find(i => i < (document.body.clientHeight - 304) / 49) ?? 5, 20, 50, 100],
+                            size: [10, 8].find(i => i < (document.body.clientHeight - 304) / 49) ?? 5,
                             index: 1,
-                            size: 5,
                             count: 0,
                         },
                         search: {
                             keyword: "",
                             type: "",
+                            tag: "",
                         },
                         sort: {
                             prop: "rowid",
@@ -297,24 +319,23 @@
             },
             methods: {
                 onTableFetch(reset) {
-                    const that = this
                     if (reset) {
-                        that.table.pagination.index = 1
+                        this.table.pagination.index = 1
                     }
-                    that.table.loading = true
-                    fetch(`source?name=%25${that.table.search.keyword}%25&type=${that.table.search.type}&from=${(that.table.pagination.index - 1) * that.table.pagination.size}&size=${that.table.pagination.size}&sort=${that.table.sort.prop} ${that.table.sort.order}&basic`).then(r => {
+                    this.table.loading = true
+                    fetch(`source?name=%25${this.table.search.keyword}%25&type=${this.table.search.type || ""}&tag=${this.table.search.tag}&from=${(this.table.pagination.index - 1) * this.table.pagination.size}&size=${this.table.pagination.size}&sort=${this.table.sort.prop} ${this.table.sort.order}&basic`).then(r => {
                         if (r.status != 200) {
                             throw new Error(r.statusText)
                         }
                         return r.json()
                     }).then(r => {
-                        that.table.pagination.count = r.data.total
-                        that.table.pagination.index = Math.min(that.table.pagination.index, Math.ceil(r.data.total / that.table.pagination.size))
-                        that.table.records = r.data.sources
+                        this.table.pagination.count = r.data.total
+                        this.table.pagination.index = Math.min(this.table.pagination.index, Math.ceil(r.data.total / this.table.pagination.size))
+                        this.table.records = r.data.sources
                     }).catch(e => {
                         ElMessage.error(e.message)
                     }).finally(() => {
-                        that.table.loading = false
+                        this.table.loading = false
                     })
                 },
                 onTablePageSizeChange(value) {
@@ -374,7 +395,7 @@
                 onTableExport() {
                     // 移动端浏览器无法通过 window.open 在新标签打开链接，这里使用 a 标签下载
                     const a = document.createElement("a")
-                    a.href = `source?name=%25${this.table.search.keyword}%25&type=${this.table.search.type}&size=5000&bulk`
+                    a.href = `source?name=%25${this.table.search.keyword}%25&type=${this.table.search.type || ""}&tag=${this.table.search.tag}&size=5000&bulk`
                     a.download = "" // 如果不设置 download 属性，移动端取消下载任务时，可能会影响当前页面的加载状态
                     a.click()
                 },
@@ -396,7 +417,6 @@
                     window.open(`editor.html?name=${record.name}&type=${record.type}` + (record.rowid ? "" : "&example"))
                 },
                 onTableRowDelete(record) {
-                    const that = this
                     ElMessageBox.confirm(`${record.name} will be deleted permanently. Continue ?`, "Warning", {
                         confirmButtonText: "Confirm",
                         type: "warning",
@@ -409,7 +429,7 @@
                                 }).then(r => r.json()).then(r => {
                                     if (r.code === "0") {
                                         ElMessage.success("Delete succeeded")
-                                        that.onTableFetch()
+                                        this.onTableFetch()
                                     } else {
                                         ElMessage.error(r.message)
                                     }
@@ -421,7 +441,6 @@
                     }).catch(() => { })
                 },
                 onTableRowActiveSwitch(record) {
-                    const that = this
                     fetch("source", {
                         method: "PUT",
                         body: JSON.stringify({
@@ -439,8 +458,7 @@
                     })
                 },
                 onTableRowStatusSwitch(record) {
-                    const that = this,
-                        status = record.status === "true" ? "false" : "true"
+                    const status = record.status === "true" ? "false" : "true"
                     fetch("source", {
                         method: "PUT",
                         body: JSON.stringify({
@@ -457,6 +475,21 @@
                         }
                     })
                 },
+                onTableSearchSelect({ value }) {
+                    this.table.search.keyword = this.table.search.keyword.substring(0, this.table.search.keyword.lastIndexOf(value))
+                    const tag = value.replace(/^Tag: /, "")
+                    if (tag && !~this["proxy.table.search.tag"].indexOf(tag)) {
+                        this["proxy.table.search.tag"] = [...this["proxy.table.search.tag"], tag]
+                        this.onTableFetch()
+                    }
+                },
+                onTableSearchSuggest(keyword, callback) {
+                    if (!~this["proxy.table.search.tag"].indexOf(keyword)) {
+                        callback([{ value: `Tag: ${keyword}` }])
+                    } else {
+                        callback([])
+                    }
+                },
                 onDialogNew() {
                     this.dialog.record = {
                         method: "",
@@ -464,21 +497,20 @@
                     this.dialog.visible = true
                 },
                 onDialogSubmit(FormRef) {
-                    const that = this
                     FormRef.validate(valid => {
                         if (!valid) {
                             return false
                         }
-                        const { name, type, lang, method, url, cron, } = that.dialog.record
+                        const { name, type, lang, method, url, cron, tag, } = this.dialog.record
                         fetch("source", {
-                            method: !that.dialog.record.rowid ? "POST" : "PUT",
-                            body: JSON.stringify({ name, type, lang, method, url, cron, }),
+                            method: !this.dialog.record.rowid ? "POST" : "PUT",
+                            body: JSON.stringify({ name, type, lang, method, url, cron, tag, }),
                         }).then(r => r.json()).then(r => {
                             if (r.code === "0") {
                                 ElMessage.success("Submit succeeded")
-                                that.dialog.visible = false
-                                that.onTableFetch()
-                                !that.dialog.record.rowid && that.onTableRowCode(that.dialog.record)
+                                this.dialog.visible = false
+                                this.onTableFetch()
+                                !this.dialog.record.rowid && this.onTableRowCode(this.dialog.record)
                             } else {
                                 ElMessage.error(r.message)
                             }
@@ -493,8 +525,75 @@
                     return text.slice(0, 1).toUpperCase() + text.slice(1)
                 },
             },
-            mounted: function () {
+            mounted() {
                 this.onTableFetch()
+            },
+            components: {
+                "my-tags": {
+                    template: `<div style="display: inline-flex; flex-flow: wrap; align-items: center; gap: 4px;">
+    <el-tag v-if="dataset.length" v-for="e in dataset.slice(0, this.count)" :closable="closable" @close="onRemoveTag(e)">{{ e }}</el-tag>
+    <el-popover v-if="dataset.length > count" placement="bottom-start" :width="0" trigger="hover">
+        <template #reference>
+            <el-tag>+{{ dataset.length - count }}</el-tag>
+        </template>
+        <div style="display: flex; flex-wrap: wrap; gap: 4px; max-width: 400px;">
+            <el-tag v-for="e in dataset.slice(this.count)" :closable="closable" @close="onRemoveTag(e)">{{ e }}</el-tag>
+        </div>
+    </el-popover>
+    <div v-if="newable" style="display: flex;">
+        <el-input v-if="input.visible" ref="InputRef" v-model="input.value" size="small" @keyup.enter="onAddTag" @blur="onAddTag"></el-input>
+        <el-button v-else size="small" @click="onNewTag">+ New Tag</el-button>
+    </div>
+</div>`,
+                    props: {
+                        modelValue: { type: Array, default: "", },
+                        count: { type: Number, default: 99, },
+                        closable: { type: Boolean, default: false, },
+                        newable: { type: Boolean, default: false, },
+                    },
+                    emits: ["update:modelValue"],
+                    setup() {
+                        return {
+                            InputRef: Vue.ref(),
+                        }
+                    },
+                    computed: {
+                        dataset: {
+                            get() {
+                                return this.modelValue.split(",")?.filter(i => i)
+                            },
+                            set(v) {
+                                this.$emit("update:modelValue", v.join(","))
+                            },
+                        },
+                    },
+                    data() {
+                        return {
+                            input: {
+                                value: "",
+                                visible: false,
+                            },
+                        }
+                    },
+                    methods: {
+                        onRemoveTag(tag) {
+                            this.dataset = this.dataset.filter(i => i !== tag)
+                        },
+                        onAddTag() {
+                            if (this.input.value && !~this.dataset.indexOf(this.input.value)) {
+                                this.dataset = [...this.dataset, this.input.value]
+                            }
+                            this.input.visible = false
+                            this.input.value = ""
+                        },
+                        onNewTag() {
+                            this.input.visible = true
+                            Vue.nextTick(() => {
+                                this.InputRef.input.focus()
+                            })
+                        },
+                    },
+                },
             },
         }).use(ElementPlus).mount("#app")
     </script>

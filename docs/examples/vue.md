@@ -22,8 +22,8 @@
         </style>
     </head>
     <body>
-        <script src="https://cdn.bootcdn.net/ajax/libs/vue/2.7.14/vue.min.js"></script>
-        <script src="https://cdn.bootcdn.net/ajax/libs/vue-router/3.6.5/vue-router.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/2.7.14/vue.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/vue-router/3.6.5/vue-router.min.js"></script>
         <script src="https://unpkg.com/http-vue-loader"></script>
         <router-view id="container"></router-view>
         <script>

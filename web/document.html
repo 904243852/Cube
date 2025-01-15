@@ -5,7 +5,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
     <title>Loading</title>
-    <link rel="stylesheet" href="https://cdn.bootcdn.net/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css" />
     <style>
         body{-ms-text-size-adjust:100%;-webkit-text-size-adjust:100%;line-height:1.5;color:#24292e;font-size:17px;word-wrap:break-word}body details{display:block}body summary{display:list-item}body strong{font-weight:inherit;font-weight:bolder}body h1{font-size:2em;margin:.67em 0}body img{border-style:none}body hr{box-sizing:initial;height:0;overflow:visible}body input{font:inherit;margin:0}body input{overflow:visible}body [type=checkbox]{box-sizing:border-box;padding:0}body *{box-sizing:border-box}body input{font-family:inherit;font-size:inherit;line-height:inherit}body a{color:#009dff;text-decoration:none}body strong{font-weight:600}body hr{height:0;margin:15px 0;overflow:hidden;background:0 0;border:0;border-bottom:1px solid #dfe2e5}body hr:after,body hr:before{display:table;content:""}body hr:after{clear:both}body table{border-spacing:0;border-collapse:collapse}body td,body th{padding:0}body details summary{cursor:pointer}body h1,body h2,body h3,body h4,body h5,body h6{margin-top:0;margin-bottom:0}body h1{font-size:32px}body h1,body h2{font-weight:600}body h2{font-size:24px}body h3{font-size:20px}body h3,body h4{font-weight:600}body h4{font-size:16px}body h5{font-size:14px}body h5,body h6{font-weight:600}body h6{font-size:12px}body p{margin-top:0;margin-bottom:10px}body blockquote{margin:0}body ol ol,body ul ol{list-style-type:lower-roman}body ol ol ol,body ol ul ol,body ul ol ol,body ul ul ol{list-style-type:lower-alpha}body dd{margin-left:0}body input::-webkit-inner-spin-button,body input::-webkit-outer-spin-button{margin:0;-webkit-appearance:none;appearance:none}body :checked+.radio-label{position:relative;z-index:1;border-color:#0366d6}body .border{border:1px solid #e1e4e8!important}body .border-0{border:0!important}body .border-bottom{border-bottom:1px solid #e1e4e8!important}body .text-bold{font-weight:600!important}body hr{border-bottom-color:#eee}body:after,body:before{display:table;content:""}body:after{clear:both}body>:first-child{margin-top:0!important}body>:last-child{margin-bottom:0!important}body blockquote,body details,body dl,body ol,body p,body pre,body table,body ul{margin-top:0;margin-bottom:16px}body hr{height:1px;padding:0;margin:24px 0;background-color:#e1e4e8;border:0}body blockquote{padding:0 1em;color:#6a737d;background-color:#bbbbbb1c;border-left:.25em solid #dfe2e5}body blockquote>:first-child{margin-top:0}body blockquote>:last-child{margin-bottom:0}body h1,body h2,body h3,body h4,body h5,body h6{margin-top:24px;margin-bottom:16px;font-weight:600;line-height:1.25}body h1{font-size:2em}body h1,body h2{padding-bottom:.3em;border-bottom:1px solid #eaecef}body h2{font-size:1.5em}body h3{font-size:1.25em}body h4{font-size:1em}body h5{font-size:.875em}body h6{font-size:.85em;color:#6a737d}body ol,body ul{padding-left:2em}body ol ol,body ol ul,body ul ol,body ul ul{margin-top:0;margin-bottom:0}body li{word-wrap:break-all}body li>p{margin-top:16px}body li+li{margin-top:.25em}body dl{padding:0}body dl dt{padding:0;margin-top:16px;font-size:1em;font-style:italic;font-weight:600}body dl dd{padding:0 16px;margin-bottom:16px}body table{display:block;width:100%;overflow:auto}body table th{font-weight:600}body table td,body table th{padding:6px 13px;border:1px solid #dfe2e5}body table tr{background-color:#fff;border-top:1px solid #c6cbd1}body table tr:nth-child(2n){background-color:#f6f8fa}body img{max-width:100%;box-sizing:initial}body img[align=right]{padding-left:20px}body img[align=left]{padding-right:20px}body .full-commit .btn-outline:not(:disabled):hover{color:#005cc5;border-color:#005cc5}body .task-list-item{list-style-type:none}body .task-list-item+.task-list-item{margin-top:3px}body .task-list-item input{margin:0 .2em .25em -1.6em;vertical-align:middle}body code,body pre{font-size:16px;font-family:Monaco,Ubuntu mono,Hack,Consolas}details{box-shadow:0 2px 2px 0 rgba(0,0,0,.14),0 1px 5px 0 rgba(0,0,0,.12),0 3px 1px -2px rgba(0,0,0,.2);position:relative;margin:1em 0;padding:0 .6rem;border-left:.2rem solid #448aff;border-radius:.1rem;font-size:16px;overflow:auto}details summary{cursor:pointer;line-height:2.5em;outline:0;margin:0 -.6rem;padding:.1rem 0 0 1rem;border-bottom:.05rem solid rgba(68,138,255,.1);background-color:rgba(68,138,255,.1)}
     </style>
@@ -55,14 +55,17 @@
         pre:has(span.btn-expand) code {
             overflow-x: hidden; /* 用于 PC 端代码超长时，隐藏横向滚动条 */
         }
+        pre .hljs {
+            width: 100%;
+        }
     </style>
 </head>
 
 <body>
-    <script src="https://cdn.bootcdn.net/ajax/libs/typescript/5.3.3/typescript.min.js" defer></script>
-    <script src="https://cdn.bootcdn.net/ajax/libs/sweetalert/2.1.2/sweetalert.min.js" defer></script>
-    <script src="https://cdn.bootcdn.net/ajax/libs/marked/9.0.0/marked.min.js"></script>
-    <script src="https://cdn.bootcdn.net/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/typescript/5.7.3/typescript.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sweetalert/2.1.2/sweetalert.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.0.0/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
     <script>
         ({
             setup() {
