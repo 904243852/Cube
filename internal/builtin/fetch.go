@@ -72,9 +72,9 @@ func init() {
 }
 
 type FetchOptions struct {
-	Method string
+	Method  string
 	Headers map[string]string
-	Body   string
+	Body    string
 }
 
 type FetchResponse struct {

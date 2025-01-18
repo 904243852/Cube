@@ -50,6 +50,16 @@ declare function clearTimeout(id: TimeoutId): void;
 
 declare function fetch(url: string, options?: { method?: "GET" | "POST" | "PUT" | "DELETE"; headers?: { [name: string]: string }; body?: string; }): Promise<{ status: number; headers: { [name: string]: string }; buffer(): Buffer; json(): any; text(): string; }>;
 
+interface WebSocket {
+    read(): { messageType: number; data: Buffer; };
+    send(data: GenericByteArray);
+    close();
+}
+declare var WebSocket: {
+    prototype: WebSocket;
+    new(url: string): WebSocket;
+}
+
 //#endregion
 
 //#region native module

@@ -126,16 +126,14 @@ func (s *ServiceContext) GetCookie(name string) (*http.Cookie, error) {
 	return cookie, err
 }
 
-func (s *ServiceContext) UpgradeToWebSocket() (*ServiceWebSocket, error) {
+func (s *ServiceContext) UpgradeToWebSocket() (*builtin.WebSocket, error) {
 	s.returnless = true // upgrader.Upgrade 内部已经调用过 WriteHeader 方法了，后续不应再次调用，否则将会出现 http: superfluous response.WriteHeader call from ... 的异常
 	s.timer.Stop()      // 关闭定时器，WebSocket 不需要设置超时时间
 	upgrader := websocket.Upgrader{}
 	if conn, err := upgrader.Upgrade(s.responseWriter, s.request, nil); err != nil {
 		return nil, err
 	} else {
-		return &ServiceWebSocket{
-			connection: conn,
-		}, nil
+		return builtin.NewWebSocket(conn), nil
 	}
 }
 
@@ -194,33 +192,6 @@ func CreateServiceContext(r *http.Request, w http.ResponseWriter, t *time.Timer,
 
 func Returnless(ctx *ServiceContext) bool {
 	return ctx.returnless
-}
-
-//#endregion
-
-//#region service websocket
-
-type ServiceWebSocket struct {
-	connection *websocket.Conn
-}
-
-func (s *ServiceWebSocket) Read() (interface{}, error) {
-	messageType, data, err := s.connection.ReadMessage()
-	if err != nil {
-		return nil, err
-	}
-	return map[string]interface{}{
-		"messageType": messageType,
-		"data":        builtin.Buffer(data),
-	}, nil
-}
-
-func (s *ServiceWebSocket) Send(data []byte) error {
-	return s.connection.WriteMessage(1, data) // message type：0 表示消息是文本格式，1 表示消息是二进制格式。这里 data 是 []byte，因此固定使用二进制格式类型
-}
-
-func (s *ServiceWebSocket) Close() {
-	s.connection.Close()
 }
 
 //#endregion

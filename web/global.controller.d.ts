@@ -11,18 +11,12 @@ interface ServiceContext {
     getFile(name: string): { name: string; size: number; data: Buffer; };
     getCerts(): any[];
     getCookie(name: string): { value: string; };
-    upgradeToWebSocket(): ServiceWebSocket;
+    upgradeToWebSocket(): WebSocket;
     getReader(): { readByte(): number; read(count: number): Buffer; };
     getPusher(): { push(target: string, options: any): void; };
     write(data: GenericByteArray): number;
     flush(): void;
     resetTimeout(timeout: number): void;
-}
-
-interface ServiceWebSocket {
-    read(): { messageType: number; data: Buffer; };
-    send(data: GenericByteArray);
-    close();
 }
 
 //#endregion
