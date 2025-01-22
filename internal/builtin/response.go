@@ -35,7 +35,10 @@ func init() {
 				}
 			}
 
-			if v := util.ExportGojaValue(call.Argument(2)); v != nil {
+			if v, err := util.ExportGojaValue(call.Argument(2)); v != nil {
+				if err != nil {
+					panic(runtime.NewTypeError(err))
+				}
 				if s, ok := v.(string); ok {
 					output.data = []byte(s)
 				} else if b, ok := v.(Buffer); ok {

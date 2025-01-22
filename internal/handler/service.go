@@ -81,5 +81,11 @@ func HandleService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	Success(w, util.ExportGojaValue(value))
+	data, err := util.ExportGojaValue(value)
+	if err != nil {
+		Error(w, err)
+		return
+	}
+
+	Success(w, data)
 }

@@ -87,8 +87,8 @@ func (f *FetchResponse) Buffer() Buffer {
 	return f.data
 }
 
-func (f *FetchResponse) Json() (v *map[string]interface{}, err error) {
-	err = json.Unmarshal(f.data, v)
+func (f *FetchResponse) Json() (v map[string]interface{}, err error) {
+	err = json.Unmarshal(f.data, &v)
 	return
 }
 
